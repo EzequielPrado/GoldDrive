@@ -37,7 +37,9 @@ const Login = () => {
     resetForm();
   };
 
-  const handleForgotPassword = async () => {
+  const handleForgotPassword = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    
     if (!email) {
       showError("Digite seu email para recuperar a senha.");
       return;
@@ -45,7 +47,7 @@ const Login = () => {
     setLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + '/update-password', // Opcional: página para definir nova senha
+        redirectTo: window.location.origin + '/update-password',
       });
       if (error) throw error;
       showSuccess("Email de recuperação enviado! Verifique sua caixa de entrada.");
@@ -57,7 +59,9 @@ const Login = () => {
     }
   };
 
-  const handleAuth = async () => {
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault(); // Impede o reload da página ao dar Enter
+    
     setLoading(true);
     try {
         if (isSignUp) {
@@ -97,7 +101,7 @@ const Login = () => {
                 }
             });
             if (error) throw error;
-            showSuccess("Cadastro realizado com sucesso! Verifique seu email ou faça login.");
+            showSuccess("Cadastro realizado! Verifique seu email para confirmar.");
             setIsSignUp(false);
         } else {
             // Login
@@ -110,13 +114,16 @@ const Login = () => {
             navigate(activeTab === 'admin' ? '/admin' : activeTab === 'driver' ? '/driver' : '/client');
         }
     } catch (e: any) {
-        if (e.message.includes("Invalid login")) {
+        if (e.message && e.message.includes("Invalid login")) {
             showError("Email ou senha incorretos.");
         } else {
-            showError(e.message);
+            showError(e.message || "Erro desconhecido ao tentar entrar.");
         }
     } finally {
-        setLoading(false);
+        // Garante que o loading pare, exceto se navegou (mas o unmount limpa o state)
+        if (window.location.pathname === '/login') {
+            setLoading(false);
+        }
     }
   };
 
@@ -133,23 +140,25 @@ const Login = () => {
               </div>
               <CardDescription>Digite seu email para receber o link de redefinição.</CardDescription>
            </CardHeader>
-           <CardContent className="space-y-4">
-              <div className="space-y-2">
-                  <Label>Email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <Input 
-                        type="email" 
-                        placeholder="seu@email.com" 
-                        className="pl-9"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                    />
+           <CardContent>
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                  <div className="space-y-2">
+                      <Label>Email</Label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                        <Input 
+                            type="email" 
+                            placeholder="seu@email.com" 
+                            className="pl-9"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                        />
+                      </div>
                   </div>
-              </div>
-              <Button className="w-full" onClick={handleForgotPassword} disabled={loading}>
-                  {loading ? "Enviando..." : "Enviar Email"}
-              </Button>
+                  <Button type="submit" className="w-full" disabled={loading}>
+                      {loading ? "Enviando..." : "Enviar Email"}
+                  </Button>
+              </form>
            </CardContent>
         </Card>
       </div>
@@ -179,7 +188,7 @@ const Login = () => {
               <TabsTrigger value="admin">Admin</TabsTrigger>
             </TabsList>
 
-            <div className="space-y-4">
+            <form onSubmit={handleAuth} className="space-y-4">
                 {isSignUp && (
                     <div className="space-y-2 animate-in slide-in-from-left-5 fade-in duration-300">
                         <Label>Nome Completo</Label>
@@ -215,6 +224,7 @@ const Login = () => {
                     {!isSignUp && (
                         <span 
                             className="text-xs text-blue-600 cursor-pointer hover:underline"
+                            type="button"
                             onClick={() => setIsForgotPassword(true)}
                         >
                             Esqueceu?
@@ -248,17 +258,17 @@ const Login = () => {
                 )}
                 
                 <Button 
+                    type="submit"
                     className={`w-full h-12 text-lg font-bold mt-2 ${
                         activeTab === 'admin' ? 'bg-slate-900 hover:bg-slate-800' : 
                         activeTab === 'driver' ? 'bg-green-600 hover:bg-green-700' : 
                         'bg-blue-600 hover:bg-blue-700'
                     }`}
-                    onClick={handleAuth}
                     disabled={loading}
                 >
                   {loading ? 'Processando...' : (isSignUp ? 'CADASTRAR' : 'ENTRAR')}
                 </Button>
-            </div>
+            </form>
           </Tabs>
         </CardContent>
         
