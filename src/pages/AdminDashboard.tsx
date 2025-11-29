@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { 
   LayoutDashboard, Users, Car, Settings, Wallet, 
-  Map as MapIcon, LogOut, Bell, Search, Menu,
-  ArrowUpRight, ArrowDownRight, Save, RefreshCw
+  Map as MapIcon, LogOut, Search, Star, MoreHorizontal,
+  ArrowUpRight, ArrowDownRight, Save, RefreshCw, Filter
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -15,66 +15,44 @@ import MapComponent from "@/components/MapComponent";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { showSuccess, showError } from "@/utils/toast";
-import { Loader2 } from "lucide-react";
-
-// Tipos
-type DashboardStats = {
-  totalRevenue: number;
-  totalRides: number;
-  totalUsers: number;
-  activeDrivers: number;
-};
-
-type CarCategory = {
-  id: string;
-  name: string;
-  description: string;
-  base_fare: number;
-  cost_per_km: number;
-  min_fare: number;
-};
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
+  const [loading, setLoading] = useState(false);
   
-  // Dados Reais
-  const [stats, setStats] = useState<DashboardStats>({ totalRevenue: 0, totalRides: 0, totalUsers: 0, activeDrivers: 0 });
-  const [rides, setRides] = useState<any[]>([]);
+  // Dados
+  const [stats, setStats] = useState({ revenue: 0, rides: 0, users: 0, drivers: 0 });
   const [users, setUsers] = useState<any[]>([]);
-  const [categories, setCategories] = useState<CarCategory[]>([]);
+  const [rides, setRides] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
 
-  // Carregar Dados
   const fetchData = async () => {
     setLoading(true);
     try {
-        // 1. Stats de Receita e Corridas
-        const { data: ridesData } = await supabase.from('rides').select('id, price, status, created_at, pickup_address, destination_address, category');
+        // Corridas e Receita
+        const { data: ridesData } = await supabase.from('rides').select('*').order('created_at', { ascending: false });
+        const revenue = ridesData?.filter(r => r.status === 'COMPLETED').reduce((acc, curr) => acc + (Number(curr.price) || 0), 0) || 0;
         
-        const completedRides = ridesData?.filter(r => r.status === 'COMPLETED') || [];
-        const revenue = completedRides.reduce((acc, curr) => acc + (Number(curr.price) || 0), 0);
+        // Usuários
+        const { data: usersData } = await supabase.from('profiles').select('*');
         
-        // 2. Usuários
-        const { data: profilesData } = await supabase.from('profiles').select('*');
-        const drivers = profilesData?.filter((p: any) => p.role === 'driver') || [];
+        // Categorias
+        const { data: catsData } = await supabase.from('car_categories').select('*').order('base_fare', { ascending: true });
 
         setStats({
-            totalRevenue: revenue,
-            totalRides: ridesData?.length || 0,
-            totalUsers: profilesData?.length || 0,
-            activeDrivers: drivers.length
+            revenue,
+            rides: ridesData?.length || 0,
+            users: usersData?.filter((u:any) => u.role === 'client').length || 0,
+            drivers: usersData?.filter((u:any) => u.role === 'driver').length || 0
         });
 
-        if (ridesData) setRides(ridesData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
-        if (profilesData) setUsers(profilesData);
+        if (ridesData) setRides(ridesData);
+        if (usersData) setUsers(usersData);
+        if (catsData) setCategories(catsData);
 
-        // 3. Configurações (Categorias)
-        const { data: catData } = await supabase.from('car_categories').select('*').order('base_fare', { ascending: true });
-        if (catData) setCategories(catData as CarCategory[]);
-
-    } catch (error: any) {
-        showError("Erro ao carregar dados: " + error.message);
+    } catch (e: any) {
+        showError(e.message);
     } finally {
         setLoading(false);
     }
@@ -82,315 +60,292 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     fetchData();
-
-    // Inscrever em atualizações em tempo real para manter o dashboard vivo
-    const channel = supabase.channel('admin_dashboard')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'rides' }, () => fetchData())
-        .subscribe();
-
-    return () => { supabase.removeChannel(channel) };
   }, []);
 
-  // Atualizar Configurações
-  const handleUpdateCategory = async (id: string, field: string, value: string) => {
-     // Atualiza estado local para UI responsiva
-     setCategories(prev => prev.map(cat => cat.id === id ? { ...cat, [field]: parseFloat(value) } : cat));
+  const updateCategory = async (id: string, field: string, value: string) => {
+      setCategories(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
   };
 
-  const saveCategoryChanges = async (category: CarCategory) => {
+  const saveCategory = async (cat: any) => {
       try {
           const { error } = await supabase.from('car_categories').update({
-              base_fare: category.base_fare,
-              cost_per_km: category.cost_per_km,
-              min_fare: category.min_fare
-          }).eq('id', category.id);
-
+              base_fare: cat.base_fare,
+              cost_per_km: cat.cost_per_km,
+              min_fare: cat.min_fare
+          }).eq('id', cat.id);
           if (error) throw error;
-          showSuccess(`Configurações de ${category.name} salvas!`);
+          showSuccess("Categoria atualizada!");
       } catch (e: any) {
           showError(e.message);
       }
   };
 
-  return (
-    <div className="flex h-screen bg-gray-100 overflow-hidden font-sans">
-      {/* Sidebar */}
-      <aside className="w-64 bg-slate-950 text-white hidden md:flex flex-col border-r border-slate-800">
-        <div className="p-6">
-          <h1 className="text-2xl font-bold flex items-center gap-2 tracking-tighter">
-            Go<span className="text-blue-500">Move</span> <span className="text-xs bg-slate-800 px-2 py-0.5 rounded text-slate-400">ADMIN</span>
-          </h1>
-        </div>
-        
-        <nav className="flex-1 p-4 space-y-1">
-          {[
-            { id: "overview", icon: LayoutDashboard, label: "Visão Geral" },
-            { id: "map", icon: MapIcon, label: "Mapa em Tempo Real" },
-            { id: "users", icon: Users, label: "Usuários & Motoristas" },
-            { id: "finance", icon: Settings, label: "Configurações & Preços" },
-          ].map((item) => (
-            <button 
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-sm font-medium ${
-                activeTab === item.id 
-                ? "bg-blue-600 text-white shadow-lg shadow-blue-900/50" 
-                : "text-slate-400 hover:bg-slate-900 hover:text-white"
-              }`}
-            >
-              <item.icon className="w-4 h-4" />
-              <span>{item.label}</span>
-            </button>
-          ))}
-        </nav>
+  // Helper para renderizar estrelas
+  const renderStars = (rating?: number) => {
+      if (!rating) return <span className="text-gray-300 text-xs">Sem avaliação</span>;
+      return (
+          <div className="flex text-yellow-400">
+              {[...Array(5)].map((_, i) => (
+                  <Star key={i} className={`w-3 h-3 ${i < rating ? 'fill-current' : 'text-gray-200'}`} />
+              ))}
+          </div>
+      );
+  };
 
-        <div className="p-4 border-t border-slate-900">
-          <button onClick={() => navigate('/')} className="flex items-center gap-2 text-slate-400 hover:text-red-400 transition-colors text-sm px-4">
-            <LogOut className="w-4 h-4" />
-            <span>Sair do Sistema</span>
-          </button>
-        </div>
+  return (
+    <div className="flex h-screen bg-slate-50 font-sans text-slate-900">
+      
+      {/* Sidebar Elegante */}
+      <aside className="w-72 bg-white border-r border-slate-200 flex flex-col shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-20">
+         <div className="p-8 pb-4">
+             <div className="flex items-center gap-2 text-2xl font-black tracking-tighter text-slate-900">
+                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
+                    <Car className="w-5 h-5" />
+                </div>
+                GoMove
+             </div>
+             <p className="text-xs font-medium text-slate-400 mt-1 uppercase tracking-wider ml-10">Admin Console</p>
+         </div>
+
+         <nav className="flex-1 px-4 space-y-1 mt-6">
+             {[
+                 { id: 'overview', label: 'Visão Geral', icon: LayoutDashboard },
+                 { id: 'users', label: 'Passageiros', icon: Users },
+                 { id: 'drivers', label: 'Motoristas', icon: Car },
+                 { id: 'finance', label: 'Financeiro', icon: Wallet },
+                 { id: 'config', label: 'Configurações', icon: Settings },
+             ].map(item => (
+                 <button 
+                    key={item.id}
+                    onClick={() => setActiveTab(item.id)}
+                    className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                        activeTab === item.id 
+                        ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' 
+                        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
+                 >
+                     <item.icon className={`w-5 h-5 ${activeTab === item.id ? 'text-blue-400' : ''}`} />
+                     {item.label}
+                 </button>
+             ))}
+         </nav>
+
+         <div className="p-4 border-t">
+             <button onClick={() => navigate('/')} className="flex items-center gap-2 text-sm font-medium text-red-500 hover:bg-red-50 px-4 py-3 rounded-xl w-full transition-colors">
+                 <LogOut className="w-4 h-4" /> Sair
+             </button>
+         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden bg-gray-50/50">
-        <header className="h-16 bg-white border-b flex items-center justify-between px-6 shadow-sm sticky top-0 z-10">
-            <h2 className="text-lg font-bold text-gray-800 capitalize">{activeTab.replace('_', ' ')}</h2>
-            <div className="flex items-center gap-4">
-                <Button variant="outline" size="sm" onClick={fetchData} disabled={loading}>
-                    <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                    Atualizar
-                </Button>
-                <div className="flex items-center gap-3 border-l pl-4">
-                    <div className="text-right hidden md:block">
-                        <p className="text-sm font-bold text-gray-900">Administrador</p>
-                        <p className="text-xs text-green-600">Super User</p>
-                    </div>
-                    <Avatar className="w-8 h-8">
-                        <AvatarImage src="https://github.com/shadcn.png" />
-                        <AvatarFallback>AD</AvatarFallback>
-                    </Avatar>
-                </div>
-            </div>
-        </header>
+      {/* Conteúdo Principal */}
+      <main className="flex-1 flex flex-col overflow-hidden bg-slate-50/50">
+          {/* Topbar */}
+          <header className="h-20 border-b bg-white/80 backdrop-blur px-8 flex items-center justify-between sticky top-0 z-10">
+              <div>
+                  <h1 className="text-xl font-bold text-slate-800">
+                      {activeTab === 'overview' ? 'Painel de Controle' : 
+                       activeTab === 'users' ? 'Gestão de Passageiros' :
+                       activeTab === 'drivers' ? 'Gestão de Motoristas' :
+                       activeTab === 'finance' ? 'Controle Financeiro' : 'Configurações'}
+                  </h1>
+                  <p className="text-xs text-slate-400">Atualizado em tempo real</p>
+              </div>
+              <div className="flex items-center gap-4">
+                  <Button variant="outline" size="icon" onClick={fetchData} disabled={loading}>
+                      <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                  </Button>
+                  <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden border-2 border-white shadow-sm">
+                      <AvatarImage src="https://github.com/shadcn.png" />
+                  </div>
+              </div>
+          </header>
 
-        <div className="flex-1 overflow-auto p-8">
-            {/* TABS CONTENT */}
-            
-            {activeTab === 'overview' && (
-                <div className="space-y-8 animate-in fade-in duration-500">
-                    {/* Stats Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                        {[
-                            { title: "Faturamento Total", value: `R$ ${stats.totalRevenue.toFixed(2)}`, icon: Wallet, color: "bg-green-500" },
-                            { title: "Corridas Totais", value: stats.totalRides, icon: Car, color: "bg-blue-500" },
-                            { title: "Usuários Cadastrados", value: stats.totalUsers, icon: Users, color: "bg-purple-500" },
-                            { title: "Motoristas Ativos", value: stats.activeDrivers, icon: Settings, color: "bg-orange-500" },
-                        ].map((stat, i) => (
-                            <Card key={i} className="border-0 shadow-sm hover:shadow-md transition-shadow">
-                                <CardContent className="p-6 flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
-                                        <h3 className="text-3xl font-bold mt-2 text-gray-900">{stat.value}</h3>
-                                    </div>
-                                    <div className={`p-4 rounded-2xl text-white shadow-lg ${stat.color}`}>
-                                        <stat.icon className="w-6 h-6" />
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </div>
+          <div className="flex-1 overflow-y-auto p-8">
+              
+              {/* VISÃO GERAL */}
+              {activeTab === 'overview' && (
+                  <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                          {[
+                              { label: 'Faturamento', value: `R$ ${stats.revenue.toFixed(2)}`, icon: Wallet, color: 'text-green-600', bg: 'bg-green-50' },
+                              { label: 'Corridas Totais', value: stats.rides, icon: Car, color: 'text-blue-600', bg: 'bg-blue-50' },
+                              { label: 'Passageiros', value: stats.users, icon: Users, color: 'text-purple-600', bg: 'bg-purple-50' },
+                              { label: 'Motoristas', value: stats.drivers, icon: Car, color: 'text-orange-600', bg: 'bg-orange-50' },
+                          ].map((stat, i) => (
+                              <Card key={i} className="border-0 shadow-sm hover:shadow-md transition-shadow">
+                                  <CardContent className="p-6">
+                                      <div className={`w-12 h-12 rounded-2xl ${stat.bg} ${stat.color} flex items-center justify-center mb-4`}>
+                                          <stat.icon className="w-6 h-6" />
+                                      </div>
+                                      <p className="text-sm font-medium text-slate-500">{stat.label}</p>
+                                      <h3 className="text-3xl font-bold text-slate-900 mt-1">{stat.value}</h3>
+                                  </CardContent>
+                              </Card>
+                          ))}
+                      </div>
 
-                    {/* Recent Rides Table */}
-                    <Card className="border-0 shadow-sm">
-                        <CardHeader>
-                            <CardTitle>Corridas Recentes</CardTitle>
-                            <CardDescription>Monitoramento das últimas solicitações na plataforma</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>ID</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Categoria</TableHead>
-                                        <TableHead>Origem / Destino</TableHead>
-                                        <TableHead>Valor</TableHead>
-                                        <TableHead>Data</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {rides.slice(0, 10).map((ride) => (
-                                        <TableRow key={ride.id}>
-                                            <TableCell className="font-mono text-xs">{ride.id.slice(0, 8)}...</TableCell>
-                                            <TableCell>
-                                                <Badge className={
-                                                    ride.status === 'COMPLETED' ? 'bg-green-100 text-green-700 hover:bg-green-100' :
-                                                    ride.status === 'CANCELLED' ? 'bg-red-100 text-red-700 hover:bg-red-100' :
-                                                    ride.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700 hover:bg-blue-100' :
-                                                    'bg-yellow-100 text-yellow-700 hover:bg-yellow-100'
-                                                }>
-                                                    {ride.status}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell>{ride.category}</TableCell>
-                                            <TableCell className="max-w-[300px]">
-                                                <div className="text-xs truncate" title={ride.pickup_address}>📍 {ride.pickup_address}</div>
-                                                <div className="text-xs truncate text-gray-500" title={ride.destination_address}>🏁 {ride.destination_address}</div>
-                                            </TableCell>
-                                            <TableCell className="font-bold">R$ {ride.price}</TableCell>
-                                            <TableCell className="text-xs text-gray-500">
-                                                {new Date(ride.created_at).toLocaleDateString()} {new Date(ride.created_at).toLocaleTimeString().slice(0,5)}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                          <Card className="lg:col-span-2 border-0 shadow-sm">
+                              <CardHeader>
+                                  <CardTitle>Últimas Corridas</CardTitle>
+                              </CardHeader>
+                              <CardContent>
+                                  <Table>
+                                      <TableHeader>
+                                          <TableRow>
+                                              <TableHead>Status</TableHead>
+                                              <TableHead>Avaliação (Mot/Pass)</TableHead>
+                                              <TableHead>Valor</TableHead>
+                                              <TableHead className="text-right">Data</TableHead>
+                                          </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                          {rides.slice(0, 5).map(ride => (
+                                              <TableRow key={ride.id}>
+                                                  <TableCell>
+                                                      <Badge className={
+                                                          ride.status === 'COMPLETED' ? 'bg-green-100 text-green-700 hover:bg-green-100' :
+                                                          ride.status === 'CANCELLED' ? 'bg-red-100 text-red-700 hover:bg-red-100' :
+                                                          'bg-blue-100 text-blue-700 hover:bg-blue-100'
+                                                      }>{ride.status}</Badge>
+                                                  </TableCell>
+                                                  <TableCell>
+                                                      <div className="flex flex-col gap-1">
+                                                          <div className="flex items-center gap-1 text-xs text-gray-500">
+                                                              M: {renderStars(ride.driver_rating)}
+                                                          </div>
+                                                          <div className="flex items-center gap-1 text-xs text-gray-500">
+                                                              P: {renderStars(ride.customer_rating)}
+                                                          </div>
+                                                      </div>
+                                                  </TableCell>
+                                                  <TableCell className="font-bold">R$ {ride.price}</TableCell>
+                                                  <TableCell className="text-right text-gray-500 text-xs">
+                                                      {new Date(ride.created_at).toLocaleDateString()}
+                                                  </TableCell>
+                                              </TableRow>
+                                          ))}
+                                      </TableBody>
+                                  </Table>
+                              </CardContent>
+                          </Card>
+                          
+                          <Card className="border-0 shadow-sm overflow-hidden flex flex-col h-[400px]">
+                              <CardHeader className="bg-white border-b z-10">
+                                  <CardTitle>Mapa em Tempo Real</CardTitle>
+                              </CardHeader>
+                              <div className="flex-1 relative">
+                                  <MapComponent />
+                              </div>
+                          </Card>
+                      </div>
+                  </div>
+              )}
 
-            {activeTab === 'map' && (
-                <Card className="h-full border-0 shadow-sm overflow-hidden flex flex-col">
-                    <CardHeader className="bg-white border-b z-10">
-                        <div className="flex justify-between items-center">
-                            <CardTitle>Monitoramento em Tempo Real</CardTitle>
-                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                ● {rides.filter(r => r.status === 'IN_PROGRESS').length} Corridas em andamento
-                            </Badge>
-                        </div>
-                    </CardHeader>
-                    <div className="flex-1 relative bg-gray-100">
-                        <MapComponent />
-                        {/* Overlay simulado de corridas ativas */}
-                        <div className="absolute top-4 left-4 bg-white/90 backdrop-blur p-4 rounded-xl shadow-lg z-[400] max-w-sm">
-                            <h4 className="font-bold text-sm mb-2 text-gray-700">Atividade Recente</h4>
-                            <div className="space-y-3">
-                                {rides.slice(0,3).map(r => (
-                                    <div key={r.id} className="flex items-center gap-3 text-xs border-b last:border-0 pb-2 last:pb-0">
-                                        <div className={`w-2 h-2 rounded-full ${r.status === 'COMPLETED' ? 'bg-green-500' : 'bg-blue-500'}`} />
-                                        <div>
-                                            <p className="font-medium">{r.status}</p>
-                                            <p className="text-gray-500 truncate w-40">{r.destination_address}</p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </Card>
-            )}
+              {/* LISTA DE USUÁRIOS (GENÉRICA PARA DRIVER E PASSAGEIRO) */}
+              {(activeTab === 'users' || activeTab === 'drivers') && (
+                  <Card className="border-0 shadow-sm animate-in fade-in">
+                      <CardHeader className="flex flex-row items-center justify-between">
+                          <div>
+                              <CardTitle>Base de {activeTab === 'users' ? 'Passageiros' : 'Motoristas'}</CardTitle>
+                              <CardDescription>Gerencie os usuários cadastrados</CardDescription>
+                          </div>
+                          <div className="relative w-64">
+                              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                              <Input placeholder="Buscar por nome..." className="pl-9 bg-slate-50 border-0" />
+                          </div>
+                      </CardHeader>
+                      <CardContent>
+                          <Table>
+                              <TableHeader>
+                                  <TableRow>
+                                      <TableHead>Usuário</TableHead>
+                                      <TableHead>Status</TableHead>
+                                      <TableHead>ID</TableHead>
+                                      <TableHead className="text-right">Ações</TableHead>
+                                  </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                  {users
+                                    .filter(u => u.role === (activeTab === 'users' ? 'client' : 'driver'))
+                                    .map(user => (
+                                      <TableRow key={user.id}>
+                                          <TableCell>
+                                              <div className="flex items-center gap-3">
+                                                  <Avatar>
+                                                      <AvatarFallback className="bg-blue-100 text-blue-700 font-bold">
+                                                          {user.first_name?.[0]}{user.last_name?.[0]}
+                                                      </AvatarFallback>
+                                                  </Avatar>
+                                                  <div>
+                                                      <p className="font-medium text-slate-900">{user.first_name} {user.last_name}</p>
+                                                      <p className="text-xs text-slate-500">{user.id}</p>
+                                                  </div>
+                                              </div>
+                                          </TableCell>
+                                          <TableCell>
+                                              <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">Ativo</Badge>
+                                          </TableCell>
+                                          <TableCell className="font-mono text-xs text-gray-400">{user.id}</TableCell>
+                                          <TableCell className="text-right">
+                                              <Button variant="ghost" size="icon"><MoreHorizontal className="w-4 h-4" /></Button>
+                                          </TableCell>
+                                      </TableRow>
+                                  ))}
+                              </TableBody>
+                          </Table>
+                      </CardContent>
+                  </Card>
+              )}
 
-            {activeTab === 'finance' && (
-                <div className="space-y-6 animate-in slide-in-from-right duration-500">
-                     <div className="flex items-center justify-between">
-                        <div>
-                            <h2 className="text-2xl font-bold text-gray-900">Configuração de Preços</h2>
-                            <p className="text-gray-500">Gerencie o valor cobrado por km e tarifa base de cada categoria.</p>
-                        </div>
-                     </div>
-
-                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {categories.map((cat) => (
-                            <Card key={cat.id} className="border-0 shadow-sm hover:shadow-lg transition-all">
-                                <CardHeader className="pb-2">
-                                    <div className="flex justify-between items-center">
-                                        <CardTitle className="text-xl">{cat.name}</CardTitle>
-                                        <Badge variant="secondary">{cat.description}</Badge>
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="space-y-4 pt-4">
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-gray-500">Tarifa Base (R$)</label>
-                                        <Input 
-                                            type="number" 
-                                            value={cat.base_fare} 
-                                            onChange={(e) => handleUpdateCategory(cat.id, 'base_fare', e.target.value)}
-                                            className="font-bold text-lg"
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-gray-500">Preço por KM (R$)</label>
-                                        <Input 
-                                            type="number" 
-                                            value={cat.cost_per_km} 
-                                            onChange={(e) => handleUpdateCategory(cat.id, 'cost_per_km', e.target.value)}
-                                            className="font-bold text-lg"
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-gray-500">Tarifa Mínima (R$)</label>
-                                        <Input 
-                                            type="number" 
-                                            value={cat.min_fare} 
-                                            onChange={(e) => handleUpdateCategory(cat.id, 'min_fare', e.target.value)}
-                                            className="font-bold text-lg"
-                                        />
-                                    </div>
-                                    <Button className="w-full mt-4" onClick={() => saveCategoryChanges(cat)}>
-                                        <Save className="w-4 h-4 mr-2" /> Salvar Alterações
-                                    </Button>
-                                </CardContent>
-                            </Card>
-                        ))}
-                     </div>
-                </div>
-            )}
-
-            {activeTab === 'users' && (
-                <Card className="border-0 shadow-sm">
-                    <CardHeader>
-                        <CardTitle>Base de Usuários</CardTitle>
-                        <CardDescription>Gestão de passageiros e motoristas parceiros</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Tabs defaultValue="all" className="w-full">
-                            <TabsList className="mb-4">
-                                <TabsTrigger value="all">Todos</TabsTrigger>
-                                <TabsTrigger value="driver">Motoristas</TabsTrigger>
-                                <TabsTrigger value="client">Passageiros</TabsTrigger>
-                            </TabsList>
-                            <TabsContent value="all">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Nome</TableHead>
-                                            <TableHead>Perfil</TableHead>
-                                            <TableHead>ID</TableHead>
-                                            <TableHead>Cadastro</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {users.map((user) => (
-                                            <TableRow key={user.id}>
-                                                <TableCell className="font-medium">
-                                                    <div className="flex items-center gap-3">
-                                                        <Avatar className="w-8 h-8">
-                                                            <AvatarFallback>{user.first_name?.[0]}{user.last_name?.[0]}</AvatarFallback>
-                                                        </Avatar>
-                                                        {user.first_name} {user.last_name}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Badge variant={user.role === 'driver' ? 'default' : 'secondary'}>
-                                                        {user.role === 'driver' ? 'Motorista' : 'Passageiro'}
-                                                    </Badge>
-                                                </TableCell>
-                                                <TableCell className="font-mono text-xs text-gray-400">{user.id}</TableCell>
-                                                <TableCell className="text-gray-500">
-                                                    {user.updated_at ? new Date(user.updated_at).toLocaleDateString() : '-'}
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </TabsContent>
-                        </Tabs>
-                    </CardContent>
-                </Card>
-            )}
-        </div>
+              {/* CONFIGURAÇÕES E FINANCEIRO */}
+              {(activeTab === 'config' || activeTab === 'finance') && (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in slide-in-from-right">
+                      {categories.map((cat) => (
+                          <Card key={cat.id} className="border-0 shadow-md hover:shadow-xl transition-all duration-300">
+                              <CardHeader className="pb-4">
+                                  <div className="flex justify-between items-start">
+                                      <div>
+                                          <Badge variant="secondary" className="mb-2">{cat.name}</Badge>
+                                          <CardTitle className="text-lg">Configuração de Preço</CardTitle>
+                                      </div>
+                                      <Car className="w-8 h-8 text-slate-200" />
+                                  </div>
+                              </CardHeader>
+                              <CardContent className="space-y-4">
+                                  <div className="space-y-2">
+                                      <label className="text-xs font-bold text-slate-500 uppercase">Tarifa Base</label>
+                                      <div className="relative">
+                                          <span className="absolute left-3 top-2.5 text-slate-400">R$</span>
+                                          <Input 
+                                              type="number" 
+                                              className="pl-8 font-bold"
+                                              value={cat.base_fare} 
+                                              onChange={(e) => updateCategory(cat.id, 'base_fare', e.target.value)}
+                                          />
+                                      </div>
+                                  </div>
+                                  <div className="space-y-2">
+                                      <label className="text-xs font-bold text-slate-500 uppercase">Por Km</label>
+                                      <div className="relative">
+                                          <span className="absolute left-3 top-2.5 text-slate-400">R$</span>
+                                          <Input 
+                                              type="number" 
+                                              className="pl-8 font-bold"
+                                              value={cat.cost_per_km} 
+                                              onChange={(e) => updateCategory(cat.id, 'cost_per_km', e.target.value)}
+                                          />
+                                      </div>
+                                  </div>
+                                  <Button className="w-full bg-slate-900 hover:bg-slate-800" onClick={() => saveCategory(cat)}>
+                                      <Save className="w-4 h-4 mr-2" /> Salvar Alterações
+                                  </Button>
+                              </CardContent>
+                          </Card>
+                      ))}
+                  </div>
+              )}
+          </div>
       </main>
     </div>
   );

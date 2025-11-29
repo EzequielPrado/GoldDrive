@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Wallet, User, MapPin, Navigation, Shield, DollarSign, Clock } from "lucide-react";
+import { Wallet, User, MapPin, Navigation, Shield, DollarSign, Clock, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -8,15 +8,18 @@ import { useRide, RideData } from "@/context/RideContext";
 import { showSuccess } from "@/utils/toast";
 
 const DriverDashboard = () => {
-  const { ride, availableRides, acceptRide, finishRide, startRide } = useRide();
+  const { ride, availableRides, acceptRide, finishRide, startRide, rateRide } = useRide();
   const [isOnline, setIsOnline] = useState(false);
   const [incomingRide, setIncomingRide] = useState<RideData | null>(null);
   const [timer, setTimer] = useState(15);
+  const [rating, setRating] = useState(0);
 
-  // Efeito para "tocar" quando chega nova corrida
+  // Estados derivados
+  const isOnTrip = !!ride && ride.status !== 'COMPLETED';
+  const isRating = ride?.status === 'COMPLETED';
+
   useEffect(() => {
     if (isOnline && availableRides.length > 0 && !ride) {
-        // Pega a primeira da fila
         setIncomingRide(availableRides[0]);
         setTimer(15);
     } else {
@@ -24,17 +27,14 @@ const DriverDashboard = () => {
     }
   }, [availableRides, isOnline, ride]);
 
-  // Timer do popup
   useEffect(() => {
     if (incomingRide && timer > 0) {
         const interval = setInterval(() => setTimer(t => t - 1), 1000);
         return () => clearInterval(interval);
     } else if (timer === 0) {
-        setIncomingRide(null); // Tempo esgotou
+        setIncomingRide(null);
     }
   }, [incomingRide, timer]);
-
-  const isOnTrip = !!ride;
 
   const handleAccept = async () => {
     if (incomingRide) {
@@ -44,12 +44,10 @@ const DriverDashboard = () => {
     }
   };
 
-  const handleStartTrip = async () => {
-      if (ride) await startRide(ride.id);
-  };
-
-  const handleFinishTrip = async () => {
-      if (ride) await finishRide(ride.id);
+  const handleSubmitRating = async (stars: number) => {
+      if (ride) {
+          await rateRide(ride.id, stars, true); // true = isDriver
+      }
   };
 
   return (
@@ -61,7 +59,7 @@ const DriverDashboard = () => {
              <div className="bg-zinc-700 p-2 rounded-full"><User className="w-5 h-5" /></div>
              <div>
                 <div className="font-bold text-sm">Carlos Mot.</div>
-                <div className="text-xs text-yellow-400">★ 4.98 • ABC-1234</div>
+                <div className="text-xs text-yellow-400">★ 4.98</div>
              </div>
           </div>
           <div className="flex items-center gap-3 bg-zinc-800 px-4 py-2 rounded-full border border-zinc-700">
@@ -74,20 +72,49 @@ const DriverDashboard = () => {
       </header>
 
       <div className="flex-1 relative">
+         {/* TELA DE AVALIAÇÃO (MODAL) */}
+         {isRating && (
+             <div className="absolute inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+                 <div className="bg-zinc-900 text-white w-full max-w-sm rounded-3xl p-6 text-center animate-in zoom-in-95">
+                     <h2 className="text-2xl font-bold mb-2">Avaliar Passageiro</h2>
+                     <p className="text-gray-400 mb-8">Como foi o comportamento do passageiro?</p>
+                     
+                     <div className="flex justify-center gap-2 mb-8">
+                         {[1, 2, 3, 4, 5].map((star) => (
+                             <button 
+                                key={star}
+                                onClick={() => setRating(star)}
+                                className="transition-transform hover:scale-110 focus:outline-none"
+                             >
+                                 <Star 
+                                    className={`w-10 h-10 ${rating >= star ? 'fill-yellow-400 text-yellow-400' : 'text-zinc-600'}`} 
+                                 />
+                             </button>
+                         ))}
+                     </div>
+
+                     <Button className="w-full h-12 text-lg font-bold bg-green-600 hover:bg-green-700 mb-3" onClick={() => handleSubmitRating(rating || 5)}>
+                         Confirmar Avaliação
+                     </Button>
+                     <Button variant="ghost" className="w-full text-gray-400 hover:text-white" onClick={() => handleSubmitRating(0)}>
+                         Pular Avaliação
+                     </Button>
+                 </div>
+             </div>
+         )}
+
         {isOnline ? (
             <div className="h-full w-full relative">
                 <MapComponent className="h-full w-full" showPickup={isOnTrip} />
                 
-                {/* Status Float */}
-                {!isOnTrip && !incomingRide && (
+                {!isOnTrip && !incomingRide && !isRating && (
                     <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-zinc-900/90 text-white px-6 py-2 rounded-full shadow-lg backdrop-blur z-20 flex items-center gap-2">
                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                          <p className="text-sm font-medium">Procurando corridas...</p>
                     </div>
                 )}
 
-                {/* Painel da Viagem Ativa */}
-                {isOnTrip && (
+                {isOnTrip && !isRating && (
                     <div className="absolute bottom-0 left-0 right-0 bg-white shadow-[0_-5px_30px_rgba(0,0,0,0.3)] z-20 animate-in slide-in-from-bottom duration-500">
                         <div className="p-6">
                             <div className="flex justify-between items-center mb-6">
@@ -96,7 +123,6 @@ const DriverDashboard = () => {
                                         <span className={`px-2 py-0.5 rounded text-xs font-bold text-white ${ride?.status === 'ACCEPTED' ? 'bg-blue-500' : 'bg-green-600'}`}>
                                             {ride?.status === 'ACCEPTED' ? 'BUSCANDO' : 'EM VIAGEM'}
                                         </span>
-                                        <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded uppercase">{ride?.category}</span>
                                     </div>
                                     <h3 className="text-xl font-bold text-gray-900">Passageiro</h3>
                                     <p className="text-gray-500 text-sm truncate max-w-[200px]">{ride?.destination_address}</p>
@@ -108,11 +134,11 @@ const DriverDashboard = () => {
                             </div>
                             
                             {ride?.status === 'ACCEPTED' ? (
-                                 <Button className="w-full py-6 text-lg bg-blue-600 hover:bg-blue-700 font-bold rounded-xl shadow-lg shadow-blue-200" onClick={handleStartTrip}>
+                                 <Button className="w-full py-6 text-lg bg-blue-600 hover:bg-blue-700 font-bold rounded-xl shadow-lg shadow-blue-200" onClick={() => startRide(ride!.id)}>
                                     <Navigation className="mr-2 h-5 w-5" /> Iniciar Corrida
                                  </Button>
                             ) : (
-                                 <Button className="w-full py-6 text-lg bg-green-600 hover:bg-green-700 font-bold rounded-xl shadow-lg shadow-green-200" onClick={handleFinishTrip}>
+                                 <Button className="w-full py-6 text-lg bg-green-600 hover:bg-green-700 font-bold rounded-xl shadow-lg shadow-green-200" onClick={() => finishRide(ride!.id)}>
                                     <Shield className="mr-2 h-5 w-5" /> Finalizar & Receber
                                  </Button>
                             )}
@@ -126,18 +152,16 @@ const DriverDashboard = () => {
                     <Wallet className="w-16 h-16 text-zinc-600" />
                  </div>
                  <h2 className="text-3xl font-bold text-white">Você está offline</h2>
-                 <p className="text-gray-400 max-w-xs">Fique online para começar a receber chamadas e faturar.</p>
                  <Button size="lg" className="w-full max-w-xs bg-green-600 hover:bg-green-700 mt-4" onClick={() => setIsOnline(true)}>
                     FICAR ONLINE
                  </Button>
             </div>
         )}
 
-        {/* POPUP DE NOVA CORRIDA (OVERLAY TOTAL) */}
-        {incomingRide && (
+        {/* POPUP DE NOVA CORRIDA */}
+        {incomingRide && !isRating && (
             <div className="absolute inset-0 z-50 flex flex-col bg-zinc-900 text-white animate-in slide-in-from-bottom duration-300">
                 <div className="flex-1 flex flex-col items-center justify-center p-6 relative">
-                    {/* Timer Circle */}
                     <div className="absolute top-6 right-6 w-12 h-12 rounded-full border-4 border-white/20 flex items-center justify-center font-bold text-xl">
                         {timer}
                     </div>
