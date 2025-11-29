@@ -11,39 +11,49 @@ interface ProtectedRouteProps {
 const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<any>(null);
-  const [userRole, setUserRole] = useState<string | null>(null);
+  const [authorized, setAuthorized] = useState(false);
 
   useEffect(() => {
     let mounted = true;
 
     const checkAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        // 1. Verifica sessão local (Instantâneo)
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
         
-        if (!session) {
+        if (!currentSession) {
           if (mounted) setLoading(false);
           return;
         }
 
-        if (mounted) setSession(session);
+        if (mounted) setSession(currentSession);
 
-        // Busca a role no perfil com timeout para não travar
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', session.user.id)
-          .single();
+        // 2. Verifica role nos metadados (Sem ir ao banco de dados)
+        // Isso resolve o problema de lentidão/loop
+        const metaRole = currentSession.user.user_metadata?.role || 'client';
         
-        if (mounted) {
-            if (profile) {
-                setUserRole(profile.role);
-            } else {
-                // Fallback se o profile ainda não foi criado (race condition do signup)
-                // Tenta ler dos metadados ou define padrão
-                setUserRole(session.user.user_metadata?.role || 'client');
+        // Se a role bater, libera imediatamente
+        if (allowedRoles.includes(metaRole)) {
+            if (mounted) {
+                setAuthorized(true);
+                setLoading(false);
             }
-            setLoading(false);
+        } else {
+            // Se não bater, tenta buscar no banco apenas por garantia (fallback)
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', currentSession.user.id)
+                .single();
+            
+            if (mounted) {
+                if (profile && allowedRoles.includes(profile.role)) {
+                    setAuthorized(true);
+                }
+                setLoading(false);
+            }
         }
+
       } catch (error) {
         console.error("Auth check error", error);
         if (mounted) setLoading(false);
@@ -53,13 +63,16 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
     checkAuth();
 
     return () => { mounted = false; };
-  }, []);
+  }, [allowedRoles]);
 
   if (loading) {
     return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-gray-50 gap-4">
-        <Loader2 className="w-10 h-10 animate-spin text-yellow-500" />
-        <p className="text-gray-500 font-medium animate-pulse">Carregando GoldDrive...</p>
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-white gap-4">
+        {/* Loading Minimalista */}
+        <div className="relative w-16 h-16">
+            <div className="absolute inset-0 border-4 border-gray-100 rounded-full"></div>
+            <div className="absolute inset-0 border-4 border-yellow-500 rounded-full border-t-transparent animate-spin"></div>
+        </div>
       </div>
     );
   }
@@ -68,12 +81,12 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
     return <Navigate to="/login" replace />;
   }
 
-  // Se tiver a role mas ela não estiver na lista de permitidas
-  if (userRole && !allowedRoles.includes(userRole)) {
-    if (userRole === 'admin') return <Navigate to="/admin" replace />;
-    if (userRole === 'driver') return <Navigate to="/driver" replace />;
-    if (userRole === 'client') return <Navigate to="/client" replace />;
-    return <Navigate to="/" replace />;
+  if (!authorized) {
+      // Redireciona para o dashboard correto baseado na role se tentar acessar área errada
+      const role = session.user.user_metadata?.role;
+      if (role === 'admin') return <Navigate to="/admin" replace />;
+      if (role === 'driver') return <Navigate to="/driver" replace />;
+      return <Navigate to="/client" replace />;
   }
 
   return <>{children}</>;
