@@ -9,13 +9,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"; // Importação do Sheet
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import MapComponent from "@/components/MapComponent";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { showSuccess, showError } from "@/utils/toast";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -24,10 +24,11 @@ const AdminDashboard = () => {
   const [userProfile, setUserProfile] = useState<any>(null);
   
   // Dados
-  const [stats, setStats] = useState({ revenue: 0, rides: 0, users: 0, drivers: 0 });
+  const [stats, setStats] = useState({ revenue: 0, adminRevenue: 0, rides: 0, users: 0, drivers: 0 });
   const [users, setUsers] = useState<any[]>([]);
   const [rides, setRides] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [chartData, setChartData] = useState<any[]>([]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -40,8 +41,21 @@ const AdminDashboard = () => {
 
         // Corridas e Receita
         const { data: ridesData } = await supabase.from('rides').select('*').order('created_at', { ascending: false });
-        const revenue = ridesData?.filter(r => r.status === 'COMPLETED').reduce((acc, curr) => acc + (Number(curr.price) || 0), 0) || 0;
         
+        const totalRevenue = ridesData?.filter(r => r.status === 'COMPLETED').reduce((acc, curr) => acc + (Number(curr.price) || 0), 0) || 0;
+        const adminRev = ridesData?.reduce((acc, curr) => acc + (Number(curr.platform_fee) || 0), 0) || 0;
+        
+        // Dados para gráfico (Agrupar por data)
+        const chartMap = new Map();
+        ridesData?.forEach(r => {
+            const date = new Date(r.created_at).toLocaleDateString();
+            if(!chartMap.has(date)) chartMap.set(date, { date, total: 0, admin: 0 });
+            const item = chartMap.get(date);
+            item.total += Number(r.price || 0);
+            item.admin += Number(r.platform_fee || 0);
+        });
+        setChartData(Array.from(chartMap.values()).reverse());
+
         // Usuários
         const { data: usersData } = await supabase.from('profiles').select('*');
         
@@ -49,7 +63,8 @@ const AdminDashboard = () => {
         const { data: catsData } = await supabase.from('car_categories').select('*').order('base_fare', { ascending: true });
 
         setStats({
-            revenue,
+            revenue: totalRevenue,
+            adminRevenue: adminRev,
             rides: ridesData?.length || 0,
             users: usersData?.filter((u:any) => u.role === 'client').length || 0,
             drivers: usersData?.filter((u:any) => u.role === 'driver').length || 0
@@ -89,17 +104,11 @@ const AdminDashboard = () => {
   };
 
   const renderStars = (rating?: number) => {
-      if (!rating) return <span className="text-gray-300 text-xs">Sem avaliação</span>;
-      return (
-          <div className="flex text-yellow-400">
-              {[...Array(5)].map((_, i) => (
-                  <Star key={i} className={`w-3 h-3 ${i < rating ? 'fill-current' : 'text-gray-200'}`} />
-              ))}
-          </div>
-      );
+      if (!rating) return <span className="text-gray-300 text-xs">-</span>;
+      return <span className="text-yellow-500 font-bold text-xs">★ {rating}</span>;
   };
 
-  // Componente de Navegação Reutilizável
+  // Componente de Navegação
   const NavContent = () => (
     <div className="flex flex-col h-full">
          <div className="p-8 pb-4">
@@ -115,6 +124,7 @@ const AdminDashboard = () => {
          <nav className="flex-1 px-4 space-y-1 mt-6">
              {[
                  { id: 'overview', label: 'Visão Geral', icon: LayoutDashboard },
+                 { id: 'rides', label: 'Corridas', icon: MapIcon },
                  { id: 'users', label: 'Passageiros', icon: Users },
                  { id: 'drivers', label: 'Motoristas', icon: Car },
                  { id: 'finance', label: 'Financeiro', icon: Wallet },
@@ -176,7 +186,8 @@ const AdminDashboard = () => {
                           {activeTab === 'overview' ? 'Painel de Controle' : 
                            activeTab === 'users' ? 'Gestão de Passageiros' :
                            activeTab === 'drivers' ? 'Gestão de Motoristas' :
-                           activeTab === 'finance' ? 'Controle Financeiro' : 'Configurações'}
+                           activeTab === 'finance' ? 'Controle Financeiro' :
+                           activeTab === 'rides' ? 'Monitoramento de Corridas' : 'Configurações'}
                       </h1>
                   </div>
               </div>
@@ -193,15 +204,15 @@ const AdminDashboard = () => {
           </header>
 
           <div className="flex-1 overflow-y-auto p-4 lg:p-8">
-              {/* O conteúdo das tabs permanece o mesmo, a estrutura já é responsiva (grid) */}
+              {/* VISÃO GERAL */}
               {activeTab === 'overview' && (
                   <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                           {[
-                              { label: 'Faturamento', value: `R$ ${stats.revenue.toFixed(2)}`, icon: Wallet, color: 'text-green-600', bg: 'bg-green-50' },
+                              { label: 'Vol. Transacionado', value: `R$ ${stats.revenue.toFixed(2)}`, icon: Wallet, color: 'text-green-600', bg: 'bg-green-50' },
+                              { label: 'Receita Admin (20%)', value: `R$ ${stats.adminRevenue.toFixed(2)}`, icon: ArrowUpRight, color: 'text-emerald-600', bg: 'bg-emerald-50' },
                               { label: 'Corridas Totais', value: stats.rides, icon: Car, color: 'text-blue-600', bg: 'bg-blue-50' },
                               { label: 'Passageiros', value: stats.users, icon: Users, color: 'text-purple-600', bg: 'bg-purple-50' },
-                              { label: 'Motoristas', value: stats.drivers, icon: Car, color: 'text-orange-600', bg: 'bg-orange-50' },
                           ].map((stat, i) => (
                               <Card key={i} className="border-0 shadow-sm hover:shadow-md transition-shadow">
                                   <CardContent className="p-6">
@@ -209,70 +220,111 @@ const AdminDashboard = () => {
                                           <stat.icon className="w-6 h-6" />
                                       </div>
                                       <p className="text-sm font-medium text-slate-500">{stat.label}</p>
-                                      <h3 className="text-3xl font-bold text-slate-900 mt-1">{stat.value}</h3>
+                                      <h3 className="text-2xl font-bold text-slate-900 mt-1">{stat.value}</h3>
                                   </CardContent>
                               </Card>
                           ))}
                       </div>
 
-                      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-                          <Card className="xl:col-span-2 border-0 shadow-sm">
-                              <CardHeader>
-                                  <CardTitle>Últimas Corridas</CardTitle>
-                              </CardHeader>
-                              <CardContent>
-                                  <div className="overflow-x-auto">
-                                      <Table>
-                                          <TableHeader>
-                                              <TableRow>
-                                                  <TableHead>Status</TableHead>
-                                                  <TableHead>Avaliação</TableHead>
-                                                  <TableHead>Valor</TableHead>
-                                                  <TableHead className="text-right">Data</TableHead>
-                                              </TableRow>
-                                          </TableHeader>
-                                          <TableBody>
-                                              {rides.slice(0, 5).map(ride => (
-                                                  <TableRow key={ride.id}>
-                                                      <TableCell>
-                                                          <Badge className={
-                                                              ride.status === 'COMPLETED' ? 'bg-green-100 text-green-700 hover:bg-green-100' :
-                                                              ride.status === 'CANCELLED' ? 'bg-red-100 text-red-700 hover:bg-red-100' :
-                                                              'bg-blue-100 text-blue-700 hover:bg-blue-100'
-                                                          }>{ride.status}</Badge>
-                                                      </TableCell>
-                                                      <TableCell>
-                                                          <div className="flex flex-col gap-1 min-w-[100px]">
-                                                              <div className="flex items-center gap-1 text-xs text-gray-500">
-                                                                  M: {renderStars(ride.driver_rating)}
-                                                              </div>
-                                                              <div className="flex items-center gap-1 text-xs text-gray-500">
-                                                                  P: {renderStars(ride.customer_rating)}
-                                                              </div>
-                                                          </div>
-                                                      </TableCell>
-                                                      <TableCell className="font-bold">R$ {ride.price}</TableCell>
-                                                      <TableCell className="text-right text-gray-500 text-xs whitespace-nowrap">
-                                                          {new Date(ride.created_at).toLocaleDateString()}
-                                                      </TableCell>
-                                                  </TableRow>
-                                              ))}
-                                          </TableBody>
-                                      </Table>
-                                  </div>
-                              </CardContent>
-                          </Card>
-                          
-                          <Card className="border-0 shadow-sm overflow-hidden flex flex-col h-[400px]">
-                              <CardHeader className="bg-white border-b z-10">
-                                  <CardTitle>Mapa em Tempo Real</CardTitle>
-                              </CardHeader>
-                              <div className="flex-1 relative">
-                                  <MapComponent />
-                              </div>
-                          </Card>
-                      </div>
+                      {/* Gráfico */}
+                      <Card className="border-0 shadow-sm">
+                          <CardHeader>
+                              <CardTitle>Desempenho Financeiro</CardTitle>
+                          </CardHeader>
+                          <CardContent className="h-[300px]">
+                              <ResponsiveContainer width="100%" height="100%">
+                                  <LineChart data={chartData}>
+                                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                      <XAxis dataKey="date" />
+                                      <YAxis />
+                                      <Tooltip />
+                                      <Line type="monotone" dataKey="total" stroke="#2563eb" strokeWidth={2} name="Total" />
+                                      <Line type="monotone" dataKey="admin" stroke="#10b981" strokeWidth={2} name="Receita Admin" />
+                                  </LineChart>
+                              </ResponsiveContainer>
+                          </CardContent>
+                      </Card>
                   </div>
+              )}
+              
+              {/* FINANCEIRO (DETALHADO) */}
+              {activeTab === 'finance' && (
+                  <div className="space-y-6 animate-in slide-in-from-right">
+                       <Card className="border-0 shadow-sm">
+                          <CardHeader>
+                              <CardTitle>Fluxo de Caixa</CardTitle>
+                              <CardDescription>Análise detalhada de receitas e taxas</CardDescription>
+                          </CardHeader>
+                          <CardContent className="h-[400px]">
+                              <ResponsiveContainer width="100%" height="100%">
+                                  <BarChart data={chartData}>
+                                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                      <XAxis dataKey="date" />
+                                      <YAxis />
+                                      <Tooltip />
+                                      <Bar dataKey="total" fill="#2563eb" name="Vol. Total" radius={[4,4,0,0]} />
+                                      <Bar dataKey="admin" fill="#10b981" name="Lucro Admin" radius={[4,4,0,0]} />
+                                  </BarChart>
+                              </ResponsiveContainer>
+                          </CardContent>
+                      </Card>
+                  </div>
+              )}
+
+              {/* CORRIDAS (TABELA DETALHADA) */}
+              {(activeTab === 'rides' || activeTab === 'overview') && (
+                  <Card className="border-0 shadow-sm mt-6">
+                      <CardHeader>
+                          <CardTitle>{activeTab === 'rides' ? 'Todas as Corridas' : 'Últimas Corridas'}</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                          <div className="overflow-x-auto">
+                              <Table>
+                                  <TableHeader>
+                                      <TableRow>
+                                          <TableHead>ID</TableHead>
+                                          <TableHead>Status</TableHead>
+                                          <TableHead>Avaliação (Mot/Pass)</TableHead>
+                                          <TableHead>Total</TableHead>
+                                          <TableHead>Lucro Admin</TableHead>
+                                          <TableHead>Mot. Ganho</TableHead>
+                                          <TableHead className="text-right">Data</TableHead>
+                                      </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                      {(activeTab === 'overview' ? rides.slice(0, 5) : rides).map(ride => (
+                                          <TableRow key={ride.id}>
+                                              <TableCell className="font-mono text-xs text-gray-400">{ride.id.substring(0,6)}</TableCell>
+                                              <TableCell>
+                                                  <Badge className={
+                                                      ride.status === 'COMPLETED' ? 'bg-green-100 text-green-700 hover:bg-green-100' :
+                                                      ride.status === 'CANCELLED' ? 'bg-red-100 text-red-700 hover:bg-red-100' :
+                                                      'bg-blue-100 text-blue-700 hover:bg-blue-100'
+                                                  }>{ride.status}</Badge>
+                                              </TableCell>
+                                              <TableCell>
+                                                  <div className="flex flex-col gap-1 min-w-[100px]">
+                                                      <div className="flex items-center gap-1 text-xs text-gray-500">
+                                                          M: {renderStars(ride.driver_rating)}
+                                                      </div>
+                                                      <div className="flex items-center gap-1 text-xs text-gray-500">
+                                                          P: {renderStars(ride.customer_rating)}
+                                                      </div>
+                                                  </div>
+                                              </TableCell>
+                                              <TableCell className="font-bold">R$ {ride.price}</TableCell>
+                                              <TableCell className="text-emerald-600 font-medium">R$ {ride.platform_fee || 0}</TableCell>
+                                              <TableCell className="text-blue-600 font-medium">R$ {ride.driver_earnings || 0}</TableCell>
+                                              <TableCell className="text-right text-gray-500 text-xs whitespace-nowrap">
+                                                  {new Date(ride.created_at).toLocaleDateString()} {new Date(ride.created_at).toLocaleTimeString()}
+                                              </TableCell>
+                                          </TableRow>
+                                      ))}
+                                  </TableBody>
+                              </Table>
+                          </div>
+                      </CardContent>
+                  </Card>
               )}
 
               {/* LISTA DE USUÁRIOS */}
@@ -294,8 +346,8 @@ const AdminDashboard = () => {
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Usuário</TableHead>
+                                        <TableHead>Saldo Atual</TableHead>
                                         <TableHead>Status</TableHead>
-                                        <TableHead className="hidden md:table-cell">ID</TableHead>
                                         <TableHead className="text-right">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -318,10 +370,12 @@ const AdminDashboard = () => {
                                                     </div>
                                                 </div>
                                             </TableCell>
+                                            <TableCell className="font-bold">
+                                                R$ {user.balance?.toFixed(2) || '0.00'}
+                                            </TableCell>
                                             <TableCell>
                                                 <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">Ativo</Badge>
                                             </TableCell>
-                                            <TableCell className="font-mono text-xs text-gray-400 hidden md:table-cell">{user.id}</TableCell>
                                             <TableCell className="text-right">
                                                 <Button variant="ghost" size="icon"><MoreHorizontal className="w-4 h-4" /></Button>
                                             </TableCell>
@@ -334,8 +388,8 @@ const AdminDashboard = () => {
                   </Card>
               )}
 
-              {/* CONFIGURAÇÕES E FINANCEIRO */}
-              {(activeTab === 'config' || activeTab === 'finance') && (
+              {/* CONFIGURAÇÕES */}
+              {activeTab === 'config' && (
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in slide-in-from-right">
                       {categories.map((cat) => (
                           <Card key={cat.id} className="border-0 shadow-md hover:shadow-xl transition-all duration-300">

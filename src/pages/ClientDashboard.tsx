@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import MapComponent from "@/components/MapComponent";
 import { 
-  MapPin, Menu, User, ArrowLeft, Car, Navigation, Loader2, Star
+  MapPin, Menu, User, ArrowLeft, Car, Navigation, Loader2, Star, Wallet
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,7 +71,7 @@ const ClientDashboard = () => {
     if (ride) {
       if (ride.status === 'COMPLETED') {
          setStep('rating');
-      } else if (['SEARCHING', 'ACCEPTED', 'IN_PROGRESS'].includes(ride.status)) {
+      } else if (['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(ride.status)) {
          setStep('waiting');
       }
     } else {
@@ -126,6 +126,8 @@ const ClientDashboard = () => {
         } else {
             showError("Dados inválidos. Tente novamente.");
         }
+    } catch (e: any) {
+        showError(e.message);
     } finally {
         setIsRequesting(false);
     }
@@ -167,13 +169,16 @@ const ClientDashboard = () => {
                             </Avatar>
                             <div>
                                 <SheetTitle className="text-lg">{userProfile?.first_name}</SheetTitle>
-                                <p className="text-sm text-gray-500">5.0 ★</p>
+                                <p className="text-sm text-gray-500">R$ {userProfile?.balance?.toFixed(2) || '0.00'}</p>
                             </div>
                         </div>
                     </SheetHeader>
                     <div className="space-y-2">
                         <Button variant="ghost" className="w-full justify-start text-lg" onClick={() => navigate('/profile')}>
                             <User className="mr-2 h-5 w-5" /> Perfil
+                        </Button>
+                        <Button variant="ghost" className="w-full justify-start text-lg" onClick={() => navigate('/wallet')}>
+                            <Wallet className="mr-2 h-5 w-5" /> Carteira
                         </Button>
                         <Button variant="ghost" className="w-full justify-start text-lg text-red-500" onClick={() => navigate('/')}>
                             Sair
@@ -302,7 +307,7 @@ const ClientDashboard = () => {
                         <div className="flex-1">
                             <p className="text-xs text-gray-500 mb-1">Pagamento</p>
                             <div className="flex items-center gap-2 font-bold">
-                                💵 Dinheiro
+                                💵 Saldo App
                             </div>
                         </div>
                         <Button className="flex-[2] py-6 text-lg rounded-xl bg-black hover:bg-zinc-800" onClick={confirmRide} disabled={!selectedCategoryId || isRequesting}>
@@ -314,7 +319,7 @@ const ClientDashboard = () => {
 
             {step === 'waiting' && (
                 <div className="text-center py-4">
-                    {ride?.status === 'ACCEPTED' || ride?.status === 'IN_PROGRESS' ? (
+                    {ride?.status === 'ACCEPTED' || ride?.status === 'IN_PROGRESS' || ride?.status === 'ARRIVED' ? (
                         <div className="animate-in fade-in zoom-in space-y-4">
                             <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-4">
                                 <div className="w-14 h-14 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden border-2 border-white shadow">
@@ -334,12 +339,15 @@ const ClientDashboard = () => {
                                  <div className="text-left">
                                     <p className="text-xs text-gray-500 uppercase font-bold">Status</p>
                                     <p className="text-blue-600 font-bold animate-pulse">
-                                        {ride.status === 'IN_PROGRESS' ? 'Em viagem ao destino' : 'Motorista chegando'}
+                                        {ride.status === 'ARRIVED' ? 'Motorista no local!' :
+                                         ride.status === 'IN_PROGRESS' ? 'Em viagem ao destino' : 'Motorista chegando'}
                                     </p>
                                  </div>
                                  <div className="text-right">
-                                    <p className="text-xs text-gray-500 uppercase font-bold">Chegada</p>
-                                    <p className="font-bold">14:35</p>
+                                    <p className="text-xs text-gray-500 uppercase font-bold">Tempo</p>
+                                    <p className="font-bold">
+                                        {ride.status === 'ACCEPTED' ? '60s' : '--'}
+                                    </p>
                                  </div>
                             </div>
 
@@ -353,7 +361,7 @@ const ClientDashboard = () => {
                         <>
                             <div className="w-20 h-20 bg-blue-50 rounded-full mx-auto flex items-center justify-center mb-4 relative">
                                 <div className="absolute inset-0 border-4 border-blue-500 rounded-full animate-ping opacity-20"></div>
-                                <Car className="w-8 h-8 text-blue-600" />
+                                <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
                             </div>
                             <h3 className="text-xl font-bold mb-2">Procurando motorista...</h3>
                             <p className="text-gray-500 mb-6 text-sm px-8">Estamos oferecendo sua corrida para os motoristas parceiros da GoMove.</p>
