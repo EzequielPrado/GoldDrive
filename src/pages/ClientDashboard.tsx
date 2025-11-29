@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import MapComponent from "@/components/MapComponent";
 import { 
-  MapPin, Menu, User, ArrowLeft, Car, Navigation, Loader2, Star, Wallet
+  MapPin, Menu, User, ArrowLeft, Car, Navigation, Loader2, Star, Wallet, AlertCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 const MOCK_LOCATIONS = [
     { id: "short", label: "Shopping Center (2km)", distance: "2.1 km", km: 2.1 },
@@ -40,34 +41,59 @@ const ClientDashboard = () => {
   const [isRequesting, setIsRequesting] = useState(false);
   const [rating, setRating] = useState(0);
   
+  // Dados
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingCats, setLoadingCats] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
 
+  // Controle de Saldo
+  const [showBalanceAlert, setShowBalanceAlert] = useState(false);
+  const [missingAmount, setMissingAmount] = useState(0);
+
+  // Carregar dados iniciais e monitorar saldo
   useEffect(() => {
-    const fetchCategories = async () => {
-        setLoadingCats(true);
-        const { data } = await supabase.from('car_categories').select('*').order('base_fare', { ascending: true });
-        if (data && data.length > 0) {
-            setCategories(data);
-            setSelectedCategoryId(data[0].id);
-        }
-        setLoadingCats(false);
-    };
+    fetchInitialData();
 
-    const fetchProfile = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if(user) {
-             const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-             setUserProfile(data);
+    // Monitorar mudanças no saldo em tempo real (para atualizar quando voltar da carteira)
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+        },
+        (payload) => {
+             if (userProfile && payload.new.id === userProfile.id) {
+                 setUserProfile(payload.new);
+             }
         }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [userProfile?.id]); // Re-executa se o ID mudar, mas idealmente só uma vez após login
+
+  const fetchInitialData = async () => {
+    setLoadingCats(true);
+    // Categorias
+    const { data: cats } = await supabase.from('car_categories').select('*').order('base_fare', { ascending: true });
+    if (cats && cats.length > 0) {
+        setCategories(cats);
+        setSelectedCategoryId(cats[0].id);
     }
+    
+    // Perfil
+    const { data: { user } } = await supabase.auth.getUser();
+    if(user) {
+         const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+         setUserProfile(data);
+    }
+    setLoadingCats(false);
+  };
 
-    fetchCategories();
-    fetchProfile();
-  }, []);
-
-  // Monitora estado da corrida e Timeout
+  // Monitora estado da corrida
   useEffect(() => {
     let timeout: NodeJS.Timeout;
 
@@ -77,7 +103,6 @@ const ClientDashboard = () => {
       } else if (['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(ride.status)) {
          setStep('waiting');
          
-         // Se ficar procurando por mais de 60 segundos, cancela
          if (ride.status === 'SEARCHING') {
              const created = new Date(ride.created_at).getTime();
              const now = new Date().getTime();
@@ -90,7 +115,6 @@ const ClientDashboard = () => {
                      showError("Nenhum motorista disponível no momento. Tente novamente.");
                  }, remaining);
              } else {
-                 // Já passou do tempo (page refresh)
                  cancelRide(ride.id, 'TIMEOUT');
              }
          }
@@ -98,7 +122,6 @@ const ClientDashboard = () => {
     } else {
       setStep('search');
     }
-    
     return () => clearTimeout(timeout);
   }, [ride]);
 
@@ -137,18 +160,28 @@ const ClientDashboard = () => {
 
   const confirmRide = async () => {
     if (isRequesting) return;
-    setIsRequesting(true);
     
+    const dest = MOCK_LOCATIONS.find(l => l.id === destinationId);
+    const cat = categories.find(c => c.id === selectedCategoryId);
+    
+    if (!dest || !cat) {
+        showError("Erro nos dados da corrida.");
+        return;
+    }
+
+    const price = parseFloat(getPrice(cat.id));
+    const currentBalance = Number(userProfile?.balance || 0);
+
+    // Verificação de Saldo
+    if (currentBalance < price) {
+        setMissingAmount(price - currentBalance);
+        setShowBalanceAlert(true);
+        return;
+    }
+
+    setIsRequesting(true);
     try {
-        const dest = MOCK_LOCATIONS.find(l => l.id === destinationId);
-        const cat = categories.find(c => c.id === selectedCategoryId);
-        
-        if (dest && cat) {
-            const price = parseFloat(getPrice(cat.id));
-            await requestRide(pickup, dest.label, price, dest.distance, cat.name);
-        } else {
-            showError("Dados inválidos. Tente novamente.");
-        }
+        await requestRide(pickup, dest.label, price, dest.distance, cat.name);
     } catch (e: any) {
         showError(e.message);
     } finally {
@@ -158,7 +191,7 @@ const ClientDashboard = () => {
 
   const handleSubmitRating = async (stars: number) => {
       if (ride) {
-          await rateRide(ride.id, stars, false); // false = isDriver (cliente avaliando)
+          await rateRide(ride.id, stars, false);
       }
   };
 
@@ -170,6 +203,33 @@ const ClientDashboard = () => {
             showDestination={!!destinationId && step !== 'search'} 
          />
       </div>
+
+      {/* Alerta de Saldo Insuficiente */}
+      <Dialog open={showBalanceAlert} onOpenChange={setShowBalanceAlert}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-red-600">
+                  <AlertCircle className="w-6 h-6" /> Saldo Insuficiente
+              </DialogTitle>
+              <DialogDescription>
+                  Você não possui créditos suficientes para esta corrida.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4 text-center">
+                <p className="text-gray-500 mb-2">Faltam apenas</p>
+                <h2 className="text-4xl font-bold text-slate-900">R$ {missingAmount.toFixed(2)}</h2>
+                <p className="text-xs text-gray-400 mt-2">Seu saldo atual: R$ {userProfile?.balance?.toFixed(2)}</p>
+            </div>
+            <DialogFooter className="flex-col sm:flex-col gap-2">
+                <Button className="w-full bg-green-600 hover:bg-green-700 h-12 text-lg font-bold" onClick={() => navigate('/wallet')}>
+                    Adicionar Saldo Agora
+                </Button>
+                <Button variant="ghost" className="w-full" onClick={() => setShowBalanceAlert(false)}>
+                    Fechar
+                </Button>
+            </DialogFooter>
+          </DialogContent>
+      </Dialog>
 
       {step !== 'rating' && (
           <div className="absolute top-0 left-0 right-0 p-4 z-10 flex justify-between items-center pointer-events-none">

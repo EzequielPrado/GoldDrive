@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { ArrowLeft, CreditCard, QrCode, Wallet as WalletIcon, CheckCircle2, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRide } from "@/context/RideContext";
+import { showSuccess, showError } from "@/utils/toast";
 
 const Wallet = () => {
   const navigate = useNavigate();
@@ -25,7 +26,7 @@ const Wallet = () => {
       if (!user) return;
       
       const { data: profile } = await supabase.from('profiles').select('balance').eq('id', user.id).single();
-      setBalance(profile?.balance || 0);
+      setBalance(Number(profile?.balance || 0));
 
       const { data: trans } = await supabase
         .from('transactions')
@@ -36,20 +37,32 @@ const Wallet = () => {
   };
 
   const handleGeneratePIX = () => {
-      if (!amount || Number(amount) <= 0) return;
+      if (!amount || Number(amount) <= 0) {
+        showError("Digite um valor válido");
+        return;
+      }
       setShowQR(true);
   };
 
   const handlePay = async () => {
+      if (processing) return;
       setProcessing(true);
-      // Simula delay de banco
-      setTimeout(async () => {
+      
+      try {
+          // Simula delay de banco (2 segundos)
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
           await addBalance(Number(amount));
-          setProcessing(false);
-          setShowQR(false);
+          
           setAmount("");
-          fetchData(); // Atualiza saldo
-      }, 2000);
+          setShowQR(false);
+          await fetchData(); // Atualiza saldo na tela
+          
+      } catch (error: any) {
+          showError("Erro ao processar pagamento: " + error.message);
+      } finally {
+          setProcessing(false);
+      }
   };
 
   return (
@@ -125,7 +138,8 @@ const Wallet = () => {
                                   Cancelar
                               </Button>
                               <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={handlePay} disabled={processing}>
-                                  {processing ? <Loader2 className="animate-spin" /> : "Simular Pagamento"}
+                                  {processing ? <Loader2 className="animate-spin mr-2" /> : <CheckCircle2 className="mr-2 w-4 h-4" />}
+                                  {processing ? "Processando..." : "Simular Pagamento"}
                               </Button>
                           </div>
                       </div>
