@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import MapComponent from "@/components/MapComponent";
 import { 
-  MapPin, Car, Navigation, Loader2, Star, AlertTriangle, XCircle, ChevronRight, Clock, Wallet, User, ArrowLeft, Menu, BellRing
+  MapPin, Car, Navigation, Loader2, Star, AlertTriangle, XCircle, ChevronRight, Clock, Wallet, User, ArrowLeft, BellRing, History, X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +16,6 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import FloatingDock from "@/components/FloatingDock";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 const MOCK_LOCATIONS = [
     { id: "short", label: "Shopping Center (2km)", distance: "2.1 km", km: 2.1 },
@@ -52,7 +51,6 @@ const ClientDashboard = () => {
   // Data
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<any>(null);
-  const [showHistorySheet, setShowHistorySheet] = useState(false);
 
   useEffect(() => {
     fetchInitialData();
@@ -94,12 +92,17 @@ const ClientDashboard = () => {
             }
         } 
         
-        // Busca Histórico
+        // Busca Histórico (CORRIGIDO com FK Explicita)
         if (activeTab === 'history') {
-            const { data: history } = await supabase.from('rides')
-                .select('*, driver:profiles!public_rides_driver_id_fkey(first_name, last_name, car_model, car_plate)')
+            const { data: history, error } = await supabase.from('rides')
+                .select(`
+                    *, 
+                    driver:profiles!public_rides_driver_id_fkey(first_name, last_name, car_model, car_plate)
+                `)
                 .eq('customer_id', user.id)
                 .order('created_at', { ascending: false });
+            
+            if (error) console.error("Erro historico:", error);
             setHistoryItems(history || []);
         }
     } catch (error) {
@@ -112,7 +115,6 @@ const ClientDashboard = () => {
   const handleTabChange = (tab: string) => {
       if (tab === 'profile') navigate('/profile');
       else if (tab === 'wallet') navigate('/wallet');
-      else if (tab === 'history') setShowHistorySheet(true);
       else setActiveTab(tab);
   };
 
@@ -257,6 +259,33 @@ const ClientDashboard = () => {
                 )}
             </div>
         )}
+        
+        {/* VIEW: HISTÓRICO (AGORA UM CARD FLUTUANTE) */}
+        {activeTab === 'history' && (
+            <div className={`w-full max-w-md pointer-events-auto h-[60vh] flex flex-col ${cardBaseClasses}`}>
+                <h2 className="text-2xl font-black text-slate-900 mb-4 flex items-center gap-2">
+                    <History className="w-6 h-6" /> Suas Viagens
+                </h2>
+                <ScrollArea className="flex-1 -mr-4 pr-4 custom-scrollbar">
+                    {historyItems.length === 0 ? <p className="text-center text-gray-400 py-10">Nenhuma viagem realizada.</p> : 
+                    historyItems.map(item => (
+                        <div key={item.id} onClick={() => setSelectedHistoryItem(item)} className="mb-3 p-4 bg-white/50 border border-white/60 rounded-2xl hover:bg-white hover:scale-[1.02] transition-all cursor-pointer shadow-sm">
+                            <div className="flex justify-between mb-1">
+                                <span className="font-bold text-sm text-slate-900">{new Date(item.created_at).toLocaleDateString()}</span>
+                                <Badge variant="outline" className={`h-5 text-[10px] ${item.status === 'COMPLETED' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{item.status}</Badge>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center shrink-0"><MapPin className="w-5 h-5 text-gray-500" /></div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-medium truncate text-sm">{item.destination_address}</p>
+                                    <p className="text-xs text-gray-500">R$ {item.price}</p>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </ScrollArea>
+            </div>
+        )}
       </div>
 
       {/* POPUP: MOTORISTA CHEGOU */}
@@ -289,7 +318,7 @@ const ClientDashboard = () => {
       <Dialog open={showBalanceAlert} onOpenChange={setShowBalanceAlert}><DialogContent className="sm:max-w-md bg-white rounded-3xl border-0"><DialogHeader><DialogTitle className="text-red-600 flex items-center gap-2"><Wallet /> Saldo Insuficiente</DialogTitle></DialogHeader><div className="text-center py-6"><p className="text-gray-500 mb-1">Faltam</p><h2 className="text-5xl font-black text-slate-900">R$ {missingAmount.toFixed(2)}</h2></div><DialogFooter><Button className="w-full rounded-xl h-12 font-bold" onClick={() => navigate('/wallet')}>Recarregar Agora</Button></DialogFooter></DialogContent></Dialog>
       <AlertDialog open={showCancelAlert} onOpenChange={setShowCancelAlert}><AlertDialogContent className="rounded-3xl bg-white border-0"><AlertDialogHeader><AlertDialogTitle className="flex items-center gap-2 text-red-600"><AlertTriangle /> Cancelar Corrida?</AlertDialogTitle><AlertDialogDescription>Deseja realmente cancelar? Uma taxa pode ser cobrada.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel className="rounded-xl h-12">Voltar</AlertDialogCancel><AlertDialogAction onClick={() => { cancelRide(ride!.id); setShowCancelAlert(false); }} className="bg-red-600 hover:bg-red-700 rounded-xl h-12 font-bold">Sim, Cancelar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
 
-      {/* MODAL DETALHES HISTÓRICO (Agora abre corretamente) */}
+      {/* MODAL DETALHES HISTÓRICO */}
       <Dialog open={!!selectedHistoryItem} onOpenChange={(o) => !o && setSelectedHistoryItem(null)}>
           <DialogContent className="sm:max-w-md bg-white rounded-3xl border-0">
               <DialogHeader><DialogTitle>Detalhes da Viagem</DialogTitle></DialogHeader>
@@ -313,31 +342,6 @@ const ClientDashboard = () => {
           </DialogContent>
       </Dialog>
       
-      {/* SHEET HISTÓRICO */}
-       <Sheet open={showHistorySheet} onOpenChange={setShowHistorySheet}>
-          <SheetContent side="right" className="w-full sm:w-[400px]">
-              <SheetHeader><SheetTitle>Histórico de Viagens</SheetTitle></SheetHeader>
-              <ScrollArea className="h-[calc(100vh-100px)] mt-4 pr-4">
-                  {historyItems.map(item => (
-                      <div key={item.id} onClick={() => setSelectedHistoryItem(item)} className="mb-4 p-4 border rounded-xl hover:bg-gray-50 cursor-pointer transition-colors">
-                          <div className="flex justify-between mb-2">
-                              <span className="font-bold text-sm">{new Date(item.created_at).toLocaleDateString()}</span>
-                              <span className={`text-xs font-bold ${item.status === 'CANCELLED' ? 'text-red-500' : 'text-green-600'}`}>{item.status}</span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center"><MapPin className="w-5 h-5 text-gray-600" /></div>
-                              <div className="flex-1 overflow-hidden">
-                                  <p className="font-medium truncate">{item.destination_address}</p>
-                                  <p className="text-xs text-gray-500">R$ {item.price}</p>
-                              </div>
-                              <ChevronRight className="w-4 h-4 text-gray-400" />
-                          </div>
-                      </div>
-                  ))}
-              </ScrollArea>
-          </SheetContent>
-      </Sheet>
-
       <div className="relative z-[100]">
          <FloatingDock activeTab={activeTab} onTabChange={handleTabChange} role="client" />
       </div>
