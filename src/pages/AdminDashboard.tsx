@@ -91,12 +91,14 @@ const AdminDashboard = () => {
         const currentRides = ridesData || [];
         setRides(currentRides);
 
-        // 2. Buscar Perfis - Separando em queries para evitar timeout ou erro de RLS
-        const { data: clientsData } = await supabase.from('profiles').select('*').eq('role', 'client').order('created_at', { ascending: false });
-        const { data: driversData } = await supabase.from('profiles').select('*').eq('role', 'driver').order('created_at', { ascending: false });
+        // 2. Buscar Perfis
+        const { data: profilesData, error: profileError } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
         
-        setPassengers(clientsData || []);
-        setDrivers(driversData || []);
+        if (profileError) console.error("Erro profiles:", profileError);
+
+        const allProfiles = profilesData || [];
+        setPassengers(allProfiles.filter((p: any) => p.role === 'client'));
+        setDrivers(allProfiles.filter((p: any) => p.role === 'driver'));
 
         // 3. Calcular Estatísticas
         const today = new Date().toDateString();
@@ -143,8 +145,7 @@ const AdminDashboard = () => {
         setTransactions(recentTrans);
 
     } catch (e: any) {
-        console.error(e);
-        showError("Erro ao carregar dados: " + e.message);
+        showError("Erro ao carregar: " + e.message);
     } finally {
         setLoading(false);
     }
@@ -509,6 +510,10 @@ const AdminDashboard = () => {
                   
                   <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl flex items-center justify-between">
                        <div className="flex items-center gap-3"><Avatar><AvatarImage src={selectedRide?.driver?.avatar_url} /><AvatarFallback>DR</AvatarFallback></Avatar><div><p className="font-bold">{selectedRide?.driver?.first_name || 'Sem motorista'}</p></div></div>
+                       <div className="text-right">
+                            <p className="text-xs text-muted-foreground uppercase font-bold">Data/Hora</p>
+                            <p className="font-bold text-sm">{selectedRide ? new Date(selectedRide.created_at).toLocaleString('pt-BR') : '--'}</p>
+                       </div>
                   </div>
 
                   {/* Resumo Financeiro Admin */}
