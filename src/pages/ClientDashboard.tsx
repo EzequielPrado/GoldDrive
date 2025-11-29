@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import MapComponent from "@/components/MapComponent";
 import { 
-  MapPin, Menu, User, ArrowLeft, Car, Navigation, Loader2, Star, Wallet, AlertCircle, Clock, XCircle, ChevronRight
+  MapPin, Menu, User, ArrowLeft, Car, Navigation, Loader2, Star, Wallet, AlertCircle, Clock, XCircle, ChevronRight, AlertTriangle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 
@@ -38,6 +39,9 @@ const ClientDashboard = () => {
   const [userProfile, setUserProfile] = useState<any>(null);
   const [showBalanceAlert, setShowBalanceAlert] = useState(false);
   const [missingAmount, setMissingAmount] = useState(0);
+  
+  // Confirmação de Cancelamento
+  const [showCancelAlert, setShowCancelAlert] = useState(false);
   
   // Histórico
   const [showHistory, setShowHistory] = useState(false);
@@ -87,6 +91,17 @@ const ClientDashboard = () => {
       setStep('search');
   };
 
+  const handleCancelClick = () => {
+      setShowCancelAlert(true);
+  };
+
+  const confirmCancel = async () => {
+      if (ride) {
+          await cancelRide(ride.id);
+          setShowCancelAlert(false);
+      }
+  };
+
   const getCurrentLocation = () => {
       setLoadingLocation(true);
       if ("geolocation" in navigator) {
@@ -116,6 +131,8 @@ const ClientDashboard = () => {
     finally { setIsRequesting(false); }
   };
 
+  const handleSubmitRating = async (stars: number) => { if (ride) await rateRide(ride.id, stars, false); };
+
   return (
     <div className="relative h-screen w-full overflow-hidden font-sans bg-gray-100">
       <div className="absolute inset-0 z-0">
@@ -126,6 +143,20 @@ const ClientDashboard = () => {
       <Dialog open={showBalanceAlert} onOpenChange={setShowBalanceAlert}>
           <DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle className="text-red-600">Saldo Insuficiente</DialogTitle></DialogHeader><div className="text-center py-4"><h2 className="text-4xl font-bold">R$ {missingAmount.toFixed(2)}</h2></div><DialogFooter><Button onClick={() => navigate('/wallet')}>Recarregar</Button></DialogFooter></DialogContent>
       </Dialog>
+
+      {/* Alert Cancelamento */}
+      <AlertDialog open={showCancelAlert} onOpenChange={setShowCancelAlert}>
+          <AlertDialogContent>
+              <AlertDialogHeader>
+                  <AlertDialogTitle className="flex items-center gap-2 text-red-600"><AlertTriangle /> Cancelar Corrida?</AlertDialogTitle>
+                  <AlertDialogDescription>Deseja realmente cancelar? Uma taxa pode ser cobrada se o motorista já estiver próximo.</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                  <AlertDialogCancel>Voltar</AlertDialogCancel>
+                  <AlertDialogAction onClick={confirmCancel} className="bg-red-600 hover:bg-red-700">Sim, Cancelar</AlertDialogAction>
+              </AlertDialogFooter>
+          </AlertDialogContent>
+      </AlertDialog>
 
       {/* DETALHES DO HISTÓRICO */}
       <Dialog open={!!selectedHistoryItem} onOpenChange={(o) => !o && setSelectedHistoryItem(null)}>
@@ -252,7 +283,7 @@ const ClientDashboard = () => {
                      <h2 className="text-2xl font-bold mb-1">Como foi sua viagem?</h2>
                      <p className="text-gray-500 mb-6">Avalie o motorista {ride?.driver_details?.name}</p>
                      <div className="flex justify-center gap-2 mb-8">{[1, 2, 3, 4, 5].map((star) => (<button key={star} onClick={() => setRating(star)} className="transition-transform hover:scale-110"><Star className={`w-10 h-10 ${rating >= star ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} /></button>))}</div>
-                     <Button className="w-full h-12 text-lg font-bold bg-black mb-3" onClick={() => { rateRide(ride!.id, rating || 5, false); setStep('search'); }}>Enviar Avaliação</Button>
+                     <Button className="w-full h-12 text-lg font-bold bg-black mb-3" onClick={() => { handleSubmitRating(rating || 5); setStep('search'); }}>Enviar Avaliação</Button>
                  </div>
              </div>
         )}
@@ -300,13 +331,13 @@ const ClientDashboard = () => {
                                  <div className="text-left"><p className="text-xs text-gray-500 uppercase font-bold">Status</p><p className="text-blue-600 font-bold animate-pulse">{ride.status === 'ARRIVED' ? 'Motorista no local!' : ride.status === 'IN_PROGRESS' ? 'Em viagem ao destino' : 'Motorista a caminho'}</p></div>
                                  <div className="text-right"><p className="text-xs text-gray-500 uppercase font-bold">Chegada</p><p className="font-bold">{ride.status === 'ACCEPTED' ? '2 min' : '--'}</p></div>
                             </div>
-                            {ride?.status !== 'IN_PROGRESS' && <Button variant="destructive" className="w-full mt-4" onClick={() => cancelRide(ride.id)}>Cancelar Corrida</Button>}
+                            {ride?.status !== 'IN_PROGRESS' && <Button variant="destructive" className="w-full mt-4" onClick={handleCancelClick}>Cancelar Corrida</Button>}
                         </div>
                     ) : (
                         <>
                             <div className="w-20 h-20 bg-blue-50 rounded-full mx-auto flex items-center justify-center mb-4 relative"><div className="absolute inset-0 border-4 border-yellow-500 rounded-full animate-ping opacity-20"></div><Loader2 className="w-8 h-8 text-yellow-600 animate-spin" /></div>
                             <h3 className="text-xl font-bold mb-2">Procurando motorista...</h3>
-                            <Button variant="outline" className="text-red-500 border-red-200 hover:bg-red-50 w-full" onClick={() => cancelRide(ride!.id)}>Cancelar Solicitação</Button>
+                            <Button variant="outline" className="text-red-500 border-red-200 hover:bg-red-50 w-full" onClick={handleCancelClick}>Cancelar Solicitação</Button>
                         </>
                     )}
                  </div>
