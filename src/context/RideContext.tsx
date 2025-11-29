@@ -308,30 +308,49 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
       const targetId = rideId || ride?.id;
       if (!targetId) return;
 
-      if (reason === 'TIMEOUT') {
-           await supabase.from('rides').update({ status: 'CANCELLED' }).eq('id', targetId);
-           setRide(prev => prev ? { ...prev, status: 'CANCELLED' } : null);
-           return;
-      }
+      // Status antes de cancelar
+      const { data: currentRide } = await supabase.from('rides').select('status, customer_id, driver_id').eq('id', targetId).single();
       
-      const isLateCancel = (ride?.status === 'ACCEPTED' || ride?.status === 'ARRIVED');
-      if (isLateCancel && userRole === 'client') {
-          const fee = 5.00;
-          const { data: p } = await supabase.from('profiles').select('balance').eq('id', userId).single();
-          await supabase.from('profiles').update({ balance: (p?.balance || 0) - fee }).eq('id', userId);
-          await supabase.from('transactions').insert({ user_id: userId, amount: -fee, type: 'FEE', description: 'Taxa Cancelamento' });
-          
-          if (ride?.driver_id) {
-               const { data: d } = await supabase.from('profiles').select('balance').eq('id', ride.driver_id).single();
-               await supabase.from('profiles').update({ balance: (d?.balance || 0) + (fee/2) }).eq('id', ride.driver_id);
-          }
-          showSuccess(`Corrida cancelada. Taxa de R$ ${fee.toFixed(2)} aplicada.`);
-      } else {
-          showSuccess("Corrida cancelada.");
-      }
+      if (!currentRide) return;
 
+      // Atualiza status primeiro
       await supabase.from('rides').update({ status: 'CANCELLED' }).eq('id', targetId);
       setRide(prev => prev ? { ...prev, status: 'CANCELLED' } : null);
+
+      // Aplica taxa se já tinha motorista (ACCEPTED ou ARRIVED)
+      if (currentRide.status === 'ACCEPTED' || currentRide.status === 'ARRIVED') {
+          const fee = 5.00;
+          const compensation = 2.50;
+          
+          // Debita Passageiro
+          if (currentRide.customer_id) {
+              const { data: p } = await supabase.from('profiles').select('balance').eq('id', currentRide.customer_id).single();
+              await supabase.from('profiles').update({ balance: (p?.balance || 0) - fee }).eq('id', currentRide.customer_id);
+              
+              await supabase.from('transactions').insert({ 
+                  user_id: currentRide.customer_id, 
+                  amount: -fee, 
+                  type: 'CANCELLATION_FEE', 
+                  description: `Taxa Cancelamento #${targetId.slice(0,4)}` 
+              });
+          }
+          
+          // Credita Motorista
+          if (currentRide.driver_id) {
+               const { data: d } = await supabase.from('profiles').select('balance').eq('id', currentRide.driver_id).single();
+               await supabase.from('profiles').update({ balance: (d?.balance || 0) + compensation }).eq('id', currentRide.driver_id);
+               
+               await supabase.from('transactions').insert({ 
+                   user_id: currentRide.driver_id, 
+                   amount: compensation, 
+                   type: 'COMPENSATION', 
+                   description: `Compensação Cancelamento #${targetId.slice(0,4)}` 
+               });
+          }
+          showSuccess(`Cancelado. Taxa de R$ ${fee.toFixed(2)} aplicada.`);
+      } else {
+          showSuccess("Corrida cancelada sem taxas.");
+      }
   };
 
   const rateRide = async (rideId: string, rating: number, isDriver: boolean, comment?: string) => {
