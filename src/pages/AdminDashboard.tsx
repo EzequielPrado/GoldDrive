@@ -154,9 +154,10 @@ const AdminDashboard = () => {
                   <Button variant="outline" size="icon" onClick={fetchData} disabled={loading}>
                       <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                   </Button>
-                  <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden border-2 border-white shadow-sm">
+                  <Avatar className="w-10 h-10 border-2 border-white shadow-sm">
                       <AvatarImage src="https://github.com/shadcn.png" />
-                  </div>
+                      <AvatarFallback>AD</AvatarFallback>
+                  </Avatar>
               </div>
           </header>
 
