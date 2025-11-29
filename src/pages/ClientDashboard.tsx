@@ -16,7 +16,6 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import FloatingDock from "@/components/FloatingDock";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 const MOCK_LOCATIONS = [
     { id: "short", label: "Shopping Center (2km)", distance: "2.1 km", km: 2.1 },
@@ -51,8 +50,6 @@ const ClientDashboard = () => {
   // Data
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<any>(null);
-  // Histórico Sheet Control
-  const [showHistorySheet, setShowHistorySheet] = useState(false);
 
   useEffect(() => {
     fetchInitialData();
@@ -91,7 +88,6 @@ const ClientDashboard = () => {
   const handleTabChange = (tab: string) => {
       if (tab === 'profile') navigate('/profile');
       else if (tab === 'wallet') navigate('/wallet');
-      else if (tab === 'history') setShowHistorySheet(true);
       else setActiveTab(tab);
   };
 
@@ -124,6 +120,9 @@ const ClientDashboard = () => {
       } else setLoadingLocation(false);
   };
 
+  // Estilo base para todos os cards flutuantes
+  const cardBaseClasses = "bg-white/90 backdrop-blur-xl border border-white/40 p-6 rounded-[32px] shadow-2xl animate-in slide-in-from-bottom duration-500 w-full";
+
   return (
     <div className="relative h-screen w-full overflow-hidden font-sans bg-gray-100">
       
@@ -132,9 +131,8 @@ const ClientDashboard = () => {
          <MapComponent showPickup={step !== 'search'} showDestination={!!destinationId && step !== 'search'} />
       </div>
 
-      {/* 2. HEADER FLUTUANTE (CORRIGIDO) */}
+      {/* 2. HEADER FLUTUANTE */}
       <div className="absolute top-0 left-0 right-0 p-6 z-20 flex justify-between items-start pointer-events-none">
-          {/* Saudação - Corrigido para fundo claro e texto escuro */}
           <div className="pointer-events-auto bg-white/90 backdrop-blur-xl border border-white/20 p-2 pr-4 rounded-full flex items-center gap-3 shadow-lg animate-in slide-in-from-top duration-500 cursor-pointer hover:scale-105 transition-transform" onClick={() => navigate('/profile')}>
              <Avatar className="h-10 w-10 ring-2 ring-gray-100">
                  <AvatarImage src={userProfile?.avatar_url} />
@@ -146,7 +144,6 @@ const ClientDashboard = () => {
              </div>
           </div>
 
-          {/* Saldo - Fonte Padrão (Sem Mono) */}
           <div className="pointer-events-auto bg-black text-white px-4 py-2.5 rounded-full flex items-center gap-2 shadow-xl animate-in slide-in-from-top duration-500 delay-100 cursor-pointer hover:bg-zinc-800 transition-colors" onClick={() => navigate('/wallet')}>
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               <span className="font-bold text-sm tracking-tight">R$ {userProfile?.balance?.toFixed(2) || '0.00'}</span>
@@ -159,8 +156,10 @@ const ClientDashboard = () => {
         {/* VIEW: HOME */}
         {activeTab === 'home' && (
             <div className="w-full max-w-md pointer-events-auto transition-all duration-500">
+                
+                {/* BUSCA */}
                 {step === 'search' && (
-                    <div className="bg-white/90 backdrop-blur-xl border border-white/40 p-6 rounded-[32px] shadow-2xl animate-in slide-in-from-bottom duration-500">
+                    <div className={cardBaseClasses}>
                         <h2 className="text-2xl font-black text-slate-900 mb-6">Para onde vamos?</h2>
                         <div className="space-y-4">
                             <div className="relative group">
@@ -181,8 +180,9 @@ const ClientDashboard = () => {
                     </div>
                 )}
 
+                {/* CONFIRMAÇÃO */}
                 {step === 'confirm' && (
-                    <div className="bg-white/95 backdrop-blur-xl border border-white/40 p-6 rounded-[32px] shadow-2xl animate-in slide-in-from-bottom duration-500">
+                    <div className={cardBaseClasses}>
                         <div className="flex items-center gap-3 mb-6 cursor-pointer" onClick={() => setStep('search')}>
                             <div className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><ArrowLeft className="w-5 h-5" /></div>
                             <h2 className="text-xl font-bold">Escolha a Categoria</h2>
@@ -192,8 +192,9 @@ const ClientDashboard = () => {
                     </div>
                 )}
 
+                {/* STATUS DA CORRIDA (Mesmo estilo de card) */}
                 {step === 'waiting' && (
-                     <div className="bg-white/95 backdrop-blur-xl border border-white/40 p-6 rounded-[32px] shadow-2xl animate-in zoom-in-95 duration-500 text-center">
+                     <div className={`${cardBaseClasses} text-center`}>
                          {ride?.status === 'ACCEPTED' || ride?.status === 'IN_PROGRESS' || ride?.status === 'ARRIVED' ? (
                             <div className="space-y-6">
                                 <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100">
@@ -209,49 +210,92 @@ const ClientDashboard = () => {
                      </div>
                 )}
                 
+                {/* AVALIAÇÃO */}
                 {step === 'rating' && (
-                     <div className="bg-white/95 backdrop-blur-xl border border-white/40 p-8 rounded-[32px] shadow-2xl animate-in zoom-in-95 duration-500 text-center">
+                     <div className={`${cardBaseClasses} text-center`}>
                          <div className="w-20 h-20 bg-green-100 rounded-full mx-auto flex items-center justify-center mb-6"><User className="w-10 h-10 text-green-600" /></div><h2 className="text-2xl font-black text-slate-900 mb-2">Chegamos!</h2><p className="text-gray-500 mb-8">Como foi sua experiência?</p><div className="flex justify-center gap-2 mb-8">{[1, 2, 3, 4, 5].map((star) => (<button key={star} onClick={() => setRating(star)} className="transition-transform hover:scale-125 focus:outline-none"><Star className={`w-10 h-10 ${rating >= star ? 'fill-yellow-400 text-yellow-400' : 'text-gray-200'}`} /></button>))}</div><Button className="w-full h-14 text-lg font-bold bg-black rounded-2xl" onClick={() => { rateRide(ride!.id, rating || 5, false); setStep('search'); }}>Enviar Avaliação</Button>
                      </div>
                 )}
 
+                {/* CANCELADO */}
                 {step === 'cancelled' && (
-                     <div className="bg-white/95 backdrop-blur-xl border border-white/40 p-8 rounded-[32px] shadow-2xl animate-in zoom-in-95 duration-500 text-center"><div className="w-20 h-20 bg-red-100 rounded-full mx-auto flex items-center justify-center mb-6"><XCircle className="w-10 h-10 text-red-600" /></div><h2 className="text-2xl font-black text-slate-900 mb-2">Cancelado</h2><p className="text-gray-500 mb-8">A corrida foi cancelada.</p><Button className="w-full h-14 text-lg font-bold bg-black rounded-2xl" onClick={() => { clearRide(); setStep('search'); }}>Voltar</Button></div>
+                     <div className={`${cardBaseClasses} text-center`}><div className="w-20 h-20 bg-red-100 rounded-full mx-auto flex items-center justify-center mb-6"><XCircle className="w-10 h-10 text-red-600" /></div><h2 className="text-2xl font-black text-slate-900 mb-2">Cancelado</h2><p className="text-gray-500 mb-8">A corrida foi cancelada.</p><Button className="w-full h-14 text-lg font-bold bg-black rounded-2xl" onClick={() => { clearRide(); setStep('search'); }}>Voltar</Button></div>
                 )}
+            </div>
+        )}
+
+        {/* --- VIEW: HISTÓRICO (CARD FLUTUANTE) --- */}
+        {activeTab === 'history' && (
+            <div className={`w-full max-w-md h-[65vh] ${cardBaseClasses} flex flex-col pointer-events-auto`}>
+                <h2 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-3">
+                    <div className="p-2 bg-slate-100 rounded-full"><Clock className="w-6 h-6" /></div> Suas Viagens
+                </h2>
+                <ScrollArea className="flex-1 -mr-2 pr-4 custom-scrollbar">
+                    {historyItems.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center text-gray-400 space-y-2">
+                            <Clock className="w-12 h-12 opacity-20" />
+                            <p className="font-medium">Nenhuma viagem ainda.</p>
+                        </div>
+                    ) : (
+                        historyItems.map(item => (
+                            <div key={item.id} onClick={() => setSelectedHistoryItem(item)} className="mb-4 p-4 bg-white/50 border border-white/60 rounded-2xl hover:bg-white hover:shadow-md transition-all cursor-pointer group">
+                                <div className="flex justify-between items-start mb-3">
+                                    <span className="font-bold text-slate-900 bg-white px-2 py-1 rounded-md text-sm shadow-sm border border-gray-100">{new Date(item.created_at).toLocaleDateString()}</span>
+                                    <Badge variant="outline" className={`${item.status === 'COMPLETED' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-50 text-red-600 border-red-100'}`}>
+                                        {item.status === 'COMPLETED' ? 'Concluída' : 'Cancelada'}
+                                    </Badge>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center shrink-0 border border-white shadow-sm"><MapPin className="w-5 h-5 text-gray-600" /></div>
+                                    <div className="flex-1 overflow-hidden">
+                                        <p className="font-bold text-slate-800 truncate text-sm">{item.destination_address}</p>
+                                        <p className="text-xs text-gray-500 font-medium">UberX</p>
+                                    </div>
+                                    <div className="flex flex-col items-end">
+                                        <span className="font-black text-slate-900">R$ {item.price}</span>
+                                        <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-black transition-colors" />
+                                    </div>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </ScrollArea>
             </div>
         )}
       </div>
 
       {/* MODAIS */}
       <Dialog open={showBalanceAlert} onOpenChange={setShowBalanceAlert}><DialogContent className="sm:max-w-md bg-white rounded-3xl border-0"><DialogHeader><DialogTitle className="text-red-600 flex items-center gap-2"><Wallet /> Saldo Insuficiente</DialogTitle></DialogHeader><div className="text-center py-6"><p className="text-gray-500 mb-1">Faltam</p><h2 className="text-5xl font-black text-slate-900">R$ {missingAmount.toFixed(2)}</h2></div><DialogFooter><Button className="w-full rounded-xl h-12 font-bold" onClick={() => navigate('/wallet')}>Recarregar Agora</Button></DialogFooter></DialogContent></Dialog>
-      <AlertDialog open={showCancelAlert} onOpenChange={setShowCancelAlert}><AlertDialogContent className="rounded-3xl bg-white border-0"><AlertDialogHeader><AlertDialogTitle className="flex items-center gap-2 text-red-600"><AlertTriangle /> Cancelar Corrida?</AlertDialogTitle><AlertDialogDescription>Deseja realmente cancelar?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel className="rounded-xl h-12">Voltar</AlertDialogCancel><AlertDialogAction onClick={() => { cancelRide(ride!.id); setShowCancelAlert(false); }} className="bg-red-600 hover:bg-red-700 rounded-xl h-12 font-bold">Sim, Cancelar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
-      
-      {/* HISTÓRICO SHEET */}
-      <Sheet open={showHistorySheet} onOpenChange={setShowHistorySheet}>
-          <SheetContent side="right" className="w-full sm:w-[400px]">
-              <SheetHeader><SheetTitle>Histórico de Viagens</SheetTitle></SheetHeader>
-              <ScrollArea className="h-[calc(100vh-100px)] mt-4 pr-4">
-                  {historyItems.map(item => (
-                      <div key={item.id} onClick={() => setSelectedHistoryItem(item)} className="mb-4 p-4 border rounded-xl hover:bg-gray-50 cursor-pointer transition-colors">
-                          <div className="flex justify-between mb-2">
-                              <span className="font-bold text-sm">{new Date(item.created_at).toLocaleDateString()}</span>
-                              <span className={`text-xs font-bold ${item.status === 'CANCELLED' ? 'text-red-500' : 'text-green-600'}`}>{item.status}</span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center"><MapPin className="w-5 h-5 text-gray-600" /></div>
-                              <div className="flex-1 overflow-hidden">
-                                  <p className="font-medium truncate">{item.destination_address}</p>
-                                  <p className="text-xs text-gray-500">R$ {item.price}</p>
-                              </div>
-                              <ChevronRight className="w-4 h-4 text-gray-400" />
-                          </div>
-                      </div>
-                  ))}
-              </ScrollArea>
-          </SheetContent>
-      </Sheet>
+      <AlertDialog open={showCancelAlert} onOpenChange={setShowCancelAlert}><AlertDialogContent className="rounded-3xl bg-white border-0"><AlertDialogHeader><AlertDialogTitle className="flex items-center gap-2 text-red-600"><AlertTriangle /> Cancelar Corrida?</AlertDialogTitle><AlertDialogDescription>Deseja realmente cancelar? Uma taxa pode ser cobrada se o motorista já estiver próximo.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel className="rounded-xl h-12">Voltar</AlertDialogCancel><AlertDialogAction onClick={() => { cancelRide(ride!.id); setShowCancelAlert(false); }} className="bg-red-600 hover:bg-red-700 rounded-xl h-12 font-bold">Sim, Cancelar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
 
-      <FloatingDock activeTab={activeTab} onTabChange={handleTabChange} role="client" />
+      {/* DETALHES DO HISTÓRICO */}
+      <Dialog open={!!selectedHistoryItem} onOpenChange={(o) => !o && setSelectedHistoryItem(null)}>
+          <DialogContent className="sm:max-w-md bg-white rounded-3xl border-0">
+              <DialogHeader><DialogTitle>Detalhes da Viagem</DialogTitle></DialogHeader>
+              <div className="space-y-4 pt-2">
+                  <div className="space-y-2">
+                      <div className="flex items-start gap-3"><div className="w-2 h-2 mt-2 bg-slate-900 rounded-full"/><div><p className="text-xs text-gray-400 uppercase font-bold">Origem</p><p className="font-medium text-slate-900">{selectedHistoryItem?.pickup_address}</p></div></div>
+                      <div className="h-4 border-l-2 border-dashed border-gray-200 ml-1"></div>
+                      <div className="flex items-start gap-3"><div className="w-2 h-2 mt-2 bg-yellow-500 rounded-full"/><div><p className="text-xs text-gray-400 uppercase font-bold">Destino</p><p className="font-medium text-slate-900">{selectedHistoryItem?.destination_address}</p></div></div>
+                  </div>
+                  {selectedHistoryItem?.driver && (
+                      <div className="bg-gray-50 p-4 rounded-2xl flex items-center gap-3">
+                          <Avatar><AvatarFallback>{selectedHistoryItem.driver.first_name[0]}</AvatarFallback></Avatar>
+                          <div><p className="font-bold text-slate-900">{selectedHistoryItem.driver.first_name} {selectedHistoryItem.driver.last_name}</p><p className="text-xs text-gray-500">{selectedHistoryItem.driver.car_model} • {selectedHistoryItem.driver.car_plate}</p></div>
+                      </div>
+                  )}
+                  <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+                      <span className="font-medium text-gray-500">Total Pago</span>
+                      <span className="font-black text-2xl text-slate-900">R$ {selectedHistoryItem?.price}</span>
+                  </div>
+              </div>
+          </DialogContent>
+      </Dialog>
+
+      {/* 5. MENU FLUTUANTE - SEMPRE VISÍVEL E NO TOPO */}
+      <div className="relative z-[100]">
+         <FloatingDock activeTab={activeTab} onTabChange={handleTabChange} role="client" />
+      </div>
     </div>
   );
 };

@@ -134,6 +134,8 @@ const DriverDashboard = () => {
       };
   };
 
+  const cardBaseClasses = "bg-white/90 backdrop-blur-xl border border-white/40 p-6 rounded-[32px] shadow-2xl animate-in slide-in-from-bottom duration-500 w-full";
+
   return (
     <div className="h-screen flex flex-col bg-slate-50 relative overflow-hidden font-sans">
       
@@ -142,15 +144,13 @@ const DriverDashboard = () => {
           <MapComponent className="h-full w-full" showPickup={isOnTrip} />
       </div>
 
-      {/* 2. HEADER FLUTUANTE (Status e Ganhos do Dia) */}
+      {/* 2. HEADER FLUTUANTE */}
       <div className="absolute top-0 left-0 right-0 p-6 z-20 flex justify-between items-start pointer-events-none">
-          {/* Status Toggle */}
           <div className={`pointer-events-auto backdrop-blur-xl border border-white/20 p-2 pr-4 rounded-full flex items-center gap-3 shadow-lg transition-all duration-300 ${isOnline ? 'bg-black/80' : 'bg-white/80'}`}>
              <Switch checked={isOnline} onCheckedChange={toggleOnline} className="data-[state=checked]:bg-green-500" />
              <span className={`text-xs font-bold uppercase tracking-wider ${isOnline ? 'text-white' : 'text-slate-500'}`}>{isOnline ? 'Online' : 'Offline'}</span>
           </div>
 
-          {/* Avatar / Profile */}
           <div className="pointer-events-auto bg-white/10 backdrop-blur-xl border border-white/20 p-1 rounded-full shadow-lg cursor-pointer" onClick={() => navigate('/profile')}>
              <Avatar className="h-10 w-10 ring-2 ring-white/30">
                  <AvatarImage src={driverProfile?.avatar_url} />
@@ -222,7 +222,7 @@ const DriverDashboard = () => {
 
                 {/* ESTADO: EM CORRIDA */}
                 {isOnTrip && !showFinishScreen && (
-                     <div className="bg-white/95 backdrop-blur-xl border border-white/40 p-6 rounded-[32px] shadow-[0_10px_50px_rgba(0,0,0,0.2)] animate-in slide-in-from-bottom duration-500">
+                     <div className={cardBaseClasses}>
                         <div className="flex justify-between items-center mb-6">
                             <div>
                                 <Badge className="mb-2 bg-black text-white hover:bg-black">{ride?.status === 'ACCEPTED' ? 'A CAMINHO' : ride?.status === 'ARRIVED' ? 'NO LOCAL' : 'EM VIAGEM'}</Badge>
@@ -264,13 +264,13 @@ const DriverDashboard = () => {
 
          {/* --- VIEW: HISTÓRICO --- */}
          {activeTab === 'history' && (
-            <div className="w-full max-w-md h-[60vh] bg-white/90 backdrop-blur-xl border border-white/40 rounded-[32px] shadow-2xl p-6 pointer-events-auto flex flex-col animate-in slide-in-from-bottom">
-                 <h2 className="text-2xl font-black text-slate-900 mb-4 flex items-center gap-2">
+            <div className={`w-full max-w-md h-[65vh] ${cardBaseClasses} flex flex-col`}>
+                 <h2 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-2">
                     <History className="w-6 h-6" /> Corridas Realizadas
                  </h2>
-                 <ScrollArea className="flex-1 pr-4">
+                 <ScrollArea className="flex-1 -mr-2 pr-4 custom-scrollbar">
                      {history.length === 0 ? <p className="text-center text-gray-400 py-10">Nenhuma corrida ainda.</p> : history.map(item => (
-                         <div key={item.id} onClick={() => setSelectedHistoryItem(item)} className="mb-3 p-4 bg-white/50 border border-white/60 rounded-2xl hover:bg-white transition-all cursor-pointer shadow-sm">
+                         <div key={item.id} onClick={() => setSelectedHistoryItem(item)} className="mb-3 p-4 bg-white/50 border border-white/60 rounded-2xl hover:bg-white transition-all cursor-pointer shadow-sm group">
                              <div className="flex justify-between items-start mb-2">
                                 <div className="flex items-center gap-2"><p className="font-bold text-slate-900">{formatDate(item.created_at).day}</p><p className="text-xs text-gray-500">{formatDate(item.created_at).time}</p></div>
                                 <span className="font-black text-green-700">R$ {item.driver_earnings?.toFixed(2)}</span>
@@ -361,7 +361,9 @@ const DriverDashboard = () => {
       )}
 
       {/* 5. MENU FLUTUANTE UNIFICADO */}
-      <FloatingDock activeTab={activeTab} onTabChange={handleTabChange} role="driver" />
+      <div className="relative z-[100]">
+         <FloatingDock activeTab={activeTab} onTabChange={handleTabChange} role="driver" />
+      </div>
     </div>
   );
 };
