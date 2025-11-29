@@ -20,7 +20,7 @@ export interface RideData {
   driver_rating?: number;
   driver_earnings?: number;
   platform_fee?: number;
-  rejected_by?: string[]; // Nova coluna
+  rejected_by?: string[];
 }
 
 interface RideContextType {
@@ -28,7 +28,7 @@ interface RideContextType {
   availableRides: RideData[];
   requestRide: (pickup: string, destination: string, price: number, distance: string, category: string) => Promise<void>;
   acceptRide: (rideId: string) => Promise<void>;
-  rejectRide: (rideId: string) => Promise<void>; // Nova função
+  rejectRide: (rideId: string) => Promise<void>;
   startRide: (rideId: string) => Promise<void>;
   finishRide: (rideId: string) => Promise<void>;
   cancelRide: (rideId: string, reason?: string) => Promise<void>;
@@ -128,9 +128,7 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
                  else { setRide(data as RideData); }
              }
              
-             // 2. Busca corridas disponíveis (que não foram rejeitadas por este motorista)
-             // Nota: Filtro de array 'rejected_by' no client-side ou com RPC é mais fácil. 
-             // Vamos filtrar no client side após o fetch por simplicidade.
+             // 2. Busca corridas disponíveis
              const { data: available } = await supabase
                 .from('rides')
                 .select('*')
@@ -147,6 +145,7 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
 
     fetchCurrentRide();
 
+    // Configuração do Realtime
     const channel = supabase
       .channel('public:rides')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rides' }, async (payload) => {
@@ -156,8 +155,6 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
         if (userRole === 'client' && newRide.customer_id === userId) {
             if (newRide.status === 'CANCELLED') {
                 setRide(null);
-                // Apenas mostra erro se não for o próprio cliente cancelando (checado via UI normalmente, mas ok aqui)
-                // Se o status mudou pra CANCELLED via backend/timeout
                 showError("Corrida cancelada ou nenhum motorista encontrado.");
             } else if (newRide.status === 'COMPLETED') {
                  let updatedRide = { ...newRide };
@@ -176,28 +173,29 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
         
         // --- LÓGICA DO MOTORISTA ---
         if (userRole === 'driver') {
-            // Se foi rejeitada por mim, ignora ou remove da lista
+            // Se a corrida foi rejeitada por este motorista, ignora
             if (newRide.rejected_by && newRide.rejected_by.includes(userId)) {
                 setAvailableRides(prev => prev.filter(r => r.id !== newRide.id));
                 return; 
             }
 
-            // Nova corrida disponível
+            // Nova corrida ou atualização de corrida disponível
             if (newRide.status === 'SEARCHING') {
+                // Se eu (motorista) não estou nela (driver_id nulo ou diferente de mim, mas status searching implica sem driver)
                 setAvailableRides(prev => {
-                    // Evita duplicatas e garante que não está rejeitada
                     const exists = prev.find(r => r.id === newRide.id);
-                    if (exists) return prev; 
+                    if (exists) {
+                         // Atualiza dados se já existe
+                         return prev.map(r => r.id === newRide.id ? newRide : r);
+                    }
                     return [...prev, newRide];
                 });
-            }
-            
-            // Corrida não está mais disponível (Alguém aceitou ou foi cancelada)
-            if (newRide.status !== 'SEARCHING') {
+            } else {
+                // Se não está mais procurando (foi aceita por outro ou cancelada), remove da lista
                 setAvailableRides(prev => prev.filter(r => r.id !== newRide.id));
             }
 
-            // Atualização da MINHA corrida atual
+            // Atualização da MINHA corrida atual (se eu aceitei)
             if (newRide.driver_id === userId) {
                 if (newRide.status === 'CANCELLED') {
                     setRide(null);
@@ -240,11 +238,12 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
     // Verificar saldo
     const { data: profile } = await supabase.from('profiles').select('balance').eq('id', userId).single();
     if ((profile?.balance || 0) < price) {
-        showError("Saldo insuficiente. Por favor, recarregue sua carteira.");
+        showError("Saldo insuficiente.");
         throw new Error("Saldo insuficiente");
     }
 
-    const { error } = await supabase.from('rides').insert({
+    // Insert e retorna DADOS IMEDIATAMENTE (.select().single())
+    const { data, error } = await supabase.from('rides').insert({
         customer_id: userId,
         pickup_address: pickup,
         destination_address: destination,
@@ -252,20 +251,21 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
         distance,
         category,
         status: 'SEARCHING',
-        rejected_by: [] // Inicializa array vazio
-    });
+        rejected_by: []
+    }).select().single();
     
     if (error) throw error;
-    showSuccess("Procurando motoristas...");
+    
+    // ATUALIZA ESTADO LOCAL IMEDIATAMENTE (Passageiro vê a tela mudar na hora)
+    setRide(data as RideData);
   };
 
   const acceptRide = async (rideId: string) => {
       if (!userId) return;
       
-      // Tenta pegar a corrida. Verifica se já não foi aceita por outro.
       const { data: checkRide } = await supabase.from('rides').select('status').eq('id', rideId).single();
       if (checkRide.status !== 'SEARCHING') {
-          showError("Esta corrida já foi aceita por outro motorista ou cancelada.");
+          showError("Esta corrida não está mais disponível.");
           setAvailableRides(prev => prev.filter(r => r.id !== rideId));
           return;
       }
@@ -283,17 +283,11 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
       }, 60000); 
   };
 
-  // Nova função de Rejeitar
   const rejectRide = async (rideId: string) => {
       if (!userId) return;
 
-      // Remove localmente imediatamente
       setAvailableRides(prev => prev.filter(r => r.id !== rideId));
 
-      // Atualiza no banco
-      // Usamos RPC ou raw SQL para append no array se fosse complexo, mas aqui vamos ler e atualizar
-      // Nota: Idealmente seria uma chamada RPC "append_rejection", mas vamos fazer via JS para simplicidade do prompt
-      
       const { data: currentRide } = await supabase.from('rides').select('rejected_by').eq('id', rideId).single();
       const currentRejected = currentRide?.rejected_by || [];
       
@@ -304,8 +298,6 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
                 rejected_by: [...currentRejected, userId] 
             })
             .eq('id', rideId);
-            
-          if (error) console.error("Error rejecting ride", error);
       }
   };
 
@@ -358,15 +350,12 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
       const targetId = rideId || ride?.id;
       if (!targetId) return;
 
-      // Se a corrida já foi cancelada por timeout, apenas reseta estado
       if (reason === 'TIMEOUT') {
            await supabase.from('rides').update({ status: 'CANCELLED' }).eq('id', targetId);
            setRide(null);
            return;
       }
       
-      // Logica de taxa (apenas se motorista já tinha aceitado)
-      // Se userRole == client e status == ACCEPTED/ARRIVED
       const isLateCancel = (ride?.status === 'ACCEPTED' || ride?.status === 'ARRIVED');
       
       if (isLateCancel && userRole === 'client') {
