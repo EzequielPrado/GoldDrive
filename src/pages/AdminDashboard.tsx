@@ -4,7 +4,8 @@ import {
   Map as MapIcon, LogOut, RefreshCw, Shield,
   Sun, Moon, PanelLeftClose, PanelLeftOpen, DollarSign, Clock, 
   CheckCircle, TrendingUp, Trash2, Edit, Mail, Search,
-  CreditCard, BellRing, Save, AlertTriangle, Smartphone, Globe
+  CreditCard, BellRing, Save, AlertTriangle, Smartphone, Globe,
+  Menu
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
