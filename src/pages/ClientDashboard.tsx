@@ -19,12 +19,11 @@ const ClientDashboard = () => {
 
   // Sync with Global State
   useEffect(() => {
-    if (ride?.status === 'SEARCHING' || ride?.status === 'ACCEPTED') {
-      setStep('waiting');
-    } else if (ride?.status === 'IN_PROGRESS') {
-      // In a real app, this would show trip progress
-      showSuccess("Sua viagem começou!");
-    } else if (ride === null) {
+    if (ride) {
+      if (ride.status === 'SEARCHING' || ride.status === 'ACCEPTED' || ride.status === 'IN_PROGRESS') {
+        setStep('waiting');
+      }
+    } else {
       setStep('search');
     }
   }, [ride]);
@@ -34,14 +33,18 @@ const ClientDashboard = () => {
     setStep('confirm');
   };
 
-  const confirmRide = () => {
-    requestRide(pickup, destination, "24.90", "5.2km");
-    setStep('waiting');
+  const confirmRide = async () => {
+    // Valores fixos por enquanto, idealmente calcularia distancia
+    await requestRide(pickup, destination, 24.90, "5.2km");
+  };
+
+  const handleCancel = async () => {
+      if (ride) await cancelRide(ride.id);
+      setStep('search');
   };
 
   return (
     <div className="relative h-screen w-full overflow-hidden font-sans bg-gray-100">
-      {/* Map takes full screen */}
       <div className="absolute inset-0 z-0">
          <MapComponent 
             showPickup={step !== 'search'} 
@@ -49,7 +52,6 @@ const ClientDashboard = () => {
          />
       </div>
 
-      {/* Floating Header */}
       <div className="absolute top-0 left-0 right-0 p-4 z-10 flex justify-between items-center pointer-events-none">
         <Button 
             variant="secondary" 
@@ -61,7 +63,6 @@ const ClientDashboard = () => {
         </Button>
       </div>
 
-      {/* Dynamic Bottom Sheet */}
       <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center justify-end md:justify-center pointer-events-none">
         <div className="w-full max-w-md bg-white rounded-t-3xl md:rounded-3xl shadow-2xl p-6 pointer-events-auto md:mb-10 transition-all duration-500 ease-in-out">
           
@@ -119,11 +120,13 @@ const ClientDashboard = () => {
 
           {step === 'waiting' && (
              <div className="text-center py-6">
-                {ride?.status === 'ACCEPTED' ? (
+                {ride?.status === 'ACCEPTED' || ride?.status === 'IN_PROGRESS' ? (
                     <div className="animate-in fade-in zoom-in">
                         <div className="flex items-center justify-between mb-6">
                             <div className="text-left">
-                                <h3 className="font-bold text-lg">Seu motorista está chegando</h3>
+                                <h3 className="font-bold text-lg">
+                                    {ride?.status === 'IN_PROGRESS' ? 'Em viagem...' : 'Seu motorista está chegando'}
+                                </h3>
                                 <p className="text-gray-500 text-sm">Toyota Corolla • ABC-1234</p>
                             </div>
                             <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
@@ -132,7 +135,9 @@ const ClientDashboard = () => {
                         </div>
                         <div className="flex gap-2">
                              <Button className="flex-1" variant="outline">Mensagem</Button>
-                             <Button className="flex-1 bg-red-100 text-red-600 hover:bg-red-200 border-0" onClick={cancelRide}>Cancelar</Button>
+                             {ride?.status !== 'IN_PROGRESS' && (
+                                <Button className="flex-1 bg-red-100 text-red-600 hover:bg-red-200 border-0" onClick={handleCancel}>Cancelar</Button>
+                             )}
                         </div>
                     </div>
                 ) : (
@@ -142,8 +147,8 @@ const ClientDashboard = () => {
                             <Search className="w-6 h-6 text-blue-600" />
                         </div>
                         <h3 className="text-xl font-bold mb-2">Procurando motorista...</h3>
-                        <p className="text-gray-500 mb-6">Abra a aba "Motorista" para aceitar a corrida!</p>
-                        <Button variant="ghost" className="text-red-500" onClick={cancelRide}>Cancelar</Button>
+                        <p className="text-gray-500 mb-6">Aguardando confirmação dos parceiros</p>
+                        <Button variant="ghost" className="text-red-500" onClick={handleCancel}>Cancelar</Button>
                     </>
                 )}
              </div>
