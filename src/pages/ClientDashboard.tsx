@@ -343,7 +343,9 @@ const ClientDashboard = () => {
                                 <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center shrink-0"><MapPin className="w-5 h-5 text-gray-500" /></div>
                                 <div className="flex-1 min-w-0">
                                     <p className="font-medium truncate text-sm">{item.destination_address}</p>
-                                    <p className="text-xs text-gray-500">R$ {Number(item.price).toFixed(2)}</p>
+                                    <p className="text-xs text-gray-500">
+                                        {new Date(item.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} • R$ {Number(item.price).toFixed(2)}
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -411,8 +413,14 @@ const ClientDashboard = () => {
                       </div>
                   )}
                   <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-                      <span className="font-medium text-gray-500">Total Pago</span>
-                      <span className="font-black text-2xl text-slate-900">R$ {Number(selectedHistoryItem?.price).toFixed(2)}</span>
+                      <div className="text-left">
+                          <p className="text-xs text-gray-500 font-bold uppercase">Data/Hora</p>
+                          <p className="text-sm font-medium">{selectedHistoryItem ? new Date(selectedHistoryItem.created_at).toLocaleString('pt-BR') : '--'}</p>
+                      </div>
+                      <div className="text-right">
+                          <p className="text-xs text-gray-500 font-bold uppercase">Total Pago</p>
+                          <span className="font-black text-2xl text-slate-900">R$ {Number(selectedHistoryItem?.price).toFixed(2)}</span>
+                      </div>
                   </div>
               </div>
           </DialogContent>
