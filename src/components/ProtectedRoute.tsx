@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2 } from "lucide-react";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -17,6 +16,14 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
   useEffect(() => {
     let mounted = true;
 
+    // Timeout de segurança: se o Supabase não responder em 3s, cancela o loading
+    const safetyTimeout = setTimeout(() => {
+        if (mounted && loading) {
+            console.warn("Auth check timed out, redirecting...");
+            setLoading(false);
+        }
+    }, 3000);
+
     const getSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -29,10 +36,7 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
 
           setSession(session);
           
-          // Tenta pegar a role do metadata primeiro (mais rápido)
           let userRole = session.user.user_metadata?.role;
-
-          // Se não tiver no metadata, busca no banco
           if (!userRole) {
              const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
              userRole = data?.role;
@@ -52,12 +56,15 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
        if (mounted) {
            setSession(session);
-           if (!session) setLoading(false);
+           if (!session) {
+               setLoading(false);
+           }
        }
     });
 
     return () => {
       mounted = false;
+      clearTimeout(safetyTimeout);
       subscription.unsubscribe();
     };
   }, []);
@@ -82,7 +89,6 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
 
   // Verifica permissão
   if (role && !allowedRoles.includes(role)) {
-      // Redireciona usuário logado para seu painel correto se tentar acessar área restrita
       if (role === 'admin') return <Navigate to="/admin" replace />;
       if (role === 'driver') return <Navigate to="/driver" replace />;
       return <Navigate to="/client" replace />;

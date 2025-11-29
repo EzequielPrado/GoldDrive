@@ -50,31 +50,56 @@ const AdminDashboard = () => {
         if (user) {
             const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
             setAdminProfile(data);
+            
+            // Verificação de segurança extra
+            if (data?.role !== 'admin') {
+                showError("Acesso restrito a administradores.");
+                navigate('/');
+                return;
+            }
         }
 
-        // Busca Corridas
-        const { data: ridesData } = await supabase
+        console.log("Iniciando busca de dados do Admin...");
+
+        // Busca Corridas usando as novas FKs explícitas
+        const { data: ridesData, error: ridesError } = await supabase
             .from('rides')
-            .select(`*, driver:profiles!rides_driver_id_fkey(first_name, last_name, avatar_url, car_model, car_plate), customer:profiles!rides_customer_id_fkey(first_name, last_name, avatar_url)`)
+            .select(`
+                *,
+                driver:profiles!public_rides_driver_id_fkey(first_name, last_name, avatar_url, car_model, car_plate),
+                customer:profiles!public_rides_customer_id_fkey(first_name, last_name, avatar_url)
+            `)
             .order('created_at', { ascending: false });
 
+        if (ridesError) {
+            console.error("Erro ao buscar corridas:", ridesError);
+            throw ridesError;
+        }
+
         // Busca Usuários
-        const { data: usersData } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+        const { data: usersData, error: usersError } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
         
-        // Busca Transações (Simulado com base nas corridas para demo de financeiro)
-        const recentTrans = ridesData?.slice(0, 10).map(r => ({
+        if (usersError) {
+             console.error("Erro ao buscar usuários:", usersError);
+        }
+
+        // Processamento de Estatísticas
+        const currentRides = ridesData || [];
+        const currentUsers = usersData || [];
+
+        // Transações simuladas baseadas nas corridas (para demo)
+        const recentTrans = currentRides.slice(0, 10).map(r => ({
             id: r.id,
             type: 'income',
             amount: Number(r.platform_fee || 0),
             date: r.created_at,
             description: `Taxa da corrida #${r.id.substring(0,4)}`
-        })) || [];
+        }));
         setTransactions(recentTrans);
 
-        // Processamento de Estatísticas
-        const totalRevenue = ridesData?.filter(r => r.status === 'COMPLETED').reduce((acc, curr) => acc + (Number(curr.price) || 0), 0) || 0;
-        const adminRev = ridesData?.reduce((acc, curr) => acc + (Number(curr.platform_fee) || 0), 0) || 0;
-        const activeCount = ridesData?.filter(r => ['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(r.status)).length || 0;
+        const totalRevenue = currentRides.filter(r => r.status === 'COMPLETED').reduce((acc, curr) => acc + (Number(curr.price) || 0), 0);
+        const adminRev = currentRides.reduce((acc, curr) => acc + (Number(curr.platform_fee) || 0), 0);
+        const activeCount = currentRides.filter(r => ['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(r.status)).length;
 
         // Gráfico
         const chartMap = new Map();
@@ -83,7 +108,7 @@ const AdminDashboard = () => {
             const dateStr = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
             chartMap.set(dateStr, { date: dateStr, total: 0, count: 0 });
         }
-        ridesData?.forEach(r => {
+        currentRides.forEach(r => {
             if (r.status === 'COMPLETED') {
                 const date = new Date(r.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
                 if(chartMap.has(date)) {
@@ -98,18 +123,18 @@ const AdminDashboard = () => {
         setStats({
             revenue: totalRevenue,
             adminRevenue: adminRev,
-            rides: ridesData?.length || 0,
+            rides: currentRides.length,
             activeRides: activeCount,
-            users: usersData?.filter((u:any) => u.role === 'client').length || 0,
-            drivers: usersData?.filter((u:any) => u.role === 'driver').length || 0
+            users: currentUsers.filter((u:any) => u.role === 'client').length,
+            drivers: currentUsers.filter((u:any) => u.role === 'driver').length
         });
 
-        if (ridesData) setRides(ridesData);
-        if (usersData) setUsers(usersData);
+        setRides(currentRides);
+        setUsers(currentUsers);
 
     } catch (e: any) {
-        console.error(e);
-        // Não mostramos erro toast aqui para não spamar se o usuário não estiver logado ainda
+        console.error("Erro geral no Dashboard:", e);
+        showError("Erro ao carregar dados: " + (e.message || "Erro desconhecido"));
     } finally {
         setLoading(false);
     }
