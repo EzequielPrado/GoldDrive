@@ -269,6 +269,15 @@ const ClientDashboard = () => {
                     </div>
                 </SheetContent>
             </Sheet>
+
+            {/* Balão de Saldo (Novo) */}
+            <div 
+                className="pointer-events-auto bg-white/90 backdrop-blur-md shadow-lg rounded-full px-4 py-2.5 font-bold text-sm flex items-center gap-2 cursor-pointer hover:bg-white transition-all border border-gray-200/50"
+                onClick={() => navigate('/wallet')}
+            >
+                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-slate-700">R$ {userProfile?.balance?.toFixed(2) || '0.00'}</span>
+            </div>
         </div>
       )}
 
