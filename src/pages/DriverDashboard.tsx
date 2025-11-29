@@ -347,7 +347,7 @@ const DriverDashboard = () => {
                   {/* Infos Extras */}
                   <div className="grid grid-cols-2 gap-4 text-center">
                        <div className="bg-gray-50 p-3 rounded-xl"><p className="text-xs text-gray-400 font-bold uppercase">Avaliação</p><div className="flex items-center justify-center gap-1 font-bold text-slate-900"><Star className="w-4 h-4 fill-yellow-400 text-yellow-400" /> {selectedHistoryItem?.customer_rating || '-'}</div></div>
-                       <div className="bg-gray-50 p-3 rounded-xl"><p className="text-xs text-gray-400 font-bold uppercase">Data e Hora</p><p className="font-bold text-slate-900">{selectedHistoryItem ? new Date(selectedHistoryItem.created_at).toLocaleString('pt-BR') : '-'}</p></div>
+                       <div className="bg-gray-50 p-3 rounded-xl"><p className="text-xs text-gray-400 font-bold uppercase">Data</p><p className="font-bold text-slate-900">{selectedHistoryItem ? new Date(selectedHistoryItem.created_at).toLocaleDateString() : '-'}</p></div>
                   </div>
               </div>
           </DialogContent>
