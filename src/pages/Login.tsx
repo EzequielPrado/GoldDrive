@@ -27,9 +27,9 @@ const Login = () => {
   // Cores dinâmicas baseadas no perfil
   const getThemeColor = () => {
     switch(activeTab) {
-        case 'driver': return 'bg-green-600 hover:bg-green-700 ring-green-600';
+        case 'driver': return 'bg-yellow-500 hover:bg-yellow-600 ring-yellow-500 text-black';
         case 'admin': return 'bg-slate-900 hover:bg-slate-800 ring-slate-900';
-        default: return 'bg-blue-600 hover:bg-blue-700 ring-blue-600';
+        default: return 'bg-black hover:bg-zinc-800 ring-black';
     }
   };
 
@@ -165,7 +165,7 @@ const Login = () => {
                           disabled={loading}
                       />
                   </div>
-                  <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={loading}>
+                  <Button type="submit" className="w-full bg-black hover:bg-zinc-800" disabled={loading}>
                       {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Enviar Email"}
                   </Button>
               </form>
@@ -179,12 +179,12 @@ const Login = () => {
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4 relative overflow-hidden">
       {/* Background Decorativo */}
       <div className={`absolute top-0 left-0 right-0 h-1/2 transition-colors duration-500 ease-in-out -z-10 ${
-          activeTab === 'driver' ? 'bg-green-600' : activeTab === 'admin' ? 'bg-slate-900' : 'bg-blue-600'
+          activeTab === 'driver' ? 'bg-yellow-500' : activeTab === 'admin' ? 'bg-slate-900' : 'bg-black'
       }`} />
       
       <div className="mb-8 text-center text-white z-10">
-        <h1 className="text-4xl font-bold tracking-tight mb-2">GoMove</h1>
-        <p className="opacity-90">Sua plataforma de mobilidade urbana</p>
+        <h1 className="text-4xl font-bold tracking-tight mb-2">GoldDrive</h1>
+        <p className="opacity-90">Sua plataforma premium de mobilidade</p>
       </div>
 
       <Card className="w-full max-w-md z-10 shadow-xl border-0">
@@ -200,13 +200,13 @@ const Login = () => {
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-3 mb-6 bg-gray-100 p-1 rounded-xl">
-              <TabsTrigger value="client" className="data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm rounded-lg transition-all">
+              <TabsTrigger value="client" className="data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm rounded-lg transition-all">
                 <div className="flex flex-col items-center gap-1 py-1">
                     <User className="w-4 h-4" />
                     <span className="text-xs font-medium">Passageiro</span>
                 </div>
               </TabsTrigger>
-              <TabsTrigger value="driver" className="data-[state=active]:bg-white data-[state=active]:text-green-600 data-[state=active]:shadow-sm rounded-lg transition-all">
+              <TabsTrigger value="driver" className="data-[state=active]:bg-white data-[state=active]:text-yellow-600 data-[state=active]:shadow-sm rounded-lg transition-all">
                 <div className="flex flex-col items-center gap-1 py-1">
                     <Car className="w-4 h-4" />
                     <span className="text-xs font-medium">Motorista</span>
@@ -255,7 +255,7 @@ const Login = () => {
                     <Label>Senha</Label>
                     {!isSignUp && (
                         <span 
-                            className="text-xs text-blue-600 cursor-pointer hover:underline font-medium"
+                            className="text-xs text-black cursor-pointer hover:underline font-medium"
                             onClick={() => setIsForgotPassword(true)}
                         >
                             Esqueceu a senha?
@@ -311,7 +311,7 @@ const Login = () => {
         <CardFooter className="flex justify-center text-sm bg-gray-50/50 py-4 border-t">
             {isSignUp ? "Já possui uma conta?" : "Novo por aqui?"} 
             <button 
-                className="text-blue-600 font-bold ml-1 hover:underline focus:outline-none"
+                className="text-black font-bold ml-1 hover:underline focus:outline-none"
                 onClick={toggleMode}
                 type="button"
             >
@@ -321,7 +321,7 @@ const Login = () => {
       </Card>
       
       <div className="mt-8 text-xs text-gray-400 text-center">
-        &copy; 2024 GoMove. Todos os direitos reservados.
+        &copy; 2024 GoldDrive. Todos os direitos reservados.
       </div>
     </div>
   );

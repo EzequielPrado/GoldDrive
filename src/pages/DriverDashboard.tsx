@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { Wallet, User, MapPin, Navigation, Shield, DollarSign, Clock, Star, Menu, Home, List, History, XCircle, CheckCircle } from "lucide-react";
+import { Wallet, User, MapPin, Navigation, Shield, DollarSign, Clock, Star, Menu, Home, List, History, XCircle, CheckCircle, Car } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import MapComponent from "@/components/MapComponent";
 import { useRide, RideData } from "@/context/RideContext";
-import { showSuccess } from "@/utils/toast";
+import { showSuccess, showError } from "@/utils/toast";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -19,37 +22,69 @@ const DriverDashboard = () => {
   const [timer, setTimer] = useState(15);
   const [rating, setRating] = useState(0);
   const [driverProfile, setDriverProfile] = useState<any>(null);
+  const [showCarForm, setShowCarForm] = useState(false);
   
-  // Dados de Histórico
+  // Dados do Carro (Form)
+  const [carData, setCarData] = useState({ model: '', plate: '', year: '', color: '' });
+  
   const [history, setHistory] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
 
-  // Estados derivados
   const isOnTrip = !!ride && ride.status !== 'COMPLETED';
   const isRating = ride?.status === 'COMPLETED';
 
   useEffect(() => {
-    const getProfile = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if(user) {
-            const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-            setDriverProfile(data);
-
-            if (activeTab === 'history') {
-                 const { data: rides } = await supabase.from('rides').select('*').eq('driver_id', user.id).order('created_at', { ascending: false });
-                 setHistory(rides || []);
-            }
-            if (activeTab === 'wallet') {
-                 const { data: trans } = await supabase.from('transactions').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
-                 setTransactions(trans || []);
-            }
-        }
-    }
-    getProfile();
+    checkProfile();
   }, [activeTab]);
 
+  const checkProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if(user) {
+          const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+          setDriverProfile(data);
+
+          // Verifica se precisa cadastrar carro
+          if (!data.car_model || !data.car_plate) {
+              setShowCarForm(true);
+              setIsOnline(false); // Força offline até preencher
+          }
+
+          if (activeTab === 'history') {
+               const { data: rides } = await supabase.from('rides').select('*').eq('driver_id', user.id).order('created_at', { ascending: false });
+               setHistory(rides || []);
+          }
+          if (activeTab === 'wallet') {
+               const { data: trans } = await supabase.from('transactions').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
+               setTransactions(trans || []);
+          }
+      }
+  };
+
+  const handleSaveCar = async () => {
+      if(!carData.model || !carData.plate || !carData.year) {
+          showError("Preencha todos os campos obrigatórios");
+          return;
+      }
+      
+      try {
+          const { error } = await supabase.from('profiles').update({
+              car_model: carData.model,
+              car_plate: carData.plate,
+              car_year: carData.year,
+              car_color: carData.color
+          }).eq('id', driverProfile.id);
+
+          if(error) throw error;
+          
+          showSuccess("Veículo cadastrado com sucesso!");
+          setShowCarForm(false);
+          checkProfile();
+      } catch (e:any) {
+          showError(e.message);
+      }
+  };
+
   useEffect(() => {
-    // Lógica para mostrar a corrida disponível
     if (isOnline && availableRides.length > 0 && !ride && activeTab === 'home') {
         setIncomingRide(availableRides[0]);
         setTimer(15);
@@ -63,7 +98,6 @@ const DriverDashboard = () => {
         const interval = setInterval(() => setTimer(t => t - 1), 1000);
         return () => clearInterval(interval);
     } else if (timer === 0 && incomingRide) {
-        // Tempo acabou: rejeita automaticamente apenas visualmente para passar para a próxima se houver
         handleReject();
     }
   }, [incomingRide, timer]);
@@ -84,7 +118,7 @@ const DriverDashboard = () => {
 
   const handleCancel = async () => {
       if (ride) {
-          if (confirm("Tem certeza que deseja cancelar esta corrida?")) {
+          if (confirm("Cancelar corrida?")) {
             await cancelRide(ride.id, "Cancelado pelo motorista");
           }
       }
@@ -92,31 +126,75 @@ const DriverDashboard = () => {
 
   const handleSubmitRating = async (stars: number) => {
       if (ride) {
-          await rateRide(ride.id, stars, true); // true = isDriver
+          await rateRide(ride.id, stars, true);
       }
+  };
+
+  const toggleOnline = (val: boolean) => {
+      if (val && (!driverProfile?.car_model || !driverProfile?.car_plate)) {
+          setShowCarForm(true);
+          return;
+      }
+      setIsOnline(val);
   };
 
   return (
     <div className="h-screen flex flex-col bg-gray-100 relative overflow-hidden">
+      
+      {/* Modal Cadastro Carro */}
+      <Dialog open={showCarForm} onOpenChange={(open) => !open && (!driverProfile?.car_model ? setShowCarForm(true) : setShowCarForm(false))}>
+          <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                  <DialogTitle>Cadastro do Veículo</DialogTitle>
+                  <DialogDescription>
+                      Para começar a dirigir com a GoldDrive, precisamos dos dados do seu carro.
+                  </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                      <Label>Modelo do Carro (ex: Honda Civic)</Label>
+                      <Input value={carData.model} onChange={e => setCarData({...carData, model: e.target.value})} placeholder="Digite modelo e marca" />
+                  </div>
+                  <div className="grid gap-2">
+                      <Label>Placa</Label>
+                      <Input value={carData.plate} onChange={e => setCarData({...carData, plate: e.target.value.toUpperCase()})} placeholder="ABC-1234" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                          <Label>Ano</Label>
+                          <Input value={carData.year} type="number" onChange={e => setCarData({...carData, year: e.target.value})} placeholder="2020" />
+                      </div>
+                      <div className="grid gap-2">
+                          <Label>Cor</Label>
+                          <Input value={carData.color} onChange={e => setCarData({...carData, color: e.target.value})} placeholder="Preto" />
+                      </div>
+                  </div>
+              </div>
+              <DialogFooter>
+                  <Button onClick={handleSaveCar} className="w-full bg-black hover:bg-zinc-800">Salvar e Continuar</Button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
+
       {/* Header Fixo */}
       <header className="bg-zinc-900 text-white p-4 shadow-md z-30 flex justify-between items-center">
          <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/profile')}>
-             <Avatar className="border-2 border-zinc-700">
+             <Avatar className="border-2 border-yellow-500">
                 <AvatarImage src={driverProfile?.avatar_url} />
-                <AvatarFallback className="bg-zinc-700 text-white"><User /></AvatarFallback>
+                <AvatarFallback className="bg-zinc-700 text-yellow-500 font-bold">GD</AvatarFallback>
              </Avatar>
              <div>
-                <div className="font-bold text-sm truncate max-w-[100px]">{driverProfile?.first_name || 'Motorista'}</div>
-                <div className="text-xs text-yellow-400">R$ {driverProfile?.balance?.toFixed(2) || '0.00'}</div>
+                <div className="font-bold text-sm truncate max-w-[100px] text-yellow-500">GoldDrive</div>
+                <div className="text-xs text-gray-300">{driverProfile?.first_name}</div>
              </div>
          </div>
          
          {activeTab === 'home' && (
              <div className="flex items-center gap-3 bg-zinc-800 px-3 py-2 rounded-full border border-zinc-700">
                 <span className={`text-[10px] font-bold ${isOnline ? 'text-green-400' : 'text-gray-400'}`}>
-                    {isOnline ? 'ON' : 'OFF'}
+                    {isOnline ? 'ONLINE' : 'OFF'}
                 </span>
-                <Switch checked={isOnline} onCheckedChange={setIsOnline} className="data-[state=checked]:bg-green-500 scale-75" />
+                <Switch checked={isOnline} onCheckedChange={toggleOnline} className="data-[state=checked]:bg-green-500 scale-75" />
              </div>
          )}
       </header>
@@ -132,23 +210,14 @@ const DriverDashboard = () => {
                      
                      <div className="flex justify-center gap-2 mb-8">
                          {[1, 2, 3, 4, 5].map((star) => (
-                             <button 
-                                key={star}
-                                onClick={() => setRating(star)}
-                                className="transition-transform hover:scale-110 focus:outline-none"
-                             >
-                                 <Star 
-                                    className={`w-10 h-10 ${rating >= star ? 'fill-yellow-400 text-yellow-400' : 'text-zinc-600'}`} 
-                                 />
+                             <button key={star} onClick={() => setRating(star)} className="transition-transform hover:scale-110 focus:outline-none">
+                                 <Star className={`w-10 h-10 ${rating >= star ? 'fill-yellow-400 text-yellow-400' : 'text-zinc-600'}`} />
                              </button>
                          ))}
                      </div>
 
                      <Button className="w-full h-12 text-lg font-bold bg-green-600 hover:bg-green-700 mb-3" onClick={() => handleSubmitRating(rating || 5)}>
-                         Confirmar Avaliação
-                     </Button>
-                     <Button variant="ghost" className="w-full text-gray-400 hover:text-white" onClick={() => handleSubmitRating(0)}>
-                         Pular Avaliação
+                         Confirmar
                      </Button>
                  </div>
              </div>
@@ -161,16 +230,15 @@ const DriverDashboard = () => {
                     
                     {!isOnTrip && !incomingRide && !isRating && (
                         <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-zinc-900/90 text-white px-6 py-2 rounded-full shadow-lg backdrop-blur z-20 flex items-center gap-2">
-                             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                             <p className="text-sm font-medium">Procurando corridas...</p>
+                             <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
+                             <p className="text-sm font-medium">GoldDrive buscando...</p>
                         </div>
                     )}
 
-                    {/* --- STATUS DA CORRIDA ATIVA (PAINEL INFERIOR) --- */}
+                    {/* --- STATUS DA CORRIDA ATIVA --- */}
                     {isOnTrip && !isRating && (
                         <div className="absolute bottom-0 left-0 right-0 bg-white shadow-[0_-5px_30px_rgba(0,0,0,0.3)] z-20 animate-in slide-in-from-bottom duration-500 rounded-t-3xl">
                             <div className="p-6 pb-8">
-                                {/* Header do Painel */}
                                 <div className="flex justify-between items-center mb-6 border-b pb-4">
                                     <div>
                                         <div className="flex items-center gap-2 mb-1">
@@ -179,20 +247,19 @@ const DriverDashboard = () => {
                                                 ride?.status === 'ARRIVED' ? 'bg-orange-500' : 
                                                 'bg-green-600'
                                             }`}>
-                                                {ride?.status === 'ACCEPTED' ? 'A CAMINHO' : 
+                                                {ride?.status === 'ACCEPTED' ? 'BUSCAR' : 
                                                  ride?.status === 'ARRIVED' ? 'AGUARDANDO' : 
-                                                 'EM CORRIDA'}
+                                                 'EM ROTA'}
                                             </span>
                                         </div>
                                         <h3 className="text-xl font-bold text-gray-900">Passageiro</h3>
                                     </div>
                                     <div className="text-right">
                                         <h3 className="text-2xl font-black text-green-600">R$ {(ride?.price || 0) * 0.8}</h3>
-                                        <p className="text-gray-400 text-xs uppercase font-bold">Ganho Estimado</p>
+                                        <p className="text-gray-400 text-xs uppercase font-bold">Ganho</p>
                                     </div>
                                 </div>
                                 
-                                {/* Informações do Trajeto */}
                                 <div className="space-y-4 mb-6">
                                     <div className="flex items-start gap-4">
                                         <div className="w-3 h-3 rounded-full bg-blue-500 mt-2 shrink-0" />
@@ -210,42 +277,31 @@ const DriverDashboard = () => {
                                     </div>
                                 </div>
 
-                                {/* BOTÕES DE AÇÃO DO ESTADO */}
                                 <div className="flex flex-col gap-3">
-                                    
-                                    {/* 1. ACEITO -> A CAMINHO DO EMBARQUE */}
                                     {ride?.status === 'ACCEPTED' && (
                                         <div className="flex gap-2">
                                             <Button variant="outline" className="flex-1 border-red-200 text-red-600 hover:bg-red-50 h-14" onClick={handleCancel}>
                                                 <XCircle className="mr-2 w-5 h-5" /> Cancelar
                                             </Button>
-                                            <Button 
-                                                className="flex-[2] h-14 text-lg bg-blue-600 hover:bg-blue-700 font-bold rounded-xl shadow-lg shadow-blue-200" 
-                                                onClick={() => confirmArrival(ride!.id)}
-                                            >
-                                                <MapPin className="mr-2 h-5 w-5" /> Cheguei no Local
+                                            <Button className="flex-[2] h-14 text-lg bg-blue-600 hover:bg-blue-700 font-bold rounded-xl" onClick={() => confirmArrival(ride!.id)}>
+                                                <MapPin className="mr-2 h-5 w-5" /> Cheguei
                                             </Button>
                                         </div>
                                     )}
 
-                                    {/* 2. CHEGOU -> AGUARDANDO PASSAGEIRO */}
                                     {ride?.status === 'ARRIVED' && (
                                         <div className="flex gap-2">
                                             <Button variant="outline" className="flex-1 border-red-200 text-red-600 hover:bg-red-50 h-14" onClick={handleCancel}>
                                                 <XCircle className="mr-2 w-5 h-5" /> Cancelar
                                             </Button>
-                                            <Button 
-                                                className="flex-[2] h-14 text-lg bg-green-600 hover:bg-green-700 font-bold rounded-xl shadow-lg shadow-green-200 animate-pulse" 
-                                                onClick={() => startRide(ride!.id)}
-                                            >
-                                                <Navigation className="mr-2 h-5 w-5" /> Iniciar Corrida
+                                            <Button className="flex-[2] h-14 text-lg bg-green-600 hover:bg-green-700 font-bold rounded-xl animate-pulse" onClick={() => startRide(ride!.id)}>
+                                                <Navigation className="mr-2 h-5 w-5" /> Iniciar
                                             </Button>
                                         </div>
                                     )}
 
-                                    {/* 3. EM CORRIDA -> FINALIZAR */}
                                     {ride?.status === 'IN_PROGRESS' && (
-                                         <Button className="w-full py-6 h-16 text-xl bg-red-600 hover:bg-red-700 font-bold rounded-xl shadow-lg shadow-red-200" onClick={() => finishRide(ride!.id)}>
+                                         <Button className="w-full py-6 h-16 text-xl bg-red-600 hover:bg-red-700 font-bold rounded-xl" onClick={() => finishRide(ride!.id)}>
                                             <Shield className="mr-2 h-6 w-6" /> Finalizar Corrida
                                          </Button>
                                     )}
@@ -261,17 +317,13 @@ const DriverDashboard = () => {
                                 <div className="absolute top-6 right-6 w-12 h-12 rounded-full border-4 border-white/20 flex items-center justify-center font-bold text-xl">
                                     {timer}
                                 </div>
-
-                                <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-2">Nova Solicitação</h2>
+                                <h2 className="text-sm font-bold text-yellow-500 uppercase tracking-widest mb-2">GoldDrive Solicita</h2>
                                 <h1 className="text-4xl sm:text-5xl font-black mb-1 text-center">{incomingRide.category}</h1>
-                                <div className="bg-green-500/20 text-green-400 px-4 py-1 rounded-full text-sm font-bold mb-8 flex items-center gap-1">
-                                    <DollarSign className="w-4 h-4" /> Pagamento em Saldo
-                                </div>
-
-                                <div className="w-full bg-zinc-800 rounded-2xl p-6 space-y-6 mb-8">
+                                
+                                <div className="w-full bg-zinc-800 rounded-2xl p-6 space-y-6 mb-8 mt-4">
                                     <div className="flex justify-between items-end border-b border-zinc-700 pb-4">
                                         <div>
-                                            <p className="text-gray-400 text-xs uppercase mb-1">Seu Ganho (80%)</p>
+                                            <p className="text-gray-400 text-xs uppercase mb-1">Ganho Estimado</p>
                                             <p className="text-4xl font-bold text-green-400">R$ {(incomingRide.price * 0.8).toFixed(2)}</p>
                                         </div>
                                         <div className="text-right">
@@ -279,7 +331,6 @@ const DriverDashboard = () => {
                                             <p className="text-2xl font-bold">{incomingRide.distance}</p>
                                         </div>
                                     </div>
-
                                     <div className="space-y-4">
                                         <div className="flex items-start gap-4">
                                             <div className="w-3 h-3 rounded-full bg-white mt-2 shrink-0 shadow-[0_0_10px_white]" />
@@ -299,17 +350,10 @@ const DriverDashboard = () => {
                                 </div>
 
                                 <div className="w-full grid grid-cols-2 gap-4">
-                                    <Button 
-                                        variant="ghost" 
-                                        className="h-16 text-xl bg-zinc-800 hover:bg-zinc-700 text-gray-300 rounded-xl"
-                                        onClick={handleReject}
-                                    >
+                                    <Button variant="ghost" className="h-16 text-xl bg-zinc-800 hover:bg-zinc-700 text-gray-300 rounded-xl" onClick={handleReject}>
                                         Recusar
                                     </Button>
-                                    <Button 
-                                        className="h-16 text-xl bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(22,163,74,0.4)] animate-pulse"
-                                        onClick={handleAccept}
-                                    >
+                                    <Button className="h-16 text-xl bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl animate-pulse" onClick={handleAccept}>
                                         ACEITAR
                                     </Button>
                                 </div>
@@ -319,73 +363,27 @@ const DriverDashboard = () => {
                 </div>
             ) : (
                 <div className="p-6 space-y-6 h-full bg-zinc-900 flex flex-col items-center justify-center text-center">
-                     <div className="w-32 h-32 bg-zinc-800 rounded-full flex items-center justify-center mb-4">
-                        <Wallet className="w-16 h-16 text-zinc-600" />
+                     <div className="w-32 h-32 bg-zinc-800 rounded-full flex items-center justify-center mb-4 border-4 border-yellow-500/20">
+                        <Car className="w-16 h-16 text-yellow-500" />
                      </div>
-                     <h2 className="text-3xl font-bold text-white">Você está offline</h2>
-                     <Button size="lg" className="w-full max-w-xs bg-green-600 hover:bg-green-700 mt-4" onClick={() => setIsOnline(true)}>
+                     <h2 className="text-3xl font-bold text-white mb-2">GoldDrive</h2>
+                     <p className="text-gray-400 mb-6">Fique online para receber corridas e faturar.</p>
+                     <Button size="lg" className="w-full max-w-xs bg-yellow-500 hover:bg-yellow-600 text-black font-bold mt-4" onClick={() => toggleOnline(true)}>
                         FICAR ONLINE
                      </Button>
                 </div>
             )
         )}
 
-        {activeTab === 'history' && (
-            <div className="p-4 space-y-4">
-                <h2 className="text-xl font-bold text-slate-800">Histórico de Corridas</h2>
-                {history.map(item => (
-                    <Card key={item.id} className="border-0 shadow-sm">
-                        <CardContent className="p-4 flex justify-between items-center">
-                            <div>
-                                <p className="font-bold text-lg">{item.destination_address}</p>
-                                <p className="text-xs text-gray-500">{new Date(item.created_at).toLocaleDateString()}</p>
-                                <div className="flex items-center gap-1 mt-1">
-                                    <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
-                                    <span className="text-xs font-bold">{item.customer_rating || '-'}</span>
-                                </div>
-                            </div>
-                            <div className="text-right">
-                                <p className="font-bold text-green-600">R$ {item.driver_earnings}</p>
-                                <Badge variant="outline" className="text-xs">{item.status}</Badge>
-                            </div>
-                        </CardContent>
-                    </Card>
-                ))}
-            </div>
-        )}
-
-        {activeTab === 'wallet' && (
-            <div className="p-4 space-y-4">
-                <Card className="bg-zinc-900 text-white border-0">
-                    <CardContent className="p-6">
-                        <p className="text-gray-400 text-sm">Saldo Atual</p>
-                        <h2 className="text-4xl font-bold">R$ {driverProfile?.balance?.toFixed(2)}</h2>
-                    </CardContent>
-                </Card>
-                <h3 className="font-bold mt-4">Extrato</h3>
-                {transactions.map(t => (
-                    <div key={t.id} className="bg-white p-3 rounded-lg shadow-sm flex justify-between">
-                         <span className="text-sm font-medium">{t.description}</span>
-                         <span className={`font-bold ${t.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                             {t.amount > 0 ? '+' : ''} R$ {t.amount}
-                         </span>
-                    </div>
-                ))}
-            </div>
-        )}
+        {/* Histórico/Wallet - Simplificado para manter foco */}
+        {activeTab === 'history' && <div className="p-4"><h2 className="text-xl font-bold">Histórico</h2>{history.map(i => <div key={i.id} className="bg-white p-4 rounded mb-2 shadow-sm">{i.destination_address} - R$ {i.driver_earnings}</div>)}</div>}
+        {activeTab === 'wallet' && <div className="p-4"><h2 className="text-xl font-bold">Saldo: R$ {driverProfile?.balance?.toFixed(2)}</h2></div>}
       </div>
 
-      {/* Bottom Nav */}
       <div className="bg-white border-t p-2 flex justify-around">
-          <Button variant="ghost" className={`flex-col h-14 gap-1 ${activeTab === 'home' ? 'text-blue-600' : 'text-gray-400'}`} onClick={() => setActiveTab('home')}>
-              <Home className="w-6 h-6" /> <span className="text-xs">Início</span>
-          </Button>
-          <Button variant="ghost" className={`flex-col h-14 gap-1 ${activeTab === 'history' ? 'text-blue-600' : 'text-gray-400'}`} onClick={() => setActiveTab('history')}>
-              <List className="w-6 h-6" /> <span className="text-xs">Corridas</span>
-          </Button>
-          <Button variant="ghost" className={`flex-col h-14 gap-1 ${activeTab === 'wallet' ? 'text-blue-600' : 'text-gray-400'}`} onClick={() => setActiveTab('wallet')}>
-              <Wallet className="w-6 h-6" /> <span className="text-xs">Ganhos</span>
-          </Button>
+          <Button variant="ghost" className="flex-col h-14" onClick={() => setActiveTab('home')}><Home className="w-6 h-6" /><span className="text-[10px]">Início</span></Button>
+          <Button variant="ghost" className="flex-col h-14" onClick={() => setActiveTab('history')}><List className="w-6 h-6" /><span className="text-[10px]">Corridas</span></Button>
+          <Button variant="ghost" className="flex-col h-14" onClick={() => setActiveTab('wallet')}><Wallet className="w-6 h-6" /><span className="text-[10px]">Carteira</span></Button>
       </div>
     </div>
   );
