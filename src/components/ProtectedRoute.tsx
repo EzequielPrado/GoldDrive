@@ -9,83 +9,76 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
-  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null); // null = carregando
+  const [status, setStatus] = useState<'loading' | 'authorized' | 'unauthorized'>('loading');
   const location = useLocation();
 
   useEffect(() => {
     let mounted = true;
 
-    const verifyRole = async (session: any) => {
-        if (!session) {
-            if (mounted) setIsAuthorized(false);
-            return;
-        }
-
-        // 1. Tenta Metadata (Rápido)
-        let role = session.user.user_metadata?.role;
-
-        // 2. Fallback para RPC (Seguro)
-        if (!role) {
-            const { data } = await supabase.rpc('get_my_role');
-            role = data;
-        }
-
-        // 3. Fallback para Tabela (Garantia Final)
-        if (!role) {
-            const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
-            role = data?.role;
-        }
-
-        if (mounted) {
-            if (role && allowedRoles.includes(role)) {
-                setIsAuthorized(true);
-            } else {
-                console.warn(`Acesso negado. Role: ${role}, Esperado: ${allowedRoles}`);
-                setIsAuthorized(false);
+    const checkAccess = async () => {
+        try {
+            // 1. Verifica Sessão
+            const { data: { session } } = await supabase.auth.getSession();
+            
+            if (!session) {
+                if (mounted) setStatus('unauthorized');
+                return;
             }
+
+            // 2. Tenta obter role do metadata (mais rápido)
+            let role = session.user.user_metadata?.role;
+
+            // 3. Se não tiver no metadata, busca no banco (fonte da verdade)
+            if (!role) {
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('role')
+                    .eq('id', session.user.id)
+                    .maybeSingle();
+                role = profile?.role;
+            }
+
+            // 4. Validação final
+            if (mounted) {
+                if (role && allowedRoles.includes(role)) {
+                    setStatus('authorized');
+                } else {
+                    console.warn(`Acesso negado. Role encontrada: ${role}, Permitidas: ${allowedRoles.join(', ')}`);
+                    setStatus('unauthorized');
+                }
+            }
+        } catch (error) {
+            console.error("Erro ao verificar acesso:", error);
+            if (mounted) setStatus('unauthorized');
         }
     };
 
-    // Verificação Inicial + Listener de Mudanças
-    // onAuthStateChange dispara o evento INITIAL_SESSION quando o storage é carregado
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    checkAccess();
+
+    // Listener para mudanças de estado (ex: logout em outra aba)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
         if (event === 'SIGNED_OUT') {
-             if (mounted) setIsAuthorized(false);
-        } else if (session) {
-             verifyRole(session);
-        } else if (event === 'INITIAL_SESSION' && !session) {
-             // Se terminou de carregar e não tem sessão
-             if (mounted) setIsAuthorized(false);
+            setStatus('unauthorized');
         }
     });
 
-    // Fallback: Check manual caso o evento não dispare rápido
-    supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) verifyRole(session);
-        // Nota: Se não tiver sessão aqui, esperamos o onAuthStateChange confirmar
-        // para evitar o problema do "false positive" no F5
-    });
-
-    return () => { 
+    return () => {
         mounted = false;
         subscription.unsubscribe();
     };
   }, [allowedRoles]);
 
-  // Loading State
-  if (isAuthorized === null) {
+  if (status === 'loading') {
     return (
-        <div className="h-screen w-full flex items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-            <div className="flex flex-col items-center gap-2">
-                <Loader2 className="w-8 h-8 animate-spin text-yellow-500" />
-                <p className="text-xs text-gray-400 font-medium">Restaurando sessão...</p>
-            </div>
+        <div className="h-screen w-full flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 gap-4">
+            <Loader2 className="w-10 h-10 animate-spin text-yellow-500" />
+            <p className="text-sm text-gray-400 font-medium animate-pulse">Verificando credenciais...</p>
         </div>
     );
   }
 
-  // Redirecionamento se falhar
-  if (!isAuthorized) {
+  if (status === 'unauthorized') {
+      // Redireciona para o login correto baseado na rota tentada
       let target = "/login";
       if (location.pathname.includes('/admin')) target = "/login/admin";
       else if (location.pathname.includes('/driver')) target = "/login/driver";

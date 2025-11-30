@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,18 +36,6 @@ const LoginDriver = () => {
   const [carColor, setCarColor] = useState("");
   const [carYear, setCarYear] = useState("");
 
-  useEffect(() => {
-    // Check session on mount
-    const checkSession = async () => {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-            const { data } = await supabase.from('profiles').select('role, driver_status').eq('id', session.user.id).maybeSingle();
-            if (data?.role) redirectUserByRole(data.role, data.driver_status);
-        }
-    };
-    checkSession();
-  }, []);
-
   const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, "");
     if (value.length > 11) value = value.slice(0, 11);
@@ -81,9 +69,6 @@ const LoginDriver = () => {
       setLoading(true);
       
       try {
-          // Limpa sessão anterior
-          await supabase.auth.signOut();
-
           const { data, error } = await supabase.auth.signInWithPassword({ 
               email: email.trim(), 
               password: password.trim() 
@@ -161,8 +146,6 @@ const LoginDriver = () => {
       setLoading(true);
 
       try {
-          await supabase.auth.signOut();
-          
           const { data: authData, error: authError } = await supabase.auth.signUp({
               email: email.trim(),
               password: password.trim(),

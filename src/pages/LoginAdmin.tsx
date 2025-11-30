@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,17 +13,6 @@ const LoginAdmin = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-
-  useEffect(() => {
-    const checkSession = async () => {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-            const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
-            if (data?.role) redirectUserByRole(data.role);
-        }
-    };
-    checkSession();
-  }, []);
 
   const redirectUserByRole = (role: string) => {
       if (role === 'admin') navigate('/admin', { replace: true });
