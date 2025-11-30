@@ -9,96 +9,91 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
-  const [sessionStatus, setSessionStatus] = useState<'loading' | 'authenticated' | 'unauthenticated'>('loading');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
   const location = useLocation();
 
   useEffect(() => {
     let mounted = true;
 
-    const initializeAuth = async () => {
+    const checkSession = async () => {
       try {
-        // 1. Tenta recuperar sessão existente
         const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+            if (mounted) {
+                setIsAuthenticated(false);
+                setIsLoading(false);
+            }
+            return;
+        }
 
-        if (!mounted) return;
+        // Se tem sessão, busca a role
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', session.user.id)
+            .single();
 
-        if (session) {
-          // Sessão encontrada, verificar role
-          await fetchRole(session.user.id, session.user.user_metadata?.role);
-        } else {
-          // Nenhuma sessão encontrada
-          setSessionStatus('unauthenticated');
+        if (mounted) {
+            if (profile) {
+                setUserRole(profile.role);
+                setIsAuthenticated(true);
+            } else {
+                // Sessão existe mas perfil não (erro raro)
+                setIsAuthenticated(false);
+            }
+            setIsLoading(false);
         }
       } catch (error) {
-        console.error("Erro ao inicializar auth:", error);
-        if (mounted) setSessionStatus('unauthenticated');
+        console.error("Auth Check Error:", error);
+        if (mounted) {
+            setIsAuthenticated(false);
+            setIsLoading(false);
+        }
       }
     };
 
-    const fetchRole = async (userId: string, metadataRole?: string) => {
-        if (!mounted) return;
-        
-        let role = metadataRole;
-        
-        // Se não tiver no metadata (segurança dupla), busca no banco
-        if (!role) {
-            const { data } = await supabase.from('profiles').select('role').eq('id', userId).single();
-            role = data?.role;
-        }
+    checkSession();
 
-        setUserRole(role || 'client');
-        setSessionStatus('authenticated');
-    };
-
-    initializeAuth();
-
-    // Escuta mudanças em tempo real (Login, Logout, Auto-Refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (!mounted) return;
-        
+    // Listener para mudanças (logout, etc)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
         if (event === 'SIGNED_OUT') {
-            setSessionStatus('unauthenticated');
+            setIsAuthenticated(false);
             setUserRole(null);
-        } else if (session && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION')) {
-            await fetchRole(session.user.id, session.user.user_metadata?.role);
         }
     });
 
     return () => {
-      mounted = false;
-      subscription.unsubscribe();
+        mounted = false;
+        subscription.unsubscribe();
     };
   }, []);
 
-  // TELA DE LOADING (Enquanto verifica o "cookie")
-  if (sessionStatus === 'loading') {
+  if (isLoading) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-zinc-950 gap-4">
-        <div className="relative flex flex-col items-center">
-            <Loader2 className="w-12 h-12 text-yellow-500 animate-spin mb-4" />
-            <p className="text-gray-400 text-sm font-medium animate-pulse">Restaurando sessão...</p>
-        </div>
+        <Loader2 className="w-12 h-12 text-yellow-500 animate-spin" />
+        <p className="text-gray-400 text-sm animate-pulse">Verificando credenciais...</p>
       </div>
     );
   }
 
-  // NÃO AUTENTICADO -> Redireciona para login correto
-  if (sessionStatus === 'unauthenticated') {
-    if (location.pathname.includes('/driver')) return <Navigate to="/login/driver" replace />;
+  if (!isAuthenticated) {
+    // Redirecionamento inteligente baseado na URL que tentou acessar
     if (location.pathname.includes('/admin')) return <Navigate to="/login/admin" replace />;
+    if (location.pathname.includes('/driver')) return <Navigate to="/login/driver" replace />;
     return <Navigate to="/login" replace />;
   }
 
-  // AUTENTICADO MAS SEM PERMISSÃO DE ROLE
+  // Verifica permissão de Role
   if (userRole && !allowedRoles.includes(userRole)) {
-      // Redireciona para o painel correto do usuário se ele tentar acessar área errada
       if (userRole === 'admin') return <Navigate to="/admin" replace />;
       if (userRole === 'driver') return <Navigate to="/driver" replace />;
       return <Navigate to="/client" replace />;
   }
 
-  // TUDO CERTO -> Renderiza a página
   return <>{children}</>;
 };
 

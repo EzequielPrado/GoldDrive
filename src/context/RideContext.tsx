@@ -95,7 +95,7 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
           name: data ? `${data.first_name} ${data.last_name || ''}` : 'Passageiro',
           avatar_url: data?.avatar_url,
           rating: 5.0,
-          phone: data?.phone,
+          phone: data?.phone, // Agora retornamos o telefone!
           total_rides: data?.total_rides || 0
       };
   };
@@ -108,8 +108,10 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
         if (session) {
           setUserId(session.user.id);
           const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
-          if (data) setUserRole(data.role);
-          fetchCurrentRide(session.user.id, data?.role);
+          if (data) {
+              setUserRole(data.role);
+              fetchCurrentRide(session.user.id, data.role);
+          }
         }
       } catch (e) {
         console.error("Erro sessão:", e);
@@ -122,8 +124,11 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (session) {
             setUserId(session.user.id);
-            const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
-            if (data) setUserRole(data.role);
+            // Só busca role se não tivermos ainda, para evitar flashes
+            if (!userRole) {
+                const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
+                if (data) setUserRole(data.role);
+            }
         } else {
             setUserId(null); setUserRole(null); setRide(null);
         }
@@ -141,13 +146,16 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
       
       if (data) {
           const isActive = ['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(data.status);
-          const isPendingRating = data.status === 'COMPLETED' && (role === 'client' ? !data.customer_rating : !data.driver_rating);
+          // CORREÇÃO AVALIAÇÃO: Só considera pendente se explicitamente NULL. 0 conta como avaliado.
+          const isPendingRating = data.status === 'COMPLETED' && (role === 'client' ? data.customer_rating === null : data.driver_rating === null);
           
           if (isActive || isPendingRating) {
               let rideData = { ...data } as RideData;
               if (data.driver_id) rideData.driver_details = await fetchDriverFullInfo(data.driver_id);
               if (data.customer_id) rideData.client_details = await fetchClientFullInfo(data.customer_id);
               setRide(rideData);
+          } else {
+              setRide(null); // Garante que limpe se já estiver avaliado
           }
       }
   };
@@ -156,22 +164,44 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (!userId) return;
     const performPolling = async () => {
+        // 1. Motorista buscando corridas
         if (userRole === 'driver') {
-            if (ride && ride.status !== 'COMPLETED' && ride.status !== 'CANCELLED') return;
-            const { data: available } = await supabase.from('rides').select('*').eq('status', 'SEARCHING');
-            if (available) {
-                const filtered = available.filter((r: any) => !r.rejected_by || !r.rejected_by.includes(userId));
-                setAvailableRides(prev => JSON.stringify(prev) !== JSON.stringify(filtered) ? filtered as RideData[] : prev);
+            // Só busca novas se não estiver em uma corrida ativa
+            if (!ride || ride.status === 'COMPLETED' || ride.status === 'CANCELLED') {
+                const { data: available } = await supabase.from('rides').select('*').eq('status', 'SEARCHING');
+                if (available) {
+                    const filtered = available.filter((r: any) => !r.rejected_by || !r.rejected_by.includes(userId));
+                    
+                    // Mapeia para buscar detalhes do cliente (telefone/nome) para cada corrida disponível
+                    const ridesWithDetails = await Promise.all(filtered.map(async (r) => {
+                         const clientDetails = await fetchClientFullInfo(r.customer_id);
+                         return { ...r, client_details: clientDetails } as RideData;
+                    }));
+
+                    setAvailableRides(prev => JSON.stringify(prev) !== JSON.stringify(ridesWithDetails) ? ridesWithDetails : prev);
+                }
+            } else {
+                setAvailableRides([]);
             }
         }
         
+        // 2. Atualização da Corrida Atual
         if (ride) {
             const { data: updatedRide } = await supabase.from('rides').select('*').eq('id', ride.id).single();
             if (updatedRide) {
+                // Se mudou status ou avaliação foi preenchida
+                const ratingChanged = (userRole === 'client' && ride.customer_rating === null && updatedRide.customer_rating !== null);
+                
+                if (ratingChanged) {
+                    setRide(null); // Limpa da tela se foi avaliado externamente
+                    return;
+                }
+
                 if (updatedRide.status !== ride.status || (updatedRide.driver_id && !ride.driver_id)) {
                     let fullData = { ...updatedRide } as RideData;
                     if (updatedRide.driver_id) fullData.driver_details = await fetchDriverFullInfo(updatedRide.driver_id);
                     if (updatedRide.customer_id) fullData.client_details = await fetchClientFullInfo(updatedRide.customer_id);
+                    
                     setRide(fullData);
                     
                     if (updatedRide.status === 'ACCEPTED' && ride.status === 'SEARCHING') showSuccess("Motorista encontrado!");
@@ -196,18 +226,13 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
     }
     if (!currentUserId) throw new Error("Usuário não identificado.");
 
-    // Se for carteira, verifica e debita AGORA
     if (paymentMethod === 'WALLET') {
         const { data: profile } = await supabase.from('profiles').select('balance').eq('id', currentUserId).single();
         if ((profile?.balance || 0) < price) { 
             throw new Error("Saldo insuficiente. Recarregue ou pague na hora."); 
         }
-        
-        // Debita
         const newBalance = (profile?.balance || 0) - price;
         await supabase.from('profiles').update({ balance: newBalance }).eq('id', currentUserId);
-        
-        // Registra transação de "Bloqueio/Pagamento"
         await supabase.from('transactions').insert({
             user_id: currentUserId,
             amount: -price,
@@ -228,7 +253,6 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
     }).select().single();
 
     if (error) {
-        // Se der erro ao criar, devolve o dinheiro se foi carteira
         if (paymentMethod === 'WALLET') {
              const { data: p } = await supabase.from('profiles').select('balance').eq('id', currentUserId).single();
              await supabase.from('profiles').update({ balance: (p?.balance || 0) + price }).eq('id', currentUserId);
@@ -246,9 +270,6 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
          currentUserId = data.user?.id || null;
       }
       if (!currentUserId) return;
-
-      // Verifica se o motorista tem saldo para a taxa (caso seja pagamento em dinheiro)
-      // Opcional: Bloquear motorista se saldo negativo. Por enquanto deixamos passar.
 
       const { data: checkRide } = await supabase.from('rides').select('status').eq('id', rideId).single();
       if (checkRide.status !== 'SEARCHING') {
@@ -297,47 +318,32 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
   const finishRide = async (rideId: string) => {
       if (!ride) return;
       const price = Number(ride.price);
-      const driverEarn = price * 0.8; // 80% pro motorista
-      const platformFee = price * 0.2; // 20% taxa
+      const driverEarn = price * 0.8;
+      const platformFee = price * 0.2;
 
       await supabase.from('rides').update({ status: 'COMPLETED', driver_earnings: driverEarn, platform_fee: platformFee }).eq('id', rideId);
       
-      // Atualiza contagem de corridas
       if (ride.driver_id) {
            const { data: d } = await supabase.from('profiles').select('total_rides').eq('id', ride.driver_id).single();
            await supabase.from('profiles').update({ total_rides: (d?.total_rides || 0) + 1 }).eq('id', ride.driver_id);
       }
 
       if (ride.payment_method === 'WALLET') {
-          // O dinheiro JÁ saiu do passageiro na solicitação.
-          // Agora, creditamos o motorista (80%). A plataforma fica com o resto (que já está na conta da plataforma contabilmente).
-          
           if (ride.driver_id) {
                const { data: dProfile } = await supabase.from('profiles').select('balance').eq('id', ride.driver_id).single();
                await supabase.from('profiles').update({ balance: (dProfile?.balance || 0) + driverEarn }).eq('id', ride.driver_id);
                
                await supabase.from('transactions').insert({ 
-                   user_id: ride.driver_id, 
-                   amount: driverEarn, 
-                   type: 'RIDE_EARNING', 
-                   description: 'Ganho Corrida (Carteira)' 
+                   user_id: ride.driver_id, amount: driverEarn, type: 'RIDE_EARNING', description: 'Ganho Corrida (Carteira)' 
                });
           }
       } else {
-          // PAGAMENTO NA HORA (CASH)
-          // O passageiro paga TUDO (100%) pro motorista na mão.
-          // O motorista "deve" 20% pra plataforma. 
-          // Deduzimos a taxa do saldo do motorista.
-          
           if (ride.driver_id) {
                const { data: dProfile } = await supabase.from('profiles').select('balance').eq('id', ride.driver_id).single();
                await supabase.from('profiles').update({ balance: (dProfile?.balance || 0) - platformFee }).eq('id', ride.driver_id);
                
                await supabase.from('transactions').insert({ 
-                   user_id: ride.driver_id, 
-                   amount: -platformFee, 
-                   type: 'PLATFORM_FEE', 
-                   description: 'Taxa GoldDrive (Pago em dinheiro)' 
+                   user_id: ride.driver_id, amount: -platformFee, type: 'PLATFORM_FEE', description: 'Taxa GoldDrive (Pago em dinheiro)' 
                });
           }
       }
@@ -353,7 +359,6 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
       const { data: currentRide } = await supabase.from('rides').select('*').eq('id', targetId).single();
       if (!currentRide) return;
 
-      // Marca como cancelado
       await supabase.from('rides').update({ status: 'CANCELLED' }).eq('id', targetId);
       setRide(prev => prev ? { ...prev, status: 'CANCELLED' } : null);
 
@@ -361,63 +366,41 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
       const compensation = 2.50;
       const isLateCancel = (currentRide.status === 'ACCEPTED' || currentRide.status === 'ARRIVED');
 
-      // Lógica de Reembolso / Cobrança
       if (currentRide.payment_method === 'WALLET') {
-          // Passageiro JÁ pagou na solicitação. Precisamos devolver.
-          
           if (isLateCancel) {
-              // Devolve tudo MENOS a taxa
               const refundAmount = Number(currentRide.price) - fee;
               const { data: p } = await supabase.from('profiles').select('balance').eq('id', currentRide.customer_id).single();
               await supabase.from('profiles').update({ balance: (p?.balance || 0) + refundAmount }).eq('id', currentRide.customer_id);
               
               await supabase.from('transactions').insert({ 
-                  user_id: currentRide.customer_id, 
-                  amount: refundAmount, 
-                  type: 'REFUND_PARTIAL', 
-                  description: `Estorno (Taxa aplicada) #${targetId.slice(0,4)}` 
+                  user_id: currentRide.customer_id, amount: refundAmount, type: 'REFUND_PARTIAL', description: `Estorno (Taxa aplicada) #${targetId.slice(0,4)}` 
               });
           } else {
-              // Devolve TUDO (Cancelamento rápido ou sem motorista)
               const refundAmount = Number(currentRide.price);
               const { data: p } = await supabase.from('profiles').select('balance').eq('id', currentRide.customer_id).single();
               await supabase.from('profiles').update({ balance: (p?.balance || 0) + refundAmount }).eq('id', currentRide.customer_id);
               
               await supabase.from('transactions').insert({ 
-                  user_id: currentRide.customer_id, 
-                  amount: refundAmount, 
-                  type: 'REFUND_FULL', 
-                  description: `Estorno Total #${targetId.slice(0,4)}` 
+                  user_id: currentRide.customer_id, amount: refundAmount, type: 'REFUND_FULL', description: `Estorno Total #${targetId.slice(0,4)}` 
               });
           }
       } else {
-          // PAGAMENTO NA HORA (CASH)
-          // Passageiro não pagou nada ainda.
-          
           if (isLateCancel) {
-              // Cobra taxa da carteira do passageiro (pode ficar negativo)
               const { data: p } = await supabase.from('profiles').select('balance').eq('id', currentRide.customer_id).single();
               await supabase.from('profiles').update({ balance: (p?.balance || 0) - fee }).eq('id', currentRide.customer_id);
               
               await supabase.from('transactions').insert({ 
-                  user_id: currentRide.customer_id, 
-                  amount: -fee, 
-                  type: 'CANCELLATION_FEE', 
-                  description: `Taxa Cancelamento #${targetId.slice(0,4)}` 
+                  user_id: currentRide.customer_id, amount: -fee, type: 'CANCELLATION_FEE', description: `Taxa Cancelamento #${targetId.slice(0,4)}` 
               });
           }
       }
 
-      // Compensação do Motorista (Sempre recebe se foi cancelamento tardio)
       if (isLateCancel && currentRide.driver_id) {
            const { data: d } = await supabase.from('profiles').select('balance').eq('id', currentRide.driver_id).single();
            await supabase.from('profiles').update({ balance: (d?.balance || 0) + compensation }).eq('id', currentRide.driver_id);
            
            await supabase.from('transactions').insert({ 
-               user_id: currentRide.driver_id, 
-               amount: compensation, 
-               type: 'COMPENSATION', 
-               description: `Compensação Cancelamento #${targetId.slice(0,4)}` 
+               user_id: currentRide.driver_id, amount: compensation, type: 'COMPENSATION', description: `Compensação Cancelamento #${targetId.slice(0,4)}` 
            });
       }
       
@@ -428,9 +411,12 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
       const update = isDriver 
         ? { customer_rating: rating } 
         : { driver_rating: rating, review_comment: comment };
+      
       await supabase.from('rides').update(update).eq('id', rideId);
+      
+      // CRÍTICO: Limpa o estado local imediatamente para evitar que a tela de avaliação volte
+      setRide(null); 
       showSuccess("Avaliação enviada!");
-      setRide(null);
   };
   
   const addBalance = async (amount: number) => {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Wallet, MapPin, Navigation, Shield, DollarSign, Star, Menu, History, CheckCircle, Car, Calendar, ArrowRight, AlertTriangle, ChevronRight, TrendingUp, MessageCircle } from "lucide-react";
+import { Wallet, MapPin, Navigation, Shield, DollarSign, Star, Menu, History, CheckCircle, Car, Calendar, ArrowRight, AlertTriangle, ChevronRight, TrendingUp, MessageCircle, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -26,7 +26,7 @@ const DriverDashboard = () => {
   const [activeTab, setActiveTab] = useState('home');
   const [isOnline, setIsOnline] = useState(false);
   const [incomingRide, setIncomingRide] = useState<RideData | null>(null);
-  const [timer, setTimer] = useState(15);
+  const [timer, setTimer] = useState(30); // Aumentei para 30s pra dar tempo de ler
   const [driverProfile, setDriverProfile] = useState<any>(null);
   const [showChat, setShowChat] = useState(false);
   
@@ -83,7 +83,7 @@ const DriverDashboard = () => {
   useEffect(() => {
     if (isOnline && availableRides.length > 0 && !ride && activeTab === 'home') {
         setIncomingRide(availableRides[0]);
-        setTimer(15);
+        setTimer(30);
     } else {
         setIncomingRide(null);
     }
@@ -193,12 +193,27 @@ const DriverDashboard = () => {
 
                 {incomingRide && (
                     <div className="bg-slate-900/95 backdrop-blur-xl border border-white/10 p-6 rounded-[32px] shadow-2xl animate-in slide-in-from-bottom text-white">
-                        <div className="flex justify-between items-center mb-6">
+                        <div className="flex justify-between items-center mb-4">
                             <Badge className="bg-green-500 text-black font-bold hover:bg-green-400 px-3 py-1">NOVA CORRIDA</Badge>
                             <div className="w-10 h-10 rounded-full border-2 border-white/20 flex items-center justify-center font-bold text-lg">{timer}</div>
                         </div>
 
-                        <div className="text-center mb-8">
+                        {/* Dados do Passageiro na Solicitação */}
+                        <div className="flex items-center gap-3 bg-white/10 p-3 rounded-2xl mb-4">
+                             <Avatar className="h-10 w-10 border border-white/30">
+                                 <AvatarImage src={incomingRide.client_details?.avatar_url} />
+                                 <AvatarFallback>{incomingRide.client_details?.name?.[0]}</AvatarFallback>
+                             </Avatar>
+                             <div>
+                                 <p className="font-bold text-sm">{incomingRide.client_details?.name || 'Passageiro'}</p>
+                                 <div className="flex items-center gap-1 text-xs text-gray-300">
+                                     <Phone className="w-3 h-3" /> 
+                                     {incomingRide.client_details?.phone || 'Sem telefone'}
+                                 </div>
+                             </div>
+                        </div>
+
+                        <div className="text-center mb-6">
                             <p className="text-slate-400 text-xs uppercase font-bold mb-1">Ganho Estimado</p>
                             <h2 className="text-5xl font-black tracking-tighter text-white">R$ {(incomingRide.price * 0.8).toFixed(2)}</h2>
                             <div className="flex justify-center gap-3 mt-4"><Badge variant="outline" className="border-white/20 text-slate-300">{incomingRide.distance}</Badge><Badge variant="outline" className="border-white/20 text-slate-300">{incomingRide.category}</Badge></div>
@@ -216,7 +231,11 @@ const DriverDashboard = () => {
                 {isOnTrip && !showFinishScreen && (
                      <div className={cardBaseClasses}>
                         <div className="flex justify-between items-center mb-6">
-                            <div><Badge className="mb-2 bg-black text-white hover:bg-black">{ride?.status === 'ACCEPTED' ? 'A CAMINHO' : ride?.status === 'ARRIVED' ? 'NO LOCAL' : 'EM VIAGEM'}</Badge><h3 className="text-2xl font-bold text-slate-900">{ride?.client_details?.name}</h3></div>
+                            <div>
+                                <Badge className="mb-2 bg-black text-white hover:bg-black">{ride?.status === 'ACCEPTED' ? 'A CAMINHO' : ride?.status === 'ARRIVED' ? 'NO LOCAL' : 'EM VIAGEM'}</Badge>
+                                <h3 className="text-2xl font-bold text-slate-900">{ride?.client_details?.name}</h3>
+                                {ride?.client_details?.phone && <p className="text-sm text-gray-500 flex items-center gap-1"><Phone className="w-3 h-3" /> {ride.client_details.phone}</p>}
+                            </div>
                             <div className="text-right"><h3 className="text-3xl font-black text-slate-900">R$ {(Number(ride?.price) * 0.8).toFixed(2)}</h3><p className="text-gray-400 text-xs uppercase font-bold tracking-wider">Ganhos</p></div>
                         </div>
 
