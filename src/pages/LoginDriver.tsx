@@ -58,8 +58,17 @@ const LoginDriver = () => {
           const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: password.trim() });
           if (error) throw error;
           
-          const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).maybeSingle();
-          if (profile?.role === 'driver') navigate('/driver');
+          // Busca role e status do motorista
+          const { data: profile } = await supabase.from('profiles').select('role, driver_status').eq('id', data.user.id).maybeSingle();
+          
+          if (profile?.role === 'driver') {
+              // Se o status for PENDING, manda para a tela de análise/sucesso
+              if (profile.driver_status === 'PENDING') {
+                  navigate('/success');
+              } else {
+                  navigate('/driver');
+              }
+          }
           else if (profile?.role === 'admin') navigate('/admin');
           else navigate('/client');
       } catch (e: any) {
@@ -119,7 +128,7 @@ const LoginDriver = () => {
       setLoading(true);
 
       try {
-          // 1. CRIA O USUÁRIO (Trigger simplificado no banco lida com o básico)
+          // 1. CRIA O USUÁRIO
           const { data: authData, error: authError } = await supabase.auth.signUp({
               email: email.trim(),
               password: password.trim(),
@@ -150,15 +159,14 @@ const LoginDriver = () => {
               return;
           }
 
-          // 2. UPLOAD ARQUIVOS (Em background)
+          // 2. UPLOAD ARQUIVOS
           const [faceUrl, cnhFrontUrl, cnhBackUrl] = await Promise.all([
              uploadFileSafe(facePhoto!, `face/${userId}`),
              uploadFileSafe(cnhFront!, `cnh/${userId}`),
              uploadFileSafe(cnhBack!, `cnh/${userId}`)
           ]);
 
-          // 3. UPSERT DOS DADOS RESTANTES
-          // Isso garante que tudo seja salvo mesmo que o trigger tenha falhado ou salvo apenas o básico
+          // 3. SALVA DADOS
           await supabase.from('profiles').upsert({
               id: userId,
               role: 'driver',
@@ -178,7 +186,7 @@ const LoginDriver = () => {
               updated_at: new Date().toISOString()
           });
 
-          // SUCESSO: Redireciona para a nova página
+          // SUCESSO
           navigate('/success');
 
       } catch (e: any) {
@@ -218,7 +226,7 @@ const LoginDriver = () => {
       );
   }
 
-  // TELA DE CADASTRO (Design Original Card Centered)
+  // TELA DE CADASTRO
   return (
     <div className="min-h-screen relative flex items-center justify-center p-4 lg:p-8 font-sans overflow-hidden bg-slate-900">
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?q=80&w=2583')] bg-cover bg-center opacity-20" />
