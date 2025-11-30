@@ -4,23 +4,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { showError } from "@/utils/toast";
-import { Shield, Loader2, Lock, ArrowLeft, KeyRound, LogOut } from "lucide-react";
+import { Shield, Loader2, Lock, ArrowLeft, KeyRound, LogOut, Eye, EyeOff } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 const LoginAdmin = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  // MUDANÇA CRÍTICA: Começa como false para NÃO travar a tela
-  const [checking, setChecking] = useState(false); 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   // Verificação silenciosa (Não bloqueia a UI)
   useEffect(() => {
+    let mounted = true;
     const checkSession = async () => {
         try {
             const { data: { session } } = await supabase.auth.getSession();
-            if (session) {
+            if (session && mounted) {
                  const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
                  if (data?.role === 'admin') {
                      navigate('/admin', { replace: true });
@@ -31,6 +31,7 @@ const LoginAdmin = () => {
         }
     };
     checkSession();
+    return () => { mounted = false; };
   }, [navigate]);
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -38,33 +39,50 @@ const LoginAdmin = () => {
     if (loading) return;
 
     setLoading(true);
+
     try {
-        // Força logout antes de tentar logar para limpar estados sujos
+        // 1. Limpa qualquer sessão anterior
         await supabase.auth.signOut();
 
-        // Login
+        // 2. Tenta o login
         const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password });
-        if(error) throw error;
         
-        if(authData.user) {
-            // Verifica role
-            const { data: profile } = await supabase.from('profiles').select('role').eq('id', authData.user.id).single();
+        if (error) throw error;
+        
+        if (authData.user) {
+            // 3. Verifica se é admin
+            const { data: profile, error: profileError } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', authData.user.id)
+                .single();
             
-            if(profile?.role !== 'admin') {
+            if (profileError) throw profileError;
+
+            if (profile?.role !== 'admin') {
                 await supabase.auth.signOut();
                 throw new Error("Acesso negado: Este usuário não é um administrador.");
             }
             
+            // 4. Sucesso - Redireciona
             navigate('/admin', { replace: true });
+        } else {
+            throw new Error("Erro ao obter dados do usuário.");
         }
     } catch (e: any) {
-        showError(e.message || "Erro ao autenticar");
-        setLoading(false);
+        console.error("Erro login:", e);
+        // Tratamento específico para credenciais inválidas para ser mais claro
+        if (e.message.includes("Invalid login")) {
+            showError("Email ou senha incorretos.");
+        } else {
+            showError(e.message || "Erro ao autenticar");
+        }
+        setLoading(false); // CRÍTICO: Garante que o loading pare em caso de erro
     }
   };
 
   const handleForceClear = () => {
-      localStorage.clear(); // Limpa tudo do navegador
+      localStorage.clear();
       window.location.reload();
   };
 
@@ -106,20 +124,26 @@ const LoginAdmin = () => {
                            <div className="relative group">
                                <div className="absolute left-4 top-3.5 text-slate-500 group-focus-within:text-yellow-500 transition-colors"><KeyRound className="w-5 h-5" /></div>
                                <Input 
-                                   type="password" 
+                                   type={showPassword ? "text" : "password"} 
                                    placeholder="••••••••••••" 
-                                   className="bg-slate-900/50 border-white/10 pl-12 h-12 rounded-xl text-white placeholder:text-slate-600 focus:border-yellow-500/50 focus:ring-yellow-500/20 transition-all" 
+                                   className="bg-slate-900/50 border-white/10 pl-12 pr-12 h-12 rounded-xl text-white placeholder:text-slate-600 focus:border-yellow-500/50 focus:ring-yellow-500/20 transition-all" 
                                    value={password} 
                                    onChange={e => setPassword(e.target.value)} 
                                    autoComplete="current-password" 
                                />
-                               <Lock className="absolute right-4 top-3.5 w-4 h-4 text-slate-600" />
+                               <button 
+                                   type="button"
+                                   onClick={() => setShowPassword(!showPassword)}
+                                   className="absolute right-4 top-3.5 text-slate-500 hover:text-white transition-colors focus:outline-none"
+                               >
+                                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                               </button>
                            </div>
                        </div>
 
                        <Button 
                            className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-400 hover:to-yellow-500 text-black font-black h-12 rounded-xl shadow-lg shadow-yellow-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]" 
-                           disabled={loading} // Removido 'checking' daqui
+                           disabled={loading}
                        >
                            {loading ? <Loader2 className="animate-spin mr-2" /> : "AUTENTICAR SISTEMA"}
                        </Button>
@@ -132,7 +156,6 @@ const LoginAdmin = () => {
                    <ArrowLeft className="w-4 h-4" /> Voltar ao Início
                </Button>
                
-               {/* Botão de limpeza profunda */}
                <div onClick={handleForceClear} className="text-[10px] text-slate-700 hover:text-red-500 cursor-pointer pt-4 uppercase font-bold tracking-widest flex items-center justify-center gap-1">
                    <LogOut className="w-3 h-3" /> Resetar Dados Locais
                </div>
