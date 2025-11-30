@@ -14,7 +14,7 @@ const LoginDriver = () => {
   const [step, setStep] = useState(1); // 1: Login/Dados, 2: Docs, 3: Carro
   const [isSignUp, setIsSignUp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [registrationSuccess, setRegistrationSuccess] = useState(false); // Nova tela de sucesso
+  const [registrationSuccess, setRegistrationSuccess] = useState(false);
   
   // Estado de Erros
   const [errors, setErrors] = useState<Record<string, boolean>>({});
@@ -100,16 +100,15 @@ const LoginDriver = () => {
           const { error: uploadError } = await supabase.storage.from('documents').upload(filePath, file);
           
           if (uploadError) {
-              console.error("Erro upload:", uploadError);
-              // Em caso de erro de bucket inexistente ou permissão, retornamos null mas não quebramos o app
-              // Isso permite que o cadastro prossiga para o Admin ver, mesmo sem fotos
+              // Ignora erro se bucket não existir ou permissão falhar, para não travar o cadastro
+              console.warn("Upload falhou (não crítico):", uploadError.message);
               return null; 
           }
           
           const { data } = supabase.storage.from('documents').getPublicUrl(filePath);
           return data.publicUrl;
       } catch (err) {
-          console.error("Exceção upload:", err);
+          console.warn("Exceção upload:", err);
           return null;
       }
   };
@@ -160,7 +159,9 @@ const LoginDriver = () => {
   const submitRegistration = async () => {
       setLoading(true);
       try {
-          // 1. Criar Usuário Auth
+          let userId = "";
+
+          // 1. Tentar Criar Usuário
           const { data: authData, error: authError } = await supabase.auth.signUp({
               email, password,
               options: { 
@@ -171,22 +172,36 @@ const LoginDriver = () => {
                   } 
               }
           });
-          if (authError) throw authError;
-          if (!authData.user) throw new Error("Erro ao criar usuário");
 
-          const userId = authData.user.id;
+          if (authError) {
+              // Se o usuário já existe, tentamos fazer o login para continuar o cadastro (atualizar dados)
+              if (authError.message.includes("User already registered") || authError.status === 422) {
+                  console.log("Usuário já existe, tentando login...");
+                  const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({ email, password });
+                  
+                  if (loginError) throw new Error("Email já cadastrado. Erro ao tentar login: " + loginError.message);
+                  if (!loginData.user) throw new Error("Falha na autenticação automática.");
+                  
+                  userId = loginData.user.id;
+              } else {
+                  throw authError;
+              }
+          } else {
+              if (!authData.user) throw new Error("Erro desconhecido ao criar usuário");
+              userId = authData.user.id;
+          }
 
-          // 2. Upload Docs (Com tratamento de erro individual para não travar o loop)
-          let faceUrl = null;
-          let cnhFrontUrl = null;
-          let cnhBackUrl = null;
+          // Pequeno delay para garantir que triggers do banco tenham rodado (criação do profile)
+          await new Promise(resolve => setTimeout(resolve, 1000));
 
-          if (facePhoto) faceUrl = await uploadFile(facePhoto, `face/${userId}`);
-          if (cnhFront) cnhFrontUrl = await uploadFile(cnhFront, `cnh/${userId}`);
-          if (cnhBack) cnhBackUrl = await uploadFile(cnhBack, `cnh/${userId}`);
+          // 2. Upload Docs (Paralelo para ser mais rápido)
+          const [faceUrl, cnhFrontUrl, cnhBackUrl] = await Promise.all([
+             facePhoto ? uploadFile(facePhoto, `face/${userId}`) : Promise.resolve(null),
+             cnhFront ? uploadFile(cnhFront, `cnh/${userId}`) : Promise.resolve(null),
+             cnhBack ? uploadFile(cnhBack, `cnh/${userId}`) : Promise.resolve(null)
+          ]);
 
-          // 3. Atualizar Profile
-          // IMPORTANTE: Mesmo se upload falhar, atualizamos os dados de texto
+          // 3. Atualizar Profile com Dados do Motorista
           const { error: updateError } = await supabase.from('profiles').update({
               cpf,
               phone,
@@ -200,14 +215,18 @@ const LoginDriver = () => {
               driver_status: 'PENDING'
           }).eq('id', userId);
 
-          if (updateError) throw updateError;
+          if (updateError) {
+              console.error("Erro update profile:", updateError);
+              throw new Error("Erro ao salvar dados do perfil: " + updateError.message);
+          }
 
           // SUCESSO!
           setRegistrationSuccess(true);
+          window.scrollTo(0, 0);
 
       } catch (e: any) {
-          showError("Erro no cadastro: " + e.message);
           console.error(e);
+          showError(e.message || "Erro desconhecido no cadastro.");
       } finally {
           setLoading(false);
       }
