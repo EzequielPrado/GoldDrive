@@ -1,6 +1,8 @@
 import { ReactNode, useEffect, useState } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import WrongRole from "@/pages/WrongRole";
+import { Loader2 } from "lucide-react";
 
 interface Props {
   children: ReactNode;
@@ -9,7 +11,8 @@ interface Props {
 
 const ProtectedRoute = ({ children, allowedRoles }: Props) => {
   const [loading, setLoading] = useState(true);
-  const [authorized, setAuthorized] = useState(false);
+  const [session, setSession] = useState<any>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const location = useLocation();
 
   useEffect(() => {
@@ -22,10 +25,11 @@ const ProtectedRoute = ({ children, allowedRoles }: Props) => {
         if (!mounted) return;
         
         if (!session) {
-          setAuthorized(false);
           setLoading(false);
-          return;
+          return; // Deixa o Router redirecionar se não tiver sessão, ou Login lidar
         }
+
+        setSession(session);
 
         const { data, error } = await supabase.from('profiles')
           .select('role')
@@ -34,57 +38,39 @@ const ProtectedRoute = ({ children, allowedRoles }: Props) => {
 
         if (!mounted) return;
 
-        if (error) {
-          console.error('Erro ao buscar role:', error);
-          setAuthorized(false);
-        } else if (data && allowedRoles.includes(data.role)) {
-          setAuthorized(true);
-        } else {
-          setAuthorized(false);
+        if (data) {
+            setUserRole(data.role);
         }
       } catch (error) {
-        console.error('Erro na verificação:', error);
-        if (mounted) setAuthorized(false);
+        console.error('Erro Auth:', error);
       } finally {
         if (mounted) setLoading(false);
       }
     };
 
     checkAuth();
-
-    // Listener para mudanças de autenticação
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Auth event no ProtectedRoute:', event);
-      
-      // Só reage a eventos relevantes
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        checkAuth();
-      } else if (event === 'SIGNED_OUT') {
-        if (mounted) {
-          setAuthorized(false);
-          setLoading(false);
-        }
-      }
-    });
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, [allowedRoles, location.pathname]);
+  }, [location.pathname]);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-yellow-500 border-t-transparent mx-auto"></div>
-          <p className="text-white font-medium">Verificando acesso...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="animate-spin w-10 h-10 text-yellow-500" />
       </div>
     );
   }
 
-  return authorized ? <>{children}</> : <Navigate to="/" replace />;
+  // Se não tem sessão, manda pro início (Login público)
+  if (!session) {
+      window.location.href = '/'; 
+      return null;
+  }
+
+  // Se tem sessão mas a role não bate, mostra tela de erro
+  if (userRole && !allowedRoles.includes(userRole)) {
+      return <WrongRole userRole={userRole} requiredRole={allowedRoles} />;
+  }
+
+  return <>{children}</>;
 };
 
 export default ProtectedRoute;
