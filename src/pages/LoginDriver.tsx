@@ -4,9 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { showError, showSuccess } from "@/utils/toast";
-import { ArrowLeft, Loader2, ArrowRight, Car, Upload, Camera, CheckCircle2, User, FileText, ChevronLeft } from "lucide-react";
+import { ArrowLeft, Loader2, ArrowRight, Car, Camera, ShieldCheck, Mail, Lock, Phone, CreditCard, ChevronLeft, Eye, EyeOff, KeyRound } from "lucide-react";
 import { Label } from "@/components/ui/label";
-import { Card } from "@/components/ui/card";
 
 // Tipos para o formulário
 interface FormData {
@@ -15,6 +14,7 @@ interface FormData {
   lastName: string;
   email: string;
   password: string;
+  confirmPassword?: string; // Novo campo
   cpf: string;
   phone: string;
   // Etapa 2 (Arquivos)
@@ -32,21 +32,20 @@ const LoginDriver = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
-  
-  // Controle de Etapas (1, 2, 3)
   const [step, setStep] = useState(1);
+  
+  // Controle de visibilidade de senha
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Estado Unificado
   const [form, setForm] = useState<FormData>({
-    firstName: "", lastName: "", email: "", password: "", cpf: "", phone: "",
+    firstName: "", lastName: "", email: "", password: "", confirmPassword: "", cpf: "", phone: "",
     facePhoto: null, cnhFront: null, cnhBack: null,
     carModel: "", carPlate: "", carYear: "", carColor: ""
   });
 
-  // Previews de Imagem
   const [previews, setPreviews] = useState({ face: "", cnhFront: "", cnhBack: "" });
 
-  // Verificação de sessão
   useEffect(() => {
     const checkUser = async () => {
         const { data: { session } } = await supabase.auth.getSession();
@@ -55,27 +54,52 @@ const LoginDriver = () => {
     checkUser();
   }, [navigate]);
 
-  const handleChange = (field: keyof FormData, value: any) => {
-    setForm(prev => ({ ...prev, [field]: value }));
+  // --- MÁSCARAS DE INPUT ---
+  const formatCPF = (value: string) => {
+    return value
+      .replace(/\D/g, '')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})/, '$1-$2')
+      .replace(/(-\d{2})\d+?$/, '$1');
+  };
+
+  const formatPhone = (value: string) => {
+    return value
+      .replace(/\D/g, '')
+      .replace(/(\d{2})(\d)/, '($1) $2')
+      .replace(/(\d{5})(\d)/, '$1-$2')
+      .replace(/(-\d{4})\d+?$/, '$1');
+  };
+
+  const handleChange = (field: keyof FormData, value: string) => {
+    let formattedValue = value;
+    if (field === 'cpf') formattedValue = formatCPF(value);
+    if (field === 'phone') formattedValue = formatPhone(value);
+    
+    setForm(prev => ({ ...prev, [field]: formattedValue }));
   };
 
   const handleFileChange = (field: 'facePhoto' | 'cnhFront' | 'cnhBack', e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setForm(prev => ({ ...prev, [field]: file }));
-      // Criar preview
       const url = URL.createObjectURL(file);
       setPreviews(prev => ({ ...prev, [field === 'facePhoto' ? 'face' : field]: url }));
     }
   };
 
   const validateStep1 = () => {
-    if (!form.firstName || !form.lastName || !form.email || !form.password || !form.cpf || !form.phone) {
+    if (!form.firstName || !form.lastName || !form.email || !form.password || !form.cpf || !form.phone || !form.confirmPassword) {
       showError("Preencha todos os campos obrigatórios.");
       return false;
     }
     if (form.password.length < 6) {
       showError("A senha deve ter pelo menos 6 caracteres.");
+      return false;
+    }
+    if (form.password !== form.confirmPassword) {
+      showError("As senhas não coincidem.");
       return false;
     }
     return true;
@@ -102,7 +126,7 @@ const LoginDriver = () => {
     const filePath = `driver_docs/${fileName}`;
     
     const { error: uploadError } = await supabase.storage
-      .from('avatars') // Usando bucket existente para garantir funcionamento
+      .from('avatars')
       .upload(filePath, file);
 
     if (uploadError) throw uploadError;
@@ -115,9 +139,6 @@ const LoginDriver = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      // Limpeza preventiva de sessão
-      await supabase.auth.signOut({ scope: 'global' });
-      
       const { error } = await supabase.auth.signInWithPassword({
         email: form.email,
         password: form.password
@@ -139,7 +160,6 @@ const LoginDriver = () => {
 
     setLoading(true);
     try {
-      // 1. Criar Usuário Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: form.email,
         password: form.password,
@@ -157,17 +177,15 @@ const LoginDriver = () => {
 
       const userId = authData.user.id;
 
-      // 2. Upload Arquivos
       const faceUrl = await uploadFile(form.facePhoto!, `${userId}/face`);
       const cnhFrontUrl = await uploadFile(form.cnhFront!, `${userId}/cnh_front`);
       const cnhBackUrl = await uploadFile(form.cnhBack!, `${userId}/cnh_back`);
 
-      // 3. Atualizar Profile com TUDO
       const { error: profileError } = await supabase.from('profiles').update({
         phone: form.phone,
         cpf: form.cpf,
         face_photo_url: faceUrl,
-        avatar_url: faceUrl, // Usa a foto do rosto como avatar inicial
+        avatar_url: faceUrl,
         cnh_front_url: cnhFrontUrl,
         cnh_back_url: cnhBackUrl,
         car_model: form.carModel,
@@ -180,9 +198,8 @@ const LoginDriver = () => {
       if (profileError) throw profileError;
 
       showSuccess("Cadastro realizado! Aguarde aprovação.");
-      // Redireciona para login ou dashboard (dependendo se o email confirm é obrigatório)
-      // Como a maioria dos setups pede confirm, avisamos:
       navigate('/login/driver'); 
+      setIsSignUp(false); // Volta pra tela de login
       
     } catch (e: any) {
       showError(e.message);
@@ -191,14 +208,13 @@ const LoginDriver = () => {
     }
   };
 
-  // Componente de Upload Visual
   const UploadBox = ({ label, field, preview }: { label: string, field: 'facePhoto' | 'cnhFront' | 'cnhBack', preview: string }) => (
     <div className="space-y-2">
-      <Label className="text-gray-300 text-xs font-bold uppercase">{label}</Label>
+      <Label className="text-gray-500 text-xs font-bold uppercase tracking-wider">{label}</Label>
       <label className={`
         relative flex flex-col items-center justify-center w-full h-32 
         border-2 border-dashed rounded-2xl cursor-pointer transition-all overflow-hidden
-        ${preview ? 'border-yellow-500 bg-black' : 'border-gray-700 bg-gray-900/50 hover:bg-gray-800 hover:border-gray-500'}
+        ${preview ? 'border-yellow-500 bg-yellow-50' : 'border-gray-300 bg-gray-50 hover:bg-gray-100 hover:border-gray-400'}
       `}>
         {preview ? (
           <img src={preview} alt="Preview" className="w-full h-full object-cover" />
@@ -219,116 +235,225 @@ const LoginDriver = () => {
   );
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col font-sans selection:bg-yellow-500 selection:text-black">
-       {/* Header Simplificado */}
-       <div className="p-6 flex items-center justify-between z-10">
-           <Button variant="ghost" onClick={() => isSignUp && step > 1 ? prevStep() : isSignUp ? setIsSignUp(false) : navigate('/')} className="text-white hover:bg-white/10 rounded-full w-10 h-10 p-0">
-               {isSignUp && step > 1 ? <ChevronLeft className="w-6 h-6" /> : <ArrowLeft className="w-6 h-6" />}
-           </Button>
-           <div className="flex items-center gap-2">
-               <Car className="w-5 h-5 text-yellow-500" />
-               <span className="font-bold tracking-tight">GoldDrive Driver</span>
+    <div className="min-h-screen bg-white flex font-sans">
+       {/* Lado Esquerdo - Visual (Desktop) */}
+       <div className="hidden lg:flex lg:w-1/2 bg-slate-900 relative items-center justify-center overflow-hidden">
+           <div 
+                className="absolute inset-0 opacity-40 bg-cover bg-center"
+                style={{ backgroundImage: `url('https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?q=80&w=2070&auto=format&fit=crop')` }}
+           />
+           <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/60 to-transparent" />
+           <div className="relative z-10 text-center px-12">
+                <div className="w-20 h-20 bg-yellow-500 rounded-2xl mx-auto mb-8 flex items-center justify-center shadow-[0_0_40px_rgba(234,179,8,0.3)]">
+                    <Car className="w-10 h-10 text-black" />
+                </div>
+                <h2 className="text-5xl font-black text-white mb-6 tracking-tight">Dirija e<br/>Lucre Mais.</h2>
+                <p className="text-gray-400 text-xl font-light leading-relaxed max-w-md mx-auto">
+                    A plataforma que valoriza o motorista. Taxas justas, pagamentos rápidos e suporte 24h.
+                </p>
+                
+                <div className="mt-12 grid grid-cols-2 gap-6 text-left">
+                     <div className="bg-white/5 p-4 rounded-xl border border-white/10 backdrop-blur-sm">
+                         <div className="text-yellow-500 font-bold text-2xl mb-1">95%</div>
+                         <div className="text-gray-400 text-sm">Ficam com o valor da corrida</div>
+                     </div>
+                     <div className="bg-white/5 p-4 rounded-xl border border-white/10 backdrop-blur-sm">
+                         <div className="text-yellow-500 font-bold text-2xl mb-1">24h</div>
+                         <div className="text-gray-400 text-sm">Suporte humanizado real</div>
+                     </div>
+                </div>
            </div>
        </div>
 
-       {/* Conteúdo Principal */}
-       <div className="flex-1 flex flex-col px-6 pb-10 max-w-lg mx-auto w-full z-10">
-           
-           {!isSignUp ? (
-               // --- LOGIN FORM ---
-               <div className="flex-1 flex flex-col justify-center animate-in fade-in slide-in-from-bottom-8 duration-500">
-                   <div className="mb-8">
-                       <h1 className="text-4xl font-black text-white mb-2">Bem-vindo<br/>de volta.</h1>
-                       <p className="text-gray-400">Faça login para gerenciar suas corridas e ganhos.</p>
-                   </div>
-                   <form onSubmit={handleLogin} className="space-y-4">
-                       <Input type="email" placeholder="Email" className="h-14 bg-gray-900 border-gray-800 text-white rounded-xl focus:border-yellow-500 focus:ring-yellow-500" value={form.email} onChange={e => handleChange('email', e.target.value)} />
-                       <Input type="password" placeholder="Senha" className="h-14 bg-gray-900 border-gray-800 text-white rounded-xl focus:border-yellow-500 focus:ring-yellow-500" value={form.password} onChange={e => handleChange('password', e.target.value)} />
-                       <Button type="submit" className="w-full h-14 text-lg font-bold rounded-xl bg-yellow-500 hover:bg-yellow-400 text-black mt-4" disabled={loading}>
-                           {loading ? <Loader2 className="animate-spin" /> : "Entrar"}
-                       </Button>
-                   </form>
-                   <div className="mt-8 text-center">
-                       <p className="text-gray-500">Novo motorista? <button onClick={() => { setIsSignUp(true); setStep(1); }} className="text-yellow-500 font-bold hover:underline">Cadastre-se</button></p>
-                   </div>
-               </div>
-           ) : (
-               // --- SIGNUP FLOW ---
-               <div className="flex-1 flex flex-col">
-                   {/* Progress Bar */}
-                   <div className="flex gap-2 mb-8">
-                       {[1, 2, 3].map(i => (
-                           <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-500 ${step >= i ? 'bg-yellow-500' : 'bg-gray-800'}`} />
-                       ))}
-                   </div>
+       {/* Lado Direito - Form */}
+       <div className="w-full lg:w-1/2 flex flex-col relative bg-white">
+           <div className="p-6">
+               <Button variant="ghost" onClick={() => isSignUp && step > 1 ? prevStep() : isSignUp ? setIsSignUp(false) : navigate('/')} className="hover:bg-gray-100 rounded-full w-12 h-12 p-0 -ml-2">
+                   {isSignUp && step > 1 ? <ChevronLeft className="w-6 h-6 text-gray-800" /> : <ArrowLeft className="w-6 h-6 text-gray-800" />}
+               </Button>
+           </div>
 
-                   <div className="flex-1">
+           <div className="flex-1 flex flex-col justify-center px-8 sm:px-16 max-w-xl mx-auto w-full pb-10">
+               
+               <div className="mb-8 animate-in slide-in-from-bottom-4 duration-700">
+                   <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">Gold<span className="text-yellow-500">Driver</span></h1>
+                   {!isSignUp ? (
+                       <>
+                           <h2 className="text-2xl font-bold text-slate-800">Acesse seu painel</h2>
+                           <p className="text-gray-500 mt-2">Gerencie suas corridas e acompanhe seus ganhos.</p>
+                       </>
+                   ) : (
+                       <>
+                           <h2 className="text-2xl font-bold text-slate-800">Cadastro de Parceiro</h2>
+                           <p className="text-gray-500 mt-2">Junte-se à frota mais exclusiva da cidade.</p>
+                       </>
+                   )}
+               </div>
+
+               {!isSignUp ? (
+                   // --- LOGIN FORM ---
+                   <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">
+                       <form onSubmit={handleLogin} className="space-y-5">
+                           <div className="relative group">
+                               <Mail className="absolute left-4 top-4 w-5 h-5 text-gray-400 group-focus-within:text-yellow-600 transition-colors" />
+                               <Input type="email" placeholder="Email cadastrado" className="h-14 pl-12 bg-gray-50 border-gray-200 text-base rounded-2xl focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all" value={form.email} onChange={e => handleChange('email', e.target.value)} />
+                           </div>
+                           
+                           <div className="relative group">
+                               <Lock className="absolute left-4 top-4 w-5 h-5 text-gray-400 group-focus-within:text-yellow-600 transition-colors" />
+                               <Input 
+                                  type={showPassword ? "text" : "password"} 
+                                  placeholder="Sua senha" 
+                                  className="h-14 pl-12 pr-12 bg-gray-50 border-gray-200 text-base rounded-2xl focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all" 
+                                  value={form.password} 
+                                  onChange={e => handleChange('password', e.target.value)} 
+                               />
+                               <button 
+                                  type="button" 
+                                  onClick={() => setShowPassword(!showPassword)}
+                                  className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 focus:outline-none"
+                               >
+                                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                               </button>
+                           </div>
+
+                           <Button className="w-full h-14 text-lg font-bold rounded-2xl bg-slate-900 hover:bg-black text-white shadow-xl shadow-slate-200 transition-all hover:scale-[1.02] active:scale-[0.98] mt-4" disabled={loading}>
+                               {loading ? <Loader2 className="animate-spin" /> : "Entrar no Painel"}
+                               {!loading && <ArrowRight className="ml-2 w-5 h-5" />}
+                           </Button>
+                       </form>
+                       <div className="mt-8 text-center">
+                           <p className="text-gray-500">Ainda não é parceiro? <button onClick={() => { setIsSignUp(true); setStep(1); }} className="font-bold text-yellow-600 hover:text-yellow-700 hover:underline">Cadastre-se agora</button></p>
+                       </div>
+                   </div>
+               ) : (
+                   // --- SIGNUP FLOW ---
+                   <div className="flex flex-col h-full">
+                       {/* Barra de Progresso */}
+                       <div className="flex items-center gap-2 mb-8">
+                           {[1, 2, 3].map(i => (
+                               <div key={i} className={`h-2 flex-1 rounded-full transition-all duration-500 ${step >= i ? 'bg-yellow-500 shadow-md shadow-yellow-500/30' : 'bg-gray-100'}`} />
+                           ))}
+                       </div>
+
                        {step === 1 && (
                            <div className="space-y-5 animate-in slide-in-from-right fade-in duration-300">
-                               <div className="mb-6">
-                                   <h2 className="text-2xl font-bold flex items-center gap-2"><User className="w-6 h-6 text-yellow-500"/> Dados Pessoais</h2>
-                                   <p className="text-gray-400 text-sm">Precisamos saber quem é você.</p>
+                               <div className="flex items-center gap-3 mb-2">
+                                   <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-700 font-bold">1</div>
+                                   <h3 className="font-bold text-lg text-slate-800">Dados Pessoais</h3>
                                </div>
-                               <div className="grid grid-cols-2 gap-4">
-                                   <Input placeholder="Nome" className="h-12 bg-gray-900 border-gray-800 rounded-xl" value={form.firstName} onChange={e => handleChange('firstName', e.target.value)} />
-                                   <Input placeholder="Sobrenome" className="h-12 bg-gray-900 border-gray-800 rounded-xl" value={form.lastName} onChange={e => handleChange('lastName', e.target.value)} />
-                               </div>
-                               <Input placeholder="CPF (Apenas números)" className="h-12 bg-gray-900 border-gray-800 rounded-xl" value={form.cpf} onChange={e => handleChange('cpf', e.target.value)} maxLength={14} />
-                               <Input placeholder="Telefone / WhatsApp" className="h-12 bg-gray-900 border-gray-800 rounded-xl" value={form.phone} onChange={e => handleChange('phone', e.target.value)} />
-                               <Input type="email" placeholder="Seu melhor email" className="h-12 bg-gray-900 border-gray-800 rounded-xl" value={form.email} onChange={e => handleChange('email', e.target.value)} />
-                               <Input type="password" placeholder="Crie uma senha forte" className="h-12 bg-gray-900 border-gray-800 rounded-xl" value={form.password} onChange={e => handleChange('password', e.target.value)} />
                                
-                               <Button onClick={nextStep} className="w-full h-14 bg-white text-black hover:bg-gray-200 font-bold rounded-xl mt-4">
-                                   Próximo <ArrowRight className="ml-2 w-4 h-4" />
+                               <div className="grid grid-cols-2 gap-4">
+                                   <Input placeholder="Nome" className="h-14 bg-gray-50 border-gray-200 rounded-2xl" value={form.firstName} onChange={e => handleChange('firstName', e.target.value)} />
+                                   <Input placeholder="Sobrenome" className="h-14 bg-gray-50 border-gray-200 rounded-2xl" value={form.lastName} onChange={e => handleChange('lastName', e.target.value)} />
+                               </div>
+                               
+                               <div className="relative">
+                                    <CreditCard className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
+                                    <Input placeholder="CPF (000.000.000-00)" className="h-14 pl-12 bg-gray-50 border-gray-200 rounded-2xl font-mono text-sm" value={form.cpf} onChange={e => handleChange('cpf', e.target.value)} maxLength={14} />
+                               </div>
+
+                               <div className="relative">
+                                    <Phone className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
+                                    <Input placeholder="WhatsApp (00) 00000-0000" className="h-14 pl-12 bg-gray-50 border-gray-200 rounded-2xl" value={form.phone} onChange={e => handleChange('phone', e.target.value)} maxLength={15} />
+                               </div>
+
+                               <Input type="email" placeholder="Email para login" className="h-14 bg-gray-50 border-gray-200 rounded-2xl" value={form.email} onChange={e => handleChange('email', e.target.value)} />
+                               
+                               <div className="relative">
+                                  <Lock className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
+                                  <Input 
+                                    type={showPassword ? "text" : "password"} 
+                                    placeholder="Crie uma senha forte" 
+                                    className="h-14 pl-12 pr-12 bg-gray-50 border-gray-200 rounded-2xl" 
+                                    value={form.password} 
+                                    onChange={e => handleChange('password', e.target.value)} 
+                                  />
+                                  <button 
+                                      type="button" 
+                                      onClick={() => setShowPassword(!showPassword)}
+                                      className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 focus:outline-none"
+                                  >
+                                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                  </button>
+                               </div>
+
+                               <div className="relative">
+                                  <KeyRound className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
+                                  <Input 
+                                    type={showConfirmPassword ? "text" : "password"} 
+                                    placeholder="Confirme sua senha" 
+                                    className="h-14 pl-12 pr-12 bg-gray-50 border-gray-200 rounded-2xl" 
+                                    value={form.confirmPassword} 
+                                    onChange={e => handleChange('confirmPassword', e.target.value)} 
+                                  />
+                                  <button 
+                                      type="button" 
+                                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                      className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 focus:outline-none"
+                                  >
+                                      {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                  </button>
+                               </div>
+                               
+                               <Button onClick={nextStep} className="w-full h-14 bg-slate-900 text-white hover:bg-black font-bold rounded-2xl mt-4 shadow-xl">
+                                   Continuar <ArrowRight className="ml-2 w-4 h-4" />
                                </Button>
                            </div>
                        )}
 
                        {step === 2 && (
                            <div className="space-y-5 animate-in slide-in-from-right fade-in duration-300">
-                               <div className="mb-6">
-                                   <h2 className="text-2xl font-bold flex items-center gap-2"><FileText className="w-6 h-6 text-yellow-500"/> Documentação</h2>
-                                   <p className="text-gray-400 text-sm">Envie fotos claras dos seus documentos.</p>
-                               </div>
-                               
-                               <UploadBox label="Sua Foto de Rosto (Selfie)" field="facePhoto" preview={previews.face} />
-                               <div className="grid grid-cols-2 gap-4">
-                                   <UploadBox label="CNH (Frente)" field="cnhFront" preview={previews.cnhFront} />
-                                   <UploadBox label="CNH (Verso)" field="cnhBack" preview={previews.cnhBack} />
+                               <div className="flex items-center gap-3 mb-2">
+                                   <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-700 font-bold">2</div>
+                                   <h3 className="font-bold text-lg text-slate-800">Documentação</h3>
                                </div>
 
-                               <Button onClick={nextStep} className="w-full h-14 bg-white text-black hover:bg-gray-200 font-bold rounded-xl mt-4">
-                                   Próximo <ArrowRight className="ml-2 w-4 h-4" />
+                               <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl mb-4">
+                                   <p className="text-sm text-blue-700 flex items-start gap-2">
+                                       <ShieldCheck className="w-5 h-5 shrink-0" />
+                                       Seus dados estão seguros e serão usados apenas para validação cadastral.
+                                   </p>
+                               </div>
+
+                               <UploadBox label="Foto de Perfil (Rosto visível)" field="facePhoto" preview={previews.face} />
+                               
+                               <div className="grid grid-cols-2 gap-4">
+                                   <UploadBox label="CNH Frente" field="cnhFront" preview={previews.cnhFront} />
+                                   <UploadBox label="CNH Verso" field="cnhBack" preview={previews.cnhBack} />
+                               </div>
+
+                               <Button onClick={nextStep} className="w-full h-14 bg-slate-900 text-white hover:bg-black font-bold rounded-2xl mt-4 shadow-xl">
+                                   Continuar <ArrowRight className="ml-2 w-4 h-4" />
                                </Button>
                            </div>
                        )}
 
                        {step === 3 && (
                            <div className="space-y-5 animate-in slide-in-from-right fade-in duration-300">
-                               <div className="mb-6">
-                                   <h2 className="text-2xl font-bold flex items-center gap-2"><Car className="w-6 h-6 text-yellow-500"/> Seu Veículo</h2>
-                                   <p className="text-gray-400 text-sm">Qual carro você vai utilizar?</p>
+                               <div className="flex items-center gap-3 mb-2">
+                                   <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-700 font-bold">3</div>
+                                   <h3 className="font-bold text-lg text-slate-800">Seu Veículo</h3>
                                </div>
                                
-                               <Input placeholder="Modelo (ex: Honda Civic)" className="h-12 bg-gray-900 border-gray-800 rounded-xl" value={form.carModel} onChange={e => handleChange('carModel', e.target.value)} />
-                               <Input placeholder="Placa (ex: ABC-1234)" className="h-12 bg-gray-900 border-gray-800 rounded-xl uppercase" value={form.carPlate} onChange={e => handleChange('carPlate', e.target.value.toUpperCase())} />
+                               <Input placeholder="Modelo (ex: Honda Civic)" className="h-14 bg-gray-50 border-gray-200 rounded-2xl" value={form.carModel} onChange={e => handleChange('carModel', e.target.value)} />
+                               <Input placeholder="Placa (ex: ABC-1234)" className="h-14 bg-gray-50 border-gray-200 rounded-2xl uppercase font-mono" value={form.carPlate} onChange={e => handleChange('carPlate', e.target.value.toUpperCase())} maxLength={7} />
+                               
                                <div className="grid grid-cols-2 gap-4">
-                                   <Input type="number" placeholder="Ano" className="h-12 bg-gray-900 border-gray-800 rounded-xl" value={form.carYear} onChange={e => handleChange('carYear', e.target.value)} />
-                                   <Input placeholder="Cor" className="h-12 bg-gray-900 border-gray-800 rounded-xl" value={form.carColor} onChange={e => handleChange('carColor', e.target.value)} />
+                                   <Input type="number" placeholder="Ano (ex: 2020)" className="h-14 bg-gray-50 border-gray-200 rounded-2xl" value={form.carYear} onChange={e => handleChange('carYear', e.target.value)} />
+                                   <Input placeholder="Cor (ex: Prata)" className="h-14 bg-gray-50 border-gray-200 rounded-2xl" value={form.carColor} onChange={e => handleChange('carColor', e.target.value)} />
                                </div>
 
-                               <div className="bg-yellow-500/10 p-4 rounded-xl border border-yellow-500/20 text-yellow-200 text-xs mt-4">
-                                   Ao finalizar, seus dados serão enviados para análise. Você será notificado por email.
-                               </div>
-
-                               <Button onClick={handleSignUp} disabled={loading} className="w-full h-14 bg-yellow-500 hover:bg-yellow-400 text-black font-black rounded-xl mt-4 shadow-lg shadow-yellow-500/20">
+                               <Button onClick={handleSignUp} disabled={loading} className="w-full h-14 bg-yellow-500 hover:bg-yellow-400 text-black font-black rounded-2xl mt-6 shadow-xl shadow-yellow-500/20 text-lg">
                                    {loading ? <Loader2 className="animate-spin" /> : "FINALIZAR CADASTRO"}
                                </Button>
                            </div>
                        )}
                    </div>
-               </div>
-           )}
+               )}
+           </div>
+           
+           <div className="p-6 text-center lg:hidden"><p className="text-xs text-gray-400 font-medium">GoldDrive Driver &copy; 2024</p></div>
        </div>
     </div>
   );
