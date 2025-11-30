@@ -41,8 +41,7 @@ const LoginClient = () => {
             if(error) throw error;
             showSuccess("Conta criada! Verifique seu email.");
         } else {
-            // Limpa sessão anterior para evitar conflitos
-            await supabase.auth.signOut({ scope: 'global' });
+            // REMOVIDO: await supabase.auth.signOut({ scope: 'global' });
 
             const { error } = await supabase.auth.signInWithPassword({ email, password });
             if(error) throw error;

@@ -29,12 +29,15 @@ const LoginAdmin = () => {
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    console.log('🔐 Tentando login...');
+    
     try {
-        // CRÍTICO: Limpar sessão anterior ANTES de tentar logar
-        await supabase.auth.signOut({ scope: 'global' });
+        // REMOVIDO: await supabase.auth.signOut({ scope: 'global' });
         
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if(error) throw error;
+        
+        console.log('✅ Login bem-sucedido, verificando role...');
         
         const { data: { user } } = await supabase.auth.getUser();
         if(user) {
@@ -43,6 +46,8 @@ const LoginAdmin = () => {
                 await supabase.auth.signOut({ scope: 'global' });
                 throw new Error("Acesso negado: Este usuário não é um administrador.");
             }
+            
+            console.log('🚀 Redirecionando para admin dashboard...');
             navigate('/admin', { replace: true });
         }
     } catch (e: any) {
