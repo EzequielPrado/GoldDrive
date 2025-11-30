@@ -14,16 +14,12 @@ const LoginAdmin = () => {
   const [password, setPassword] = useState("");
 
   useEffect(() => {
-    // Verifica sessão existente apenas uma vez ao montar
     const checkExistingSession = async () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
              const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
              if (data?.role === 'admin') {
                  navigate('/admin', { replace: true });
-             } else {
-                 // Se tem sessão mas não é admin, faz logout silencioso para permitir login correto
-                 await supabase.auth.signOut();
              }
         }
     };
@@ -34,6 +30,9 @@ const LoginAdmin = () => {
     e.preventDefault();
     setLoading(true);
     try {
+        // CRÍTICO: Limpar sessão anterior ANTES de tentar logar
+        await supabase.auth.signOut({ scope: 'global' });
+        
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if(error) throw error;
         
@@ -41,7 +40,7 @@ const LoginAdmin = () => {
         if(user) {
             const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single();
             if(data?.role !== 'admin') {
-                await supabase.auth.signOut();
+                await supabase.auth.signOut({ scope: 'global' });
                 throw new Error("Acesso negado: Este usuário não é um administrador.");
             }
             navigate('/admin', { replace: true });

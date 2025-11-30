@@ -153,8 +153,21 @@ const AdminDashboard = () => {
 
   const handleLogout = async () => {
     setLoading(true);
-    await supabase.auth.signOut();
-    navigate('/login/admin');
+    try {
+      await supabase.auth.signOut({ scope: 'global' });
+      // Limpar estados locais
+      setAdminProfile(null);
+      setStats({ revenue: 0, adminRevenue: 0, ridesToday: 0, activeRides: 0 });
+      setRides([]);
+      setPassengers([]);
+      setDrivers([]);
+      // Redirecionar
+      navigate('/login/admin', { replace: true });
+    } catch (error) {
+      showError('Erro ao fazer logout');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // --- ACTIONS DE GESTÃO ---
