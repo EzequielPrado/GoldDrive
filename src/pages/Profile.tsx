@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ArrowLeft, Camera, Loader2, Shield } from "lucide-react";
+import { ArrowLeft, Camera, Loader2, Shield, LogOut } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 
 const Profile = () => {
@@ -76,6 +76,15 @@ const Profile = () => {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+        await supabase.auth.signOut();
+        navigate('/');
+    } catch (error: any) {
+        showError("Erro ao sair: " + error.message);
+    }
+  };
+
   if (loading) return <div className="h-screen flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin w-10 h-10 text-gray-400" /></div>;
 
   return (
@@ -135,6 +144,14 @@ const Profile = () => {
 
             <Button onClick={handleUpdate} disabled={saving} className="w-full h-14 mt-8 rounded-2xl bg-black hover:bg-zinc-800 text-white font-bold text-lg shadow-xl shadow-black/10 transition-transform active:scale-[0.98]">
                 {saving ? <Loader2 className="animate-spin" /> : "Salvar Alterações"}
+            </Button>
+
+            <Button 
+                onClick={handleLogout} 
+                variant="outline"
+                className="w-full h-14 mt-4 rounded-2xl border-red-100 text-red-600 hover:bg-red-50 hover:text-red-700 font-bold text-lg transition-colors"
+            >
+                <LogOut className="mr-2 w-5 h-5" /> Sair da Conta
             </Button>
         </div>
       </div>
