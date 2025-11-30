@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { showError, showSuccess } from "@/utils/toast";
-import { ArrowLeft, Loader2, ArrowRight, MapPin, User, Lock, Mail, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Loader2, MapPin, Eye, EyeOff } from "lucide-react";
 import { Label } from "@/components/ui/label";
 
 const LoginClient = () => {
@@ -17,13 +17,43 @@ const LoginClient = () => {
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
-    // Limpeza forçada ao entrar na tela
     const clearSession = async () => {
         await supabase.auth.signOut();
-        localStorage.removeItem(`sb-${new URL(supabase.supabaseUrl).hostname.split('.')[0]}-auth-token`);
     };
     clearSession();
   }, []);
+
+  // Função de segurança: Garante que o perfil existe na tabela 'profiles'
+  const ensureProfileExists = async (userId: string, userEmail: string, fullName: string) => {
+      try {
+          // 1. Tenta buscar
+          const { data, error } = await supabase.from('profiles').select('id, role').eq('id', userId).maybeSingle();
+          
+          if (data) return data.role; // Perfil existe, retorna a role
+
+          // 2. Se não existe, cria na força bruta
+          console.warn("Perfil não encontrado, criando manualmente...");
+          const firstName = fullName.split(' ')[0] || "Usuário";
+          const lastName = fullName.split(' ').slice(1).join(' ') || "";
+          
+          const { error: insertError } = await supabase.from('profiles').insert({
+              id: userId,
+              email: userEmail,
+              first_name: firstName,
+              last_name: lastName,
+              role: 'client',
+              driver_status: 'APPROVED',
+              updated_at: new Date().toISOString()
+          });
+
+          if (insertError) throw insertError;
+          return 'client';
+
+      } catch (err: any) {
+          console.error("Erro ao garantir perfil:", err);
+          throw new Error("Erro de sincronização de perfil: " + err.message);
+      }
+  };
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,54 +65,70 @@ const LoginClient = () => {
     setLoading(true);
 
     try {
-        // 1. Limpeza
         await supabase.auth.signOut();
 
-        // 2. Timeout (15s)
+        // Timeout de segurança (15s)
         const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("O servidor demorou para responder. Tente novamente.")), 15000)
+            setTimeout(() => reject(new Error("O servidor demorou para responder.")), 15000)
         );
 
-        let resultPromise;
+        let authData;
 
         if(isSignUp) {
-            resultPromise = supabase.auth.signUp({
+            // CADASTRO
+            const signUpPromise = supabase.auth.signUp({
                 email: email.trim(), 
                 password: password.trim(),
-                options: { data: { role: 'client', first_name: name.split(' ')[0], last_name: name.split(' ').slice(1).join(' ') } }
+                options: { 
+                    data: { 
+                        role: 'client', 
+                        first_name: name.split(' ')[0], 
+                        last_name: name.split(' ').slice(1).join(' ') 
+                    } 
+                }
             });
+
+            const { data, error } = await Promise.race([signUpPromise, timeoutPromise]) as any;
+            if(error) throw error;
+            authData = data;
+            
+            if (authData.user) {
+                // Força criação do perfil imediatamente
+                await ensureProfileExists(authData.user.id, email, name);
+            }
+
+            if (!authData.session) {
+                showSuccess("Conta criada! Faça login.");
+                setIsSignUp(false);
+                setLoading(false);
+                return;
+            }
+
         } else {
-            resultPromise = supabase.auth.signInWithPassword({ 
+            // LOGIN
+            const loginPromise = supabase.auth.signInWithPassword({ 
                 email: email.trim(), 
                 password: password.trim() 
             });
+
+            const { data, error } = await Promise.race([loginPromise, timeoutPromise]) as any;
+            if(error) throw error;
+            authData = data;
         }
 
-        const { data, error } = await Promise.race([resultPromise, timeoutPromise]) as any;
+        if (!authData.user) throw new Error("Erro na autenticação.");
 
-        if(error) throw error;
-        
-        if (isSignUp) {
-             if (data.session) navigate('/client', { replace: true });
-             else {
-                 showSuccess("Conta criada! Tente fazer login.");
-                 setIsSignUp(false);
-             }
-        } else {
-            // Login
-            const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).maybeSingle();
-            const role = profile?.role || 'client';
-            
-            if (role === 'driver') navigate('/driver', { replace: true });
-            else if (role === 'admin') navigate('/admin', { replace: true });
-            else navigate('/client', { replace: true });
-        }
+        // Verificação final do perfil antes de redirecionar
+        const role = await ensureProfileExists(authData.user.id, email, name || "Usuário");
+
+        if (role === 'driver') navigate('/driver', { replace: true });
+        else if (role === 'admin') navigate('/admin', { replace: true });
+        else navigate('/client', { replace: true });
 
     } catch (e: any) {
         console.error(e);
-        let msg = e.message || "Erro ao conectar.";
+        let msg = e.message || "Erro desconhecido";
         if (msg.includes("Invalid login")) msg = "Email ou senha incorretos.";
-        if (msg.includes("already registered")) msg = "Este email já está cadastrado.";
         showError(msg);
     } finally {
         setLoading(false);
@@ -111,7 +157,14 @@ const LoginClient = () => {
                        <div className="space-y-1"><Label>Nome</Label><Input value={name} onChange={e => setName(e.target.value)} className="h-12 bg-gray-50"/></div>
                    )}
                    <div className="space-y-1"><Label>Email</Label><Input type="email" value={email} onChange={e => setEmail(e.target.value)} className="h-12 bg-gray-50"/></div>
-                   <div className="space-y-1"><Label>Senha</Label><Input type="password" value={password} onChange={e => setPassword(e.target.value)} className="h-12 bg-gray-50"/></div>
+                   <div className="space-y-1"><Label>Senha</Label>
+                        <div className="relative">
+                            <Input type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} className="h-12 bg-gray-50 pr-10"/>
+                            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-gray-400">
+                                {showPassword ? <EyeOff className="w-5 h-5"/> : <Eye className="w-5 h-5"/>}
+                            </button>
+                        </div>
+                   </div>
 
                    <Button className="w-full h-14 text-lg font-bold bg-slate-900 text-white rounded-xl mt-4" disabled={loading}>
                        {loading ? <Loader2 className="animate-spin" /> : (isSignUp ? "Cadastrar" : "Entrar")}
