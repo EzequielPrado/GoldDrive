@@ -10,7 +10,8 @@ import Index from "./pages/Index";
 import LoginClient from "./pages/LoginClient";
 import LoginDriver from "./pages/LoginDriver";
 import LoginAdmin from "./pages/LoginAdmin";
-import AdminLoginSecure from "./pages/AdminLoginSecure"; // Nova Importação
+import AdminLoginSecure from "./pages/AdminLoginSecure"; 
+import AdminSuccessTest from "./pages/AdminSuccessTest"; // Nova página
 import ClientDashboard from "./pages/ClientDashboard";
 import DriverDashboard from "./pages/DriverDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -35,8 +36,9 @@ const App = () => (
             <Route path="/login/driver" element={<LoginDriver />} />
             <Route path="/login/admin" element={<LoginAdmin />} />
             
-            {/* ROTA DE LOGIN DE EMERGÊNCIA/SEGURANÇA */}
+            {/* Rota de Login Seguro e Teste */}
             <Route path="/admin-secure" element={<AdminLoginSecure />} />
+            <Route path="/admin-test-success" element={<AdminSuccessTest />} />
             
             {/* Rotas Protegidas de Cliente */}
             <Route path="/client" element={

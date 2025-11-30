@@ -14,15 +14,15 @@ const AdminLoginSecure = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Limpa qualquer sessão anterior ao carregar a página para garantir estado limpo
+  // Verificação inicial
   useEffect(() => {
     const clearSession = async () => {
-        // Se já tiver sessão, verifica se é admin. Se não for, desloga.
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
             const { data: role } = await supabase.rpc('get_my_role');
             if (role === 'admin') {
-                window.location.href = '/admin'; // Já está logado, vai direto
+                // SE JÁ ESTIVER LOGADO, VAI PRO TESTE
+                window.location.href = '/admin-test-success'; 
             }
         }
     };
@@ -52,18 +52,18 @@ const AdminLoginSecure = () => {
 
       if (rpcError) {
           console.error("Erro RPC:", rpcError);
-          // Fallback Metadata
-          if (authData.user.user_metadata?.role !== 'admin') throw new Error("Erro de permissão (RPC Fail).");
+          const metaRole = authData.user.user_metadata?.role;
+          if (metaRole !== 'admin') throw new Error("Erro de permissão (RPC Fail).");
       } else if (role !== 'admin') {
           await supabase.auth.signOut();
           throw new Error("ACESSO NEGADO: Usuário não é admin.");
       }
 
-      setSuccessMsg("Acesso autorizado! Redirecionando...");
+      setSuccessMsg("Sucesso! Carregando página de teste...");
       
-      // 3. HARD REFRESH - Isso mata qualquer loop de estado do React
+      // 3. HARD REFRESH PARA PÁGINA DE TESTE
       setTimeout(() => {
-          window.location.href = '/admin';
+          window.location.href = '/admin-test-success';
       }, 500);
 
     } catch (err: any) {
@@ -84,7 +84,7 @@ const AdminLoginSecure = () => {
           </div>
           <CardTitle className="text-2xl font-bold text-white">Admin Secure Login</CardTitle>
           <CardDescription className="text-zinc-400">
-            Modo de Recuperação de Acesso
+            Modo de Diagnóstico
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
@@ -140,7 +140,7 @@ const AdminLoginSecure = () => {
 
             <div className="pt-4 text-center">
                  <button type="button" onClick={() => { supabase.auth.signOut(); window.location.reload(); }} className="text-xs text-red-500 hover:text-red-400 underline">
-                     Forçar Logout Geral
+                     Limpar Sessão e Recarregar
                  </button>
             </div>
           </form>
