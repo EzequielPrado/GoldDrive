@@ -5,7 +5,7 @@ import {
   Sun, Moon, PanelLeftClose, PanelLeftOpen, DollarSign, Clock, 
   CheckCircle, TrendingUp, Trash2, Edit, Mail, Search,
   CreditCard, BellRing, Save, AlertTriangle, Smartphone, Globe,
-  Menu
+  Menu, Banknote
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -50,12 +50,11 @@ const AdminDashboard = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editFormData, setEditFormData] = useState({ first_name: "", last_name: "", phone: "" });
 
-  // Configurações Mock
+  // Configurações
   const [config, setConfig] = useState({
       platformFee: "20",
-      maintenanceMode: false,
-      allowRegistrations: true,
-      minRidePrice: "10.00"
+      enableCash: true,
+      enableWallet: true,
   });
 
   // Filtros
@@ -100,7 +99,24 @@ const AdminDashboard = () => {
         setPassengers(allProfiles.filter((p: any) => p.role === 'client'));
         setDrivers(allProfiles.filter((p: any) => p.role === 'driver'));
 
-        // 3. Calcular Estatísticas
+        // 3. Buscar Configurações (App Settings)
+        const { data: settingsData } = await supabase.from('app_settings').select('*');
+        if (settingsData) {
+            const fee = settingsData.find(s => s.key === 'platform_fee')?.value; // Assuming value maps to something, but schema says value is boolean. 
+            // NOTE: The schema provided says 'value' is boolean. If platformFee is text/number, we might need a workaround or another table.
+            // For now, I'll focus on the booleans requested by user.
+            
+            const cash = settingsData.find(s => s.key === 'enable_cash');
+            const wallet = settingsData.find(s => s.key === 'enable_wallet');
+
+            setConfig(prev => ({
+                ...prev,
+                enableCash: cash ? cash.value : true,
+                enableWallet: wallet ? wallet.value : true
+            }));
+        }
+
+        // 4. Calcular Estatísticas
         const today = new Date().toDateString();
         const ridesTodayCount = currentRides.filter(r => new Date(r.created_at).toDateString() === today).length;
         const totalRevenue = currentRides.filter(r => r.status === 'COMPLETED').reduce((acc, curr) => acc + (Number(curr.price) || 0), 0);
@@ -213,8 +229,22 @@ const AdminDashboard = () => {
       } catch (e: any) { showError(e.message); }
   };
 
-  const handleSaveConfig = () => {
-      showSuccess("Configurações atualizadas com sucesso!");
+  const handleSaveConfig = async () => {
+      setLoading(true);
+      try {
+        // Upsert para garantir que crie se não existir
+        const { error } = await supabase.from('app_settings').upsert([
+            { key: 'enable_cash', value: config.enableCash },
+            { key: 'enable_wallet', value: config.enableWallet }
+        ]);
+        
+        if (error) throw error;
+        showSuccess("Configurações salvas no sistema!");
+      } catch (e: any) {
+        showError(e.message);
+      } finally {
+        setLoading(false);
+      }
   };
 
   // --- UI COMPONENTS ---
@@ -490,9 +520,29 @@ const AdminDashboard = () => {
                                           <span className="text-muted-foreground font-bold">%</span>
                                       </div>
                                   </div>
+
+                                  <Separator />
+                                  
+                                  <div className="space-y-4">
+                                      <div className="flex items-center justify-between">
+                                          <div className="space-y-0.5">
+                                              <Label className="text-base font-bold flex items-center gap-2"><Banknote className="w-4 h-4 text-green-600" /> Dinheiro / PIX</Label>
+                                              <p className="text-sm text-muted-foreground">Permitir pagamentos diretos ao motorista.</p>
+                                          </div>
+                                          <Switch checked={config.enableCash} onCheckedChange={(val) => setConfig({...config, enableCash: val})} />
+                                      </div>
+                                      
+                                      <div className="flex items-center justify-between">
+                                          <div className="space-y-0.5">
+                                              <Label className="text-base font-bold flex items-center gap-2"><Wallet className="w-4 h-4 text-blue-600" /> Carteira Digital</Label>
+                                              <p className="text-sm text-muted-foreground">Permitir uso do saldo do app.</p>
+                                          </div>
+                                          <Switch checked={config.enableWallet} onCheckedChange={(val) => setConfig({...config, enableWallet: val})} />
+                                      </div>
+                                  </div>
                               </CardContent>
                               <CardFooter>
-                                  <Button onClick={handleSaveConfig} className="w-full h-12 rounded-xl font-bold bg-slate-900 text-white"><Save className="w-4 h-4 mr-2" /> Salvar Alterações</Button>
+                                  <Button onClick={handleSaveConfig} disabled={loading} className="w-full h-12 rounded-xl font-bold bg-slate-900 text-white"><Save className="w-4 h-4 mr-2" /> {loading ? "Salvando..." : "Salvar Alterações"}</Button>
                               </CardFooter>
                           </Card>
                       </div>
