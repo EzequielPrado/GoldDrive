@@ -6,7 +6,7 @@ import {
   CheckCircle, TrendingUp, Trash2, Edit, Mail, Search,
   CreditCard, BellRing, Save, AlertTriangle, Smartphone, Globe,
   Menu, Banknote, FileText, Check, X, ExternalLink, Camera, User,
-  Moon as MoonIcon, List, Plus
+  Moon as MoonIcon, List, Plus, Power, Pencil
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -62,8 +62,9 @@ const AdminDashboard = () => {
       enableWallet: true,
   });
   
-  // Tabela de Preços e Configs Avançadas
+  // Tabela de Preços, Configs Avançadas e Categorias
   const [pricingTiers, setPricingTiers] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [adminConfigs, setAdminConfigs] = useState({
       night_start: "21:00",
       night_end: "00:00",
@@ -118,9 +119,12 @@ const AdminDashboard = () => {
             setConfig(prev => ({ ...prev, enableCash: cash ? cash.value : true, enableWallet: wallet ? wallet.value : true }));
         }
 
-        // 4. Buscar Tabela de Preços e Configs Admin
-        const { data: pricingData } = await supabase.from('pricing_tiers').select('*').order('display_order', { ascending: true });
+        // 4. Buscar Tabela de Preços, Configs Admin e Categorias
+        const { data: pricingData } = await supabase.from('pricing_tiers').select('*').order('max_distance', { ascending: true });
         if (pricingData) setPricingTiers(pricingData);
+
+        const { data: categoriesData } = await supabase.from('car_categories').select('*').order('base_fare', { ascending: true });
+        if (categoriesData) setCategories(categoriesData);
 
         const { data: adminConfigData } = await supabase.from('admin_config').select('*');
         if (adminConfigData) {
@@ -173,9 +177,7 @@ const AdminDashboard = () => {
   };
 
   // --- ACTIONS DE GESTÃO ---
-  const openEditUser = (user: any) => { setSelectedUser(user); setEditFormData({ first_name: user.first_name || "", last_name: user.last_name || "", phone: user.phone || "" }); setIsEditDialogOpen(true); };
   const handleSaveUser = async () => { if (!selectedUser) return; try { const { error } = await supabase.from('profiles').update(editFormData).eq('id', selectedUser.id); if (error) throw error; showSuccess("Usuário atualizado!"); setIsEditDialogOpen(false); fetchData(); } catch (e: any) { showError(e.message); } };
-  const openDeleteUser = (user: any) => { setSelectedUser(user); setIsDeleteDialogOpen(true); };
   const handleDeleteUser = async () => { if (!selectedUser) return; try { const { error } = await supabase.from('profiles').delete().eq('id', selectedUser.id); if (error) throw error; showSuccess("Perfil removido do sistema."); setIsDeleteDialogOpen(false); fetchData(); } catch (e: any) { showError(e.message); } };
   const handleResetPassword = async (email: string) => { try { const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/update-password' }); if (error) throw error; showSuccess(`Email de redefinição enviado para ${email}`); } catch (e: any) { showError(e.message); } };
   
@@ -194,6 +196,11 @@ const AdminDashboard = () => {
               await supabase.from('pricing_tiers').update({ price: tier.price, label: tier.label }).eq('id', tier.id);
           }
 
+          // Salva Categorias (Nome e Ativo)
+          for (const cat of categories) {
+              await supabase.from('car_categories').update({ name: cat.name, active: cat.active }).eq('id', cat.id);
+          }
+
           showSuccess("Todas as configurações foram salvas!"); 
       } catch (e: any) { 
           showError(e.message); 
@@ -206,6 +213,10 @@ const AdminDashboard = () => {
       setPricingTiers(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t));
   };
 
+  const updateCategory = (id: string, field: string, value: any) => {
+      setCategories(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
+  };
+
   // --- APPROVAL LOGIC ---
   const openReview = (driver: any) => { setReviewDriver(driver); setJustApproved(false); };
   const sendWhatsAppNotice = (driver: any) => {
@@ -216,14 +227,33 @@ const AdminDashboard = () => {
           window.open(`https://wa.me/${finalPhone}?text=${message}`, '_blank');
       } else { showError("Motorista sem telefone cadastrado."); }
   };
+  
   const approveDriver = async (driver: any) => {
-      try { const { error } = await supabase.from('profiles').update({ driver_status: 'APPROVED' }).eq('id', driver.id); if (error) throw error; showSuccess(`${driver.first_name} foi aprovado!`); setJustApproved(true); fetchData(); } catch (e: any) { showError("Erro: " + e.message); }
+      try { 
+          // O banco agora deve ter a política correta
+          const { error } = await supabase.from('profiles').update({ driver_status: 'APPROVED' }).eq('id', driver.id); 
+          if (error) throw error; 
+          showSuccess(`${driver.first_name} foi aprovado!`); 
+          setJustApproved(true); 
+          fetchData(); 
+      } catch (e: any) { 
+          showError("Erro ao aprovar: " + e.message); 
+      }
   };
+  
   const rejectDriver = async (driver: any) => {
-      try { const { error } = await supabase.from('profiles').update({ driver_status: 'REJECTED' }).eq('id', driver.id); if (error) throw error; showSuccess("Motorista reprovado."); setReviewDriver(null); fetchData(); } catch (e: any) { showError(e.message); }
+      try { 
+          const { error } = await supabase.from('profiles').update({ driver_status: 'REJECTED' }).eq('id', driver.id); 
+          if (error) throw error; 
+          showSuccess("Motorista reprovado."); 
+          setReviewDriver(null); 
+          fetchData(); 
+      } catch (e: any) { 
+          showError(e.message); 
+      }
   };
 
-  // --- UI COMPONENTS ---
+  // ... (UI Components Mantidos - StatCard, UserManagementTable)
   const StatCard = ({ title, value, icon: Icon, colorClass, subtext }: any) => (
       <Card className="border-0 shadow-lg bg-white/50 dark:bg-slate-900/50 backdrop-blur-xl transition-all duration-300 hover:scale-[1.02] hover:shadow-xl group overflow-hidden relative">
           <div className={`absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity ${colorClass}`}>
@@ -262,7 +292,7 @@ const AdminDashboard = () => {
                                               <TableCell><div className="text-sm"><p>{u.email}</p><p className="text-muted-foreground text-xs">{u.phone || 'Sem telefone'}</p></div></TableCell>
                                               {type === 'driver' && <TableCell><Badge variant="secondary" className={u.driver_status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}>{u.driver_status}</Badge></TableCell>}
                                               <TableCell className="font-bold text-green-600">R$ {u.balance?.toFixed(2)}</TableCell>
-                                              <TableCell className="text-right pr-8"><div className="flex justify-end gap-2"><Button variant="ghost" size="icon" onClick={() => openEditUser(u)}><Edit className="w-4 h-4 text-blue-500" /></Button><Button variant="ghost" size="icon" onClick={() => handleResetPassword(u.email)}><Mail className="w-4 h-4 text-yellow-500" /></Button><Button variant="ghost" size="icon" onClick={() => openDeleteUser(u)}><Trash2 className="w-4 h-4 text-red-500" /></Button></div></TableCell>
+                                              <TableCell className="text-right pr-8"><div className="flex justify-end gap-2"><Button variant="ghost" size="icon" onClick={() => { setSelectedUser(u); setEditFormData({ first_name: u.first_name, last_name: u.last_name, phone: u.phone }); setIsEditDialogOpen(true); }}><Edit className="w-4 h-4 text-blue-500" /></Button><Button variant="ghost" size="icon" onClick={() => handleResetPassword(u.email)}><Mail className="w-4 h-4 text-yellow-500" /></Button><Button variant="ghost" size="icon" onClick={() => { setSelectedUser(u); setIsDeleteDialogOpen(true); }}><Trash2 className="w-4 h-4 text-red-500" /></Button></div></TableCell>
                                           </TableRow>
                                       ))}
                                   </TableBody>
@@ -284,6 +314,7 @@ const AdminDashboard = () => {
 
       {/* --- SIDEBAR --- */}
       <aside className={`hidden lg:flex flex-col z-20 transition-all duration-300 border-r border-border/50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md ${sidebarCollapsed ? 'w-20' : 'w-72'}`}>
+         {/* ... (Sidebar igual) ... */}
          <div className="p-6 flex items-center justify-between">
              {!sidebarCollapsed && (
                  <div className="flex items-center gap-2 text-2xl font-black tracking-tighter">
@@ -345,7 +376,7 @@ const AdminDashboard = () => {
                       <div className="flex gap-3"><Button variant="outline" className="rounded-xl h-12" onClick={fetchData}><RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Atualizar</Button><Button variant="destructive" className="rounded-xl h-12 font-bold px-6 shadow-red-500/20 shadow-lg" onClick={handleLogout}><LogOut className="w-4 h-4 mr-2" /> Sair</Button></div>
                   </div>
 
-                  {/* --- TAB: OVERVIEW --- */}
+                  {/* ... (TABS OVERVIEW, REQUESTS, RIDES, USERS, FINANCE permanecem iguais, apenas config muda) ... */}
                   {activeTab === 'overview' && (
                       <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
                           {/* Stats Grid */}
@@ -355,7 +386,6 @@ const AdminDashboard = () => {
                               <StatCard title="Corridas Hoje" value={stats.ridesToday} icon={TrendingUp} colorClass="bg-red-500" subtext="Últimas 24h" />
                               <StatCard title="Pendências" value={pendingDrivers.length} icon={FileText} colorClass="bg-orange-500" subtext="Aguardando Análise" />
                           </div>
-
                           {/* Charts Row */}
                           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                               <Card className="lg:col-span-2 border-0 shadow-xl bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[32px] overflow-hidden">
@@ -363,21 +393,14 @@ const AdminDashboard = () => {
                                   <CardContent className="h-[350px]"><ResponsiveContainer width="100%" height="100%"><AreaChart data={chartData}><defs><linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#eab308" stopOpacity={0.3}/><stop offset="95%" stopColor="#eab308" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.1} /><XAxis dataKey="date" axisLine={false} tickLine={false} fontSize={12} stroke="#888" dy={10} /><YAxis axisLine={false} tickLine={false} fontSize={12} stroke="#888" tickFormatter={(v) => `R$${v}`} /><Tooltip contentStyle={{ borderRadius: '16px', border: 'none', backgroundColor: '#1e293b', color: '#fff' }} itemStyle={{ color: '#fbbf24' }} formatter={(val: number) => [`R$ ${val.toFixed(2)}`, 'Receita']} /><Area type="monotone" dataKey="total" stroke="#eab308" strokeWidth={4} fillOpacity={1} fill="url(#colorTotal)" /></AreaChart></ResponsiveContainer></CardContent>
                               </Card>
                               <div className="space-y-6">
-                                  {/* Stats Users Overview */}
                                   <div className="grid grid-cols-2 gap-4">
                                       <Card className="border-0 shadow-lg bg-indigo-500 text-white rounded-[24px] overflow-hidden relative h-40">
                                           <div className="absolute -right-4 -bottom-4 opacity-20"><Users className="w-24 h-24" /></div>
-                                          <CardContent className="p-5 flex flex-col justify-between h-full relative z-10">
-                                              <p className="font-bold text-sm uppercase opacity-80">Passageiros</p>
-                                              <h3 className="text-3xl font-black">{passengers.length}</h3>
-                                          </CardContent>
+                                          <CardContent className="p-5 flex flex-col justify-between h-full relative z-10"><p className="font-bold text-sm uppercase opacity-80">Passageiros</p><h3 className="text-3xl font-black">{passengers.length}</h3></CardContent>
                                       </Card>
                                       <Card className="border-0 shadow-lg bg-orange-500 text-white rounded-[24px] overflow-hidden relative h-40">
                                           <div className="absolute -right-4 -bottom-4 opacity-20"><Car className="w-24 h-24" /></div>
-                                          <CardContent className="p-5 flex flex-col justify-between h-full relative z-10">
-                                              <p className="font-bold text-sm uppercase opacity-80">Motoristas</p>
-                                              <h3 className="text-3xl font-black">{drivers.length}</h3>
-                                          </CardContent>
+                                          <CardContent className="p-5 flex flex-col justify-between h-full relative z-10"><p className="font-bold text-sm uppercase opacity-80">Motoristas</p><h3 className="text-3xl font-black">{drivers.length}</h3></CardContent>
                                       </Card>
                                   </div>
                               </div>
@@ -385,131 +408,31 @@ const AdminDashboard = () => {
                       </div>
                   )}
 
-                  {/* --- TAB: REQUESTS (KYC) --- */}
                   {activeTab === 'requests' && (
                     <Card className="border-0 shadow-xl bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[32px] overflow-hidden animate-in fade-in slide-in-from-bottom-8">
-                        <CardHeader className="flex flex-row items-center justify-between px-8 pt-8">
-                            <div>
-                                <CardTitle className="text-2xl flex items-center gap-2"><FileText className="w-6 h-6 text-yellow-500" /> Solicitações Pendentes</CardTitle>
-                                <CardDescription>Motoristas aguardando aprovação de documentos.</CardDescription>
-                            </div>
-                            <Badge className="text-lg px-4 py-1 bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border-0">{pendingDrivers.length} Pendentes</Badge>
-                        </CardHeader>
+                        <CardHeader className="flex flex-row items-center justify-between px-8 pt-8"><div><CardTitle className="text-2xl flex items-center gap-2"><FileText className="w-6 h-6 text-yellow-500" /> Solicitações Pendentes</CardTitle><CardDescription>Motoristas aguardando aprovação de documentos.</CardDescription></div><Badge className="text-lg px-4 py-1 bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border-0">{pendingDrivers.length} Pendentes</Badge></CardHeader>
                         <CardContent className="p-0">
-                            {pendingDrivers.length === 0 ? (
-                                <div className="p-16 text-center">
-                                    <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                        <CheckCircle className="w-10 h-10 text-green-600" />
-                                    </div>
-                                    <h3 className="text-xl font-bold text-slate-900 dark:text-white">Tudo limpo!</h3>
-                                    <p className="text-muted-foreground">Não há novas solicitações de motoristas no momento.</p>
-                                </div>
-                            ) : (
-                                <Table>
-                                    <TableHeader className="bg-slate-50/50 dark:bg-slate-800/50"><TableRow><TableHead className="pl-8">Motorista</TableHead><TableHead>Veículo</TableHead><TableHead>Data Cadastro</TableHead><TableHead className="text-right pr-8">Ação</TableHead></TableRow></TableHeader>
-                                    <TableBody>
-                                        {pendingDrivers.map(driver => (
+                            {pendingDrivers.length === 0 ? <div className="p-16 text-center"><div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4"><CheckCircle className="w-10 h-10 text-green-600" /></div><h3 className="text-xl font-bold text-slate-900 dark:text-white">Tudo limpo!</h3><p className="text-muted-foreground">Não há novas solicitações de motoristas no momento.</p></div> : 
+                                <Table><TableHeader className="bg-slate-50/50 dark:bg-slate-800/50"><TableRow><TableHead className="pl-8">Motorista</TableHead><TableHead>Veículo</TableHead><TableHead>Data Cadastro</TableHead><TableHead className="text-right pr-8">Ação</TableHead></TableRow></TableHeader>
+                                    <TableBody>{pendingDrivers.map(driver => (
                                             <TableRow key={driver.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-border/50">
-                                                <TableCell className="pl-8">
-                                                    <div className="flex items-center gap-3">
-                                                        <Avatar className="w-10 h-10 border-2 border-white shadow-sm"><AvatarImage src={driver.avatar_url} /><AvatarFallback>{driver.first_name[0]}</AvatarFallback></Avatar>
-                                                        <div>
-                                                            <p className="font-bold text-sm">{driver.first_name} {driver.last_name}</p>
-                                                            <p className="text-xs text-muted-foreground flex items-center gap-1"><Smartphone className="w-3 h-3" /> {driver.phone}</p>
-                                                        </div>
-                                                    </div>
-                                                </TableCell>
+                                                <TableCell className="pl-8"><div className="flex items-center gap-3"><Avatar className="w-10 h-10 border-2 border-white shadow-sm"><AvatarImage src={driver.avatar_url} /><AvatarFallback>{driver.first_name[0]}</AvatarFallback></Avatar><div><p className="font-bold text-sm">{driver.first_name} {driver.last_name}</p><p className="text-xs text-muted-foreground flex items-center gap-1"><Smartphone className="w-3 h-3" /> {driver.phone}</p></div></div></TableCell>
                                                 <TableCell><Badge variant="outline" className="font-mono">{driver.car_model || 'N/A'} • {driver.car_plate}</Badge></TableCell>
                                                 <TableCell className="text-muted-foreground">{new Date(driver.created_at).toLocaleDateString()}</TableCell>
-                                                <TableCell className="text-right pr-8">
-                                                    <Button onClick={() => openReview(driver)} className="bg-slate-900 text-white hover:bg-black font-bold h-10 px-6 rounded-xl shadow-lg shadow-slate-900/10">Analisar</Button>
-                                                </TableCell>
+                                                <TableCell className="text-right pr-8"><Button onClick={() => openReview(driver)} className="bg-slate-900 text-white hover:bg-black font-bold h-10 px-6 rounded-xl shadow-lg shadow-slate-900/10">Analisar</Button></TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
                                 </Table>
-                            )}
+                            }
                         </CardContent>
                     </Card>
                   )}
 
-                  {/* --- TAB: RIDES --- */}
-                  {activeTab === 'rides' && (
-                      <Card className="border-0 shadow-xl bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[32px] overflow-hidden animate-in fade-in slide-in-from-bottom-8">
-                           <CardHeader className="flex flex-row items-center justify-between px-8 pt-8"><div><CardTitle className="text-2xl">Gerenciamento de Corridas</CardTitle><CardDescription>Total de {rides.length} corridas</CardDescription></div><div className="flex items-center gap-3"><Select value={filterStatus} onValueChange={setFilterStatus}><SelectTrigger className="w-[180px] h-10 rounded-xl bg-white dark:bg-slate-800"><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="ALL">Todos os Status</SelectItem><SelectItem value="COMPLETED">Finalizadas</SelectItem><SelectItem value="CANCELLED">Canceladas</SelectItem><SelectItem value="IN_PROGRESS">Em Andamento</SelectItem></SelectContent></Select></div></CardHeader>
-                           <CardContent className="p-0">
-                               <Table>
-                                   <TableHeader className="bg-slate-50/50 dark:bg-slate-800/50"><TableRow><TableHead className="pl-8">ID</TableHead><TableHead>Passageiro</TableHead><TableHead>Motorista</TableHead><TableHead>Data/Hora</TableHead><TableHead>Status</TableHead><TableHead>Taxa (Lucro)</TableHead><TableHead className="text-right pr-8">Valor Total</TableHead></TableRow></TableHeader>
-                                   <TableBody>
-                                       {rides.filter(r => filterStatus === 'ALL' ? true : r.status === filterStatus).map(r => (
-                                           <TableRow key={r.id} onClick={()=>setSelectedRide(r)} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b border-border/50">
-                                               <TableCell className="pl-8 font-mono text-xs opacity-50">#{r.id.substring(0,8)}</TableCell>
-                                               <TableCell><div className="flex items-center gap-3"><Avatar className="w-8 h-8"><AvatarImage src={r.customer?.avatar_url}/><AvatarFallback>{r.customer?.first_name?.[0]}</AvatarFallback></Avatar><span className="font-medium">{r.customer?.first_name || 'Usuário'}</span></div></TableCell>
-                                               <TableCell>{r.driver ? <div className="flex items-center gap-3"><Avatar className="w-8 h-8"><AvatarImage src={r.driver?.avatar_url}/><AvatarFallback>{r.driver?.first_name?.[0]}</AvatarFallback></Avatar><div><p className="font-medium text-sm">{r.driver.first_name}</p></div></div> : <span className="text-muted-foreground text-sm italic">--</span>}</TableCell>
-                                               <TableCell><span className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleString('pt-BR')}</span></TableCell>
-                                               <TableCell><Badge className={`rounded-lg px-3 py-1 ${r.status === 'COMPLETED' ? 'bg-green-100 text-green-700' : r.status === 'CANCELLED' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{r.status}</Badge></TableCell>
-                                               <TableCell className="font-bold text-green-600">R$ {Number(r.platform_fee || 0).toFixed(2)}</TableCell>
-                                               <TableCell className="text-right pr-8 font-bold text-base">R$ {Number(r.price).toFixed(2)}</TableCell>
-                                           </TableRow>
-                                       ))}
-                                   </TableBody>
-                               </Table>
-                           </CardContent>
-                      </Card>
-                  )}
-
-                  {/* --- TAB: USERS & DRIVERS (AVANÇADO) --- */}
+                  {activeTab === 'rides' && <Card className="border-0 shadow-xl bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[32px] overflow-hidden animate-in fade-in slide-in-from-bottom-8"><CardHeader className="flex flex-row items-center justify-between px-8 pt-8"><div><CardTitle className="text-2xl">Gerenciamento de Corridas</CardTitle><CardDescription>Total de {rides.length} corridas</CardDescription></div><div className="flex items-center gap-3"><Select value={filterStatus} onValueChange={setFilterStatus}><SelectTrigger className="w-[180px] h-10 rounded-xl bg-white dark:bg-slate-800"><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="ALL">Todos os Status</SelectItem><SelectItem value="COMPLETED">Finalizadas</SelectItem><SelectItem value="CANCELLED">Canceladas</SelectItem><SelectItem value="IN_PROGRESS">Em Andamento</SelectItem></SelectContent></Select></div></CardHeader><CardContent className="p-0"><Table><TableHeader className="bg-slate-50/50 dark:bg-slate-800/50"><TableRow><TableHead className="pl-8">ID</TableHead><TableHead>Passageiro</TableHead><TableHead>Motorista</TableHead><TableHead>Data/Hora</TableHead><TableHead>Status</TableHead><TableHead>Taxa (Lucro)</TableHead><TableHead className="text-right pr-8">Valor Total</TableHead></TableRow></TableHeader><TableBody>{rides.filter(r => filterStatus === 'ALL' ? true : r.status === filterStatus).map(r => (<TableRow key={r.id} onClick={()=>setSelectedRide(r)} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b border-border/50"><TableCell className="pl-8 font-mono text-xs opacity-50">#{r.id.substring(0,8)}</TableCell><TableCell><div className="flex items-center gap-3"><Avatar className="w-8 h-8"><AvatarImage src={r.customer?.avatar_url}/><AvatarFallback>{r.customer?.first_name?.[0]}</AvatarFallback></Avatar><span className="font-medium">{r.customer?.first_name || 'Usuário'}</span></div></TableCell><TableCell>{r.driver ? <div className="flex items-center gap-3"><Avatar className="w-8 h-8"><AvatarImage src={r.driver?.avatar_url}/><AvatarFallback>{r.driver?.first_name?.[0]}</AvatarFallback></Avatar><div><p className="font-medium text-sm">{r.driver.first_name}</p></div></div> : <span className="text-muted-foreground text-sm italic">--</span>}</TableCell><TableCell><span className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleString('pt-BR')}</span></TableCell><TableCell><Badge className={`rounded-lg px-3 py-1 ${r.status === 'COMPLETED' ? 'bg-green-100 text-green-700' : r.status === 'CANCELLED' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{r.status}</Badge></TableCell><TableCell className="font-bold text-green-600">R$ {Number(r.platform_fee || 0).toFixed(2)}</TableCell><TableCell className="text-right pr-8 font-bold text-base">R$ {Number(r.price).toFixed(2)}</TableCell></TableRow>))}</TableBody></Table></CardContent></Card>}
                   {activeTab === 'users' && <UserManagementTable data={passengers} type="client" />}
                   {activeTab === 'drivers' && <UserManagementTable data={drivers} type="driver" />}
-
-                  {/* --- TAB: FINANCEIRO --- */}
-                  {activeTab === 'finance' && (
-                      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-8">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                              {/* Cartão de Crédito Style */}
-                              <div className="bg-slate-900 text-white rounded-[32px] p-8 shadow-2xl relative overflow-hidden h-64 flex flex-col justify-between group hover:scale-[1.01] transition-transform">
-                                   <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-yellow-500/20 to-transparent rounded-full blur-[80px]" />
-                                   <div className="relative z-10 flex justify-between items-start">
-                                       <CreditCard className="w-10 h-10 text-yellow-500" />
-                                       <span className="font-mono text-sm opacity-60">GOLD PLATFORM</span>
-                                   </div>
-                                   <div className="relative z-10">
-                                       <p className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-1">Saldo Disponível</p>
-                                       <h2 className="text-5xl font-black tracking-tight">R$ {stats.adminRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h2>
-                                   </div>
-                                   <div className="relative z-10 flex justify-between items-end">
-                                       <div>
-                                           <p className="text-xs text-slate-500 uppercase font-bold">Titular</p>
-                                           <p className="font-bold">ADMINISTRADOR</p>
-                                       </div>
-                                       <div className="flex gap-2">
-                                            <div className="w-8 h-8 rounded-full bg-red-500/80" />
-                                            <div className="w-8 h-8 rounded-full bg-yellow-500/80 -ml-4" />
-                                       </div>
-                                   </div>
-                              </div>
-                          </div>
-
-                          <Card className="border-0 shadow-xl bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[32px] overflow-hidden">
-                              <CardHeader><CardTitle>Histórico de Transações</CardTitle></CardHeader>
-                              <CardContent className="p-0">
-                                  <Table>
-                                      <TableHeader className="bg-slate-50/50 dark:bg-slate-800/50"><TableRow><TableHead className="pl-8">Descrição</TableHead><TableHead>Usuário</TableHead><TableHead>Data</TableHead><TableHead className="text-right pr-8">Valor</TableHead></TableRow></TableHeader>
-                                      <TableBody>
-                                          {transactions.map((t, i) => (
-                                              <TableRow key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-border/50">
-                                                  <TableCell className="pl-8 font-bold">{t.description}</TableCell>
-                                                  <TableCell>{t.user}</TableCell>
-                                                  <TableCell className="text-muted-foreground">{new Date(t.date).toLocaleDateString()}</TableCell>
-                                                  <TableCell className="text-right pr-8 font-black text-green-600">+ R$ {t.amount.toFixed(2)}</TableCell>
-                                              </TableRow>
-                                          ))}
-                                      </TableBody>
-                                  </Table>
-                              </CardContent>
-                          </Card>
-                      </div>
-                  )}
+                  {activeTab === 'finance' && <div className="space-y-6 animate-in fade-in slide-in-from-bottom-8"><div className="grid grid-cols-1 md:grid-cols-2 gap-8"><div className="bg-slate-900 text-white rounded-[32px] p-8 shadow-2xl relative overflow-hidden h-64 flex flex-col justify-between group hover:scale-[1.01] transition-transform"><div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-yellow-500/20 to-transparent rounded-full blur-[80px]" /><div className="relative z-10 flex justify-between items-start"><CreditCard className="w-10 h-10 text-yellow-500" /><span className="font-mono text-sm opacity-60">GOLD PLATFORM</span></div><div className="relative z-10"><p className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-1">Saldo Disponível</p><h2 className="text-5xl font-black tracking-tight">R$ {stats.adminRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h2></div><div className="relative z-10 flex justify-between items-end"><div><p className="text-xs text-slate-500 uppercase font-bold">Titular</p><p className="font-bold">ADMINISTRADOR</p></div><div className="flex gap-2"><div className="w-8 h-8 rounded-full bg-red-500/80" /><div className="w-8 h-8 rounded-full bg-yellow-500/80 -ml-4" /></div></div></div></div><Card className="border-0 shadow-xl bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[32px] overflow-hidden"><CardHeader><CardTitle>Histórico de Transações</CardTitle></CardHeader><CardContent className="p-0"><Table><TableHeader className="bg-slate-50/50 dark:bg-slate-800/50"><TableRow><TableHead className="pl-8">Descrição</TableHead><TableHead>Usuário</TableHead><TableHead>Data</TableHead><TableHead className="text-right pr-8">Valor</TableHead></TableRow></TableHeader><TableBody>{transactions.map((t, i) => (<TableRow key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-border/50"><TableCell className="pl-8 font-bold">{t.description}</TableCell><TableCell>{t.user}</TableCell><TableCell className="text-muted-foreground">{new Date(t.date).toLocaleDateString()}</TableCell><TableCell className="text-right pr-8 font-black text-green-600">+ R$ {t.amount.toFixed(2)}</TableCell></TableRow>))}</TableBody></Table></CardContent></Card></div>}
 
                   {/* --- TAB: CONFIGURAÇÕES (NOVO LAYOUT) --- */}
                   {activeTab === 'config' && (
@@ -518,6 +441,7 @@ const AdminDashboard = () => {
                               <TabsList className="bg-slate-200 dark:bg-slate-800 rounded-xl p-1 mb-6">
                                   <TabsTrigger value="general" className="rounded-lg">Geral</TabsTrigger>
                                   <TabsTrigger value="values" className="rounded-lg">Valores & Tabela</TabsTrigger>
+                                  <TabsTrigger value="categories" className="rounded-lg">Categorias</TabsTrigger>
                               </TabsList>
 
                               <TabsContent value="general">
@@ -620,7 +544,7 @@ const AdminDashboard = () => {
                                                       <Table>
                                                           <TableHeader className="bg-slate-100 dark:bg-slate-800 sticky top-0 z-10">
                                                               <TableRow>
-                                                                  <TableHead className="pl-6 w-1/2">Faixa de Distância (Descrição)</TableHead>
+                                                                  <TableHead className="pl-6 w-1/2">Faixa de Distância</TableHead>
                                                                   <TableHead className="w-1/4">Valor (R$)</TableHead>
                                                                   <TableHead className="w-1/4"></TableHead>
                                                               </TableRow>
@@ -629,11 +553,7 @@ const AdminDashboard = () => {
                                                               {pricingTiers.map((tier) => (
                                                                   <TableRow key={tier.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                                                                       <TableCell className="pl-6">
-                                                                          <Input 
-                                                                              value={tier.label} 
-                                                                              onChange={(e) => updatePriceTier(tier.id, 'label', e.target.value)}
-                                                                              className="bg-transparent border-0 font-medium focus-visible:ring-0 px-0 h-auto"
-                                                                          />
+                                                                          <span className="font-medium">{tier.label}</span>
                                                                       </TableCell>
                                                                       <TableCell>
                                                                           <div className="relative">
@@ -647,7 +567,7 @@ const AdminDashboard = () => {
                                                                           </div>
                                                                       </TableCell>
                                                                       <TableCell className="text-xs text-muted-foreground text-right pr-6">
-                                                                          Editável
+                                                                          <Pencil className="w-4 h-4 opacity-50" />
                                                                       </TableCell>
                                                                   </TableRow>
                                                               ))}
@@ -657,6 +577,41 @@ const AdminDashboard = () => {
                                               </CardContent>
                                           </Card>
                                       </div>
+                                  </div>
+                              </TabsContent>
+
+                              <TabsContent value="categories">
+                                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                      <Card className="border-0 shadow-xl bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[32px] overflow-hidden">
+                                          <CardHeader className="flex flex-row items-center justify-between">
+                                              <div>
+                                                  <CardTitle className="flex items-center gap-2"><Car className="w-5 h-5" /> Categorias de Veículos</CardTitle>
+                                                  <CardDescription>Ative, desative ou renomeie as categorias.</CardDescription>
+                                              </div>
+                                              <Button onClick={handleSaveConfig} disabled={loading} className="bg-slate-900 text-white font-bold rounded-xl"><Save className="w-4 h-4 mr-2" /> Salvar</Button>
+                                          </CardHeader>
+                                          <CardContent className="p-0">
+                                              <Table>
+                                                  <TableHeader className="bg-slate-100 dark:bg-slate-800"><TableRow><TableHead className="pl-6">Nome da Categoria</TableHead><TableHead className="text-right pr-6">Status</TableHead></TableRow></TableHeader>
+                                                  <TableBody>
+                                                      {categories.map(cat => (
+                                                          <TableRow key={cat.id} className="hover:bg-slate-50">
+                                                              <TableCell className="pl-6">
+                                                                  <Input value={cat.name} onChange={e => updateCategory(cat.id, 'name', e.target.value)} className="font-bold border-0 bg-transparent focus-visible:ring-0 p-0 h-auto text-base" />
+                                                                  <p className="text-xs text-muted-foreground mt-1">{cat.description}</p>
+                                                              </TableCell>
+                                                              <TableCell className="text-right pr-6">
+                                                                  <div className="flex items-center justify-end gap-2">
+                                                                      <span className={`text-xs font-bold ${cat.active ? 'text-green-600' : 'text-slate-400'}`}>{cat.active ? 'ATIVA' : 'INATIVA'}</span>
+                                                                      <Switch checked={cat.active} onCheckedChange={(val) => updateCategory(cat.id, 'active', val)} />
+                                                                  </div>
+                                                              </TableCell>
+                                                          </TableRow>
+                                                      ))}
+                                                  </TableBody>
+                                              </Table>
+                                          </CardContent>
+                                      </Card>
                                   </div>
                               </TabsContent>
                           </Tabs>
@@ -671,7 +626,7 @@ const AdminDashboard = () => {
         <DialogContent className="max-w-3xl bg-white dark:bg-slate-950 rounded-[32px] border-0 shadow-2xl p-0 overflow-hidden">
             {reviewDriver && (
                 <div className="flex flex-col h-[85vh]">
-                    {/* Header Simplificado */}
+                    {/* Header KYC */}
                     <div className="bg-slate-900 text-white p-6 shrink-0 relative overflow-hidden">
                         {justApproved && (
                              <div className="absolute inset-0 bg-green-600 z-0 flex items-center justify-center animate-in fade-in duration-500">
@@ -824,64 +779,10 @@ const AdminDashboard = () => {
         </DialogContent>
       </Dialog>
 
-      {/* DIALOGS DE GESTÃO */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="rounded-2xl">
-              <DialogHeader><DialogTitle>Editar Usuário</DialogTitle></DialogHeader>
-              <div className="space-y-4 py-4">
-                  <div><Label>Nome</Label><Input value={editFormData.first_name} onChange={e => setEditFormData({...editFormData, first_name: e.target.value})} /></div>
-                  <div><Label>Sobrenome</Label><Input value={editFormData.last_name} onChange={e => setEditFormData({...editFormData, last_name: e.target.value})} /></div>
-                  <div><Label>Telefone</Label><Input value={editFormData.phone} onChange={e => setEditFormData({...editFormData, phone: e.target.value})} /></div>
-              </div>
-              <DialogFooter><Button onClick={handleSaveUser}>Salvar Alterações</Button></DialogFooter>
-          </DialogContent>
-      </Dialog>
-
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Excluir Usuário?</AlertDialogTitle><AlertDialogDescription>Isso removerá o perfil do sistema.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDeleteUser} className="bg-red-600">Excluir</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
-      </AlertDialog>
-
-      {/* Detalhes da Corrida Modal */}
-      <Dialog open={!!selectedRide} onOpenChange={(o) => !o && setSelectedRide(null)}>
-          <DialogContent className="max-w-md bg-white dark:bg-slate-900 rounded-[32px] border-0 shadow-2xl">
-              <DialogHeader><DialogTitle>Detalhes da Corrida</DialogTitle></DialogHeader>
-              <div className="space-y-6 py-4">
-                  <div className="grid grid-cols-1 gap-4">
-                      <div><p className="text-xs font-bold text-muted-foreground uppercase">Origem</p><p className="font-medium text-lg">{selectedRide?.pickup_address}</p></div>
-                      <div><p className="text-xs font-bold text-muted-foreground uppercase">Destino</p><p className="font-medium text-lg">{selectedRide?.destination_address}</p></div>
-                  </div>
-                  
-                  <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl flex items-center justify-between">
-                       <div className="flex items-center gap-3"><Avatar><AvatarImage src={selectedRide?.driver?.avatar_url} /><AvatarFallback>DR</AvatarFallback></Avatar><div><p className="font-bold">{selectedRide?.driver?.first_name || 'Sem motorista'}</p></div></div>
-                       <div className="text-right">
-                            <p className="text-xs text-muted-foreground uppercase font-bold">Data/Hora</p>
-                            <p className="font-bold text-sm">{selectedRide ? new Date(selectedRide.created_at).toLocaleString('pt-BR') : '--'}</p>
-                       </div>
-                  </div>
-
-                  {/* Resumo Financeiro Detalhado */}
-                  <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 space-y-3 border border-border/50">
-                      <div className="flex justify-between items-center pb-2 border-b border-border/50">
-                          <span className="text-sm text-muted-foreground font-medium">Preço Cobrado</span>
-                          <span className="font-black text-lg">R$ {Number(selectedRide?.price).toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-sm">
-                          <span className="text-muted-foreground">Repasse Motorista (80%)</span>
-                          <span className="font-bold">R$ {Number(selectedRide?.driver_earnings).toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-sm">
-                          <span className="text-muted-foreground">Taxa Plataforma (20%)</span>
-                          <span className="font-bold text-green-600">R$ {Number(selectedRide?.platform_fee).toFixed(2)}</span>
-                      </div>
-                      {selectedRide?.payment_method && (
-                          <div className="pt-2 flex justify-end">
-                              <Badge variant="outline" className="text-xs">{selectedRide.payment_method === 'WALLET' ? 'Pago via Carteira' : 'Pago em Dinheiro'}</Badge>
-                          </div>
-                      )}
-                  </div>
-              </div>
-          </DialogContent>
-      </Dialog>
+      {/* ... (Outros dialogs iguais) ... */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}><DialogContent className="rounded-2xl"><DialogHeader><DialogTitle>Editar Usuário</DialogTitle></DialogHeader><div className="space-y-4 py-4"><div><Label>Nome</Label><Input value={editFormData.first_name} onChange={e => setEditFormData({...editFormData, first_name: e.target.value})} /></div><div><Label>Sobrenome</Label><Input value={editFormData.last_name} onChange={e => setEditFormData({...editFormData, last_name: e.target.value})} /></div><div><Label>Telefone</Label><Input value={editFormData.phone} onChange={e => setEditFormData({...editFormData, phone: e.target.value})} /></div></div><DialogFooter><Button onClick={handleSaveUser}>Salvar Alterações</Button></DialogFooter></DialogContent></Dialog>
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Excluir Usuário?</AlertDialogTitle><AlertDialogDescription>Isso removerá o perfil do sistema.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDeleteUser} className="bg-red-600">Excluir</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      <Dialog open={!!selectedRide} onOpenChange={(o) => !o && setSelectedRide(null)}><DialogContent className="max-w-md bg-white dark:bg-slate-900 rounded-[32px] border-0 shadow-2xl"><DialogHeader><DialogTitle>Detalhes da Corrida</DialogTitle></DialogHeader><div className="space-y-6 py-4"><div className="grid grid-cols-1 gap-4"><div><p className="text-xs font-bold text-muted-foreground uppercase">Origem</p><p className="font-medium text-lg">{selectedRide?.pickup_address}</p></div><div><p className="text-xs font-bold text-muted-foreground uppercase">Destino</p><p className="font-medium text-lg">{selectedRide?.destination_address}</p></div></div><div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl flex items-center justify-between"><div className="flex items-center gap-3"><Avatar><AvatarImage src={selectedRide?.driver?.avatar_url} /><AvatarFallback>DR</AvatarFallback></Avatar><div><p className="font-bold">{selectedRide?.driver?.first_name || 'Sem motorista'}</p></div></div><div className="text-right"><p className="text-xs text-muted-foreground uppercase font-bold">Data/Hora</p><p className="font-bold text-sm">{selectedRide ? new Date(selectedRide.created_at).toLocaleString('pt-BR') : '--'}</p></div></div><div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 space-y-3 border border-border/50"><div className="flex justify-between items-center pb-2 border-b border-border/50"><span className="text-sm text-muted-foreground font-medium">Preço Cobrado</span><span className="font-black text-lg">R$ {Number(selectedRide?.price).toFixed(2)}</span></div><div className="flex justify-between items-center text-sm"><span className="text-muted-foreground">Repasse Motorista (80%)</span><span className="font-bold">R$ {Number(selectedRide?.driver_earnings).toFixed(2)}</span></div><div className="flex justify-between items-center text-sm"><span className="text-muted-foreground">Taxa Plataforma (20%)</span><span className="font-bold text-green-600">R$ {Number(selectedRide?.platform_fee).toFixed(2)}</span></div>{selectedRide?.payment_method && (<div className="pt-2 flex justify-end"><Badge variant="outline" className="text-xs">{selectedRide.payment_method === 'WALLET' ? 'Pago via Carteira' : 'Pago em Dinheiro'}</Badge></div>)}</div></div></DialogContent></Dialog>
     </div>
   );
 };

@@ -25,8 +25,6 @@ const MOCK_LOCATIONS = [
     { id: "long", label: "Aeroporto (15km)", distance: "15.4 km", km: 15.4 }
 ];
 
-type Category = { id: string; name: string; description: string; base_fare: number; cost_per_km: number; min_fare: number; };
-
 const ClientDashboard = () => {
   const navigate = useNavigate();
   const { ride, requestRide, cancelRide, rateRide, clearRide, currentUserId } = useRide();
@@ -45,7 +43,7 @@ const ClientDashboard = () => {
   const [isRequesting, setIsRequesting] = useState(false);
   const [rating, setRating] = useState(0);
   const [ratingComment, setRatingComment] = useState("");
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [showBalanceAlert, setShowBalanceAlert] = useState(false);
   const [missingAmount, setMissingAmount] = useState(0);
@@ -54,6 +52,11 @@ const ClientDashboard = () => {
   const [showArrivalPopup, setShowArrivalPopup] = useState(false);
   const [showStartPopup, setShowStartPopup] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  
+  // Dados de Preço Dinâmico e Configs
+  const [pricingTiers, setPricingTiers] = useState<any[]>([]);
+  const [adminConfig, setAdminConfig] = useState<any>({});
+  const [appSettings, setAppSettings] = useState({ enableCash: true, enableWallet: true });
   
   // Data
   const [historyItems, setHistoryItems] = useState<any[]>([]);
@@ -69,9 +72,7 @@ const ClientDashboard = () => {
       else if (ride.status === 'COMPLETED') setStep('rating');
       else if (['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(ride.status)) setStep('waiting');
 
-      // Pop-up de chegada
       if (ride.status === 'ARRIVED') setShowArrivalPopup(true); else setShowArrivalPopup(false);
-      // Pop-up de início
       if (ride.status === 'IN_PROGRESS') setShowStartPopup(true); else setShowStartPopup(false);
 
     } else {
@@ -90,26 +91,43 @@ const ClientDashboard = () => {
         const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single(); 
         if (profile) setUserProfile(profile); 
 
-        // Busca Categorias (Apenas se estiver na home)
         if (activeTab === 'home') {
-            const { data: cats, error } = await supabase.from('car_categories').select('*').order('base_fare', { ascending: true });
+            // Busca Categorias (Apenas ATIVAS)
+            const { data: cats } = await supabase.from('car_categories').select('*').eq('active', true).order('base_fare', { ascending: true });
             if (cats && cats.length > 0) {
                 setCategories(cats); 
                 setSelectedCategoryId(cats[0].id);
             }
+
+            // Busca Tabela de Preços e Configs Admin
+            const { data: tiers } = await supabase.from('pricing_tiers').select('*').order('max_distance', { ascending: true });
+            if (tiers) setPricingTiers(tiers);
+
+            const { data: configData } = await supabase.from('admin_config').select('*');
+            const conf: any = {};
+            configData?.forEach((c: any) => conf[c.key] = c.value);
+            setAdminConfig(conf);
+
+            const { data: settings } = await supabase.from('app_settings').select('*');
+            const cash = settings?.find((s: any) => s.key === 'enable_cash');
+            const wallet = settings?.find((s: any) => s.key === 'enable_wallet');
+            
+            const newSettings = {
+                enableCash: cash ? cash.value : true,
+                enableWallet: wallet ? wallet.value : true
+            };
+            setAppSettings(newSettings);
+            
+            // Define método inicial baseado no que está ativo
+            if (!newSettings.enableWallet && newSettings.enableCash) setPaymentMethod('CASH');
+            else setPaymentMethod('WALLET');
         } 
         
-        // Busca Histórico (CORRIGIDO com FK Explicita)
         if (activeTab === 'history') {
-            const { data: history, error } = await supabase.from('rides')
-                .select(`
-                    *, 
-                    driver:profiles!public_rides_driver_id_fkey(first_name, last_name, car_model, car_plate)
-                `)
+            const { data: history } = await supabase.from('rides')
+                .select(`*, driver:profiles!public_rides_driver_id_fkey(first_name, last_name, car_model, car_plate)`)
                 .eq('customer_id', user.id)
                 .order('created_at', { ascending: false });
-            
-            if (error) console.error("Erro historico:", error);
             setHistoryItems(history || []);
         }
     } catch (error) {
@@ -127,30 +145,73 @@ const ClientDashboard = () => {
 
   const handleRequest = () => { if (!pickup || !destinationId) { showError("Preencha origem e destino"); return; } setStep('confirm'); };
 
-  const getPrice = (catId: string) => {
+  // --- LÓGICA DE PREÇO (IMPORTANTE) ---
+  const calculatePrice = () => {
       const dest = MOCK_LOCATIONS.find(l => l.id === destinationId);
-      const cat = categories.find(c => c.id === catId);
-      if (!dest || !cat) return "0.00";
-      return Math.max(Number(cat.base_fare) + (dest.km * Number(cat.cost_per_km)), Number(cat.min_fare)).toFixed(2);
+      if (!dest || pricingTiers.length === 0) return 0;
+
+      // 1. Encontra a faixa de preço correta
+      // Ordenado por max_distance, pega o primeiro que cobre a distância
+      let tier = pricingTiers.find(t => t.max_distance >= dest.km);
+      
+      // Se a distância for maior que a maior faixa, pega a última faixa (fallback)
+      if (!tier) {
+          tier = pricingTiers[pricingTiers.length - 1];
+          // TODO: Implementar lógica de "negociado" para distâncias longas se necessário
+      }
+
+      let finalPrice = Number(tier.price);
+
+      // 2. Aplica Regra Noturna
+      const now = new Date();
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+      
+      // Converte hora string "21:00" para comparável
+      const parseTime = (timeStr: string) => {
+          const [h, m] = timeStr.split(':').map(Number);
+          return h * 60 + m;
+      };
+
+      const nowMinutes = currentHour * 60 + currentMinute;
+      const startNight = adminConfig.night_start ? parseTime(adminConfig.night_start) : 21 * 60; // Padrão 21:00
+      const endNight = adminConfig.night_end ? parseTime(adminConfig.night_end) : 0; // Padrão 00:00 (meia-noite)
+
+      // Regra da Madrugada (00h até 06h por exemplo, ou customizado)
+      // Se adminConfig.night_end é 00:00, assumimos que é o fim do "noturno" e começo da "madrugada"
+      // Lógica simples: Se for > night_start (21h)
+      
+      if (nowMinutes >= startNight) {
+          finalPrice += Number(adminConfig.night_increase || 0);
+      }
+      
+      // Regra de Mínima da Madrugada (se passou da meia noite até, digamos, 5am)
+      if (currentHour >= 0 && currentHour < 5) {
+           const minMidnight = Number(adminConfig.midnight_min_price || 0);
+           if (finalPrice < minMidnight) finalPrice = minMidnight;
+      }
+
+      return finalPrice;
   };
+
+  const currentPrice = calculatePrice();
 
   const confirmRide = async () => {
     if (isRequesting) return;
     const dest = MOCK_LOCATIONS.find(l => l.id === destinationId);
     const cat = categories.find(c => c.id === selectedCategoryId);
     if (!dest || !cat) return;
-    const price = parseFloat(getPrice(cat.id));
     
     // Verificação de saldo só se for WALLET
-    if (paymentMethod === 'WALLET' && (userProfile?.balance || 0) < price) { 
-        setMissingAmount(price - (userProfile?.balance || 0)); 
+    if (paymentMethod === 'WALLET' && (userProfile?.balance || 0) < currentPrice) { 
+        setMissingAmount(currentPrice - (userProfile?.balance || 0)); 
         setShowBalanceAlert(true); 
         return; 
     }
 
     setIsRequesting(true);
     try { 
-        await requestRide(pickup, dest.label, price, dest.distance, cat.name, paymentMethod); 
+        await requestRide(pickup, dest.label, currentPrice, dest.distance, cat.name, paymentMethod); 
     } 
     catch (e: any) { showError(e.message); } 
     finally { setIsRequesting(false); }
@@ -226,7 +287,7 @@ const ClientDashboard = () => {
                             <h2 className="text-xl font-bold">Escolha a Categoria</h2>
                         </div>
                         {loadingCats ? <div className="py-10 text-center flex flex-col items-center gap-3"><Loader2 className="animate-spin text-yellow-500 w-8 h-8" /><p className="text-gray-400 text-sm">Buscando categorias...</p></div> : 
-                         categories.length === 0 ? <div className="py-10 text-center"><p className="text-red-500 font-bold">Sem categorias.</p></div> : 
+                         categories.length === 0 ? <div className="py-10 text-center"><p className="text-red-500 font-bold">Nenhuma categoria disponível.</p></div> : 
                         (
                             <div className="space-y-3 mb-4 max-h-[30vh] overflow-y-auto pr-1 custom-scrollbar">
                                 {categories.map((cat) => (
@@ -235,24 +296,34 @@ const ClientDashboard = () => {
                                             <div className={`w-12 h-12 rounded-full flex items-center justify-center ${selectedCategoryId === cat.id ? 'bg-yellow-500 text-black' : 'bg-white text-gray-500'}`}><Car className="w-6 h-6" /></div>
                                             <div><h4 className="font-bold text-lg text-slate-900">{cat.name}</h4><p className="text-xs text-gray-500 font-medium">{cat.description}</p></div>
                                         </div>
-                                        <span className="font-black text-lg text-slate-900 z-10">R$ {getPrice(cat.id)}</span>
+                                        <span className="font-black text-lg text-slate-900 z-10">R$ {currentPrice.toFixed(2)}</span>
                                     </div>
                                 ))}
                             </div>
                         )}
 
-                        {/* Pagamento Seletor */}
-                        <div className="mb-4 bg-gray-50 p-3 rounded-2xl border border-gray-100 flex items-center justify-between cursor-pointer hover:bg-white" onClick={() => setPaymentMethod(prev => prev === 'WALLET' ? 'CASH' : 'WALLET')}>
+                        {/* Pagamento Seletor (Condicional) */}
+                        <div 
+                            className={`mb-4 bg-gray-50 p-3 rounded-2xl border border-gray-100 flex items-center justify-between transition-colors ${appSettings.enableCash && appSettings.enableWallet ? 'cursor-pointer hover:bg-white' : ''}`}
+                            onClick={() => {
+                                if (appSettings.enableCash && appSettings.enableWallet) {
+                                    setPaymentMethod(prev => prev === 'WALLET' ? 'CASH' : 'WALLET');
+                                }
+                            }}
+                        >
                              <div className="flex items-center gap-3">
                                  <div className="w-10 h-10 bg-black text-white rounded-xl flex items-center justify-center">
                                      {paymentMethod === 'WALLET' ? <Wallet className="w-5 h-5" /> : <Banknote className="w-5 h-5" />}
                                  </div>
                                  <div>
                                      <p className="text-xs text-gray-400 font-bold uppercase">Pagamento</p>
-                                     <p className="font-bold text-slate-900">{paymentMethod === 'WALLET' ? 'Saldo da Carteira' : 'Dinheiro / PIX na hora'}</p>
+                                     <p className="font-bold text-slate-900">{paymentMethod === 'WALLET' ? 'Saldo da Carteira' : 'Dinheiro / PIX'}</p>
                                  </div>
                              </div>
-                             <div className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">Trocar</div>
+                             {/* Só mostra botão de trocar se ambos estiverem ativos */}
+                             {appSettings.enableCash && appSettings.enableWallet && (
+                                 <div className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">Trocar</div>
+                             )}
                         </div>
 
                         <Button className="w-full h-14 text-lg font-bold rounded-2xl bg-black hover:bg-zinc-800" onClick={confirmRide} disabled={!selectedCategoryId || isRequesting || loadingCats}>{isRequesting ? <Loader2 className="animate-spin" /> : "Confirmar GoldDrive"}</Button>
