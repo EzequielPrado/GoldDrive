@@ -14,24 +14,18 @@ const LoginAdmin = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  // Verificação de sessão (apenas redirecionamento se já logado)
+  // Redireciona se já estiver logado como admin
   useEffect(() => {
-    let mounted = true;
     const checkSession = async () => {
-        try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session && mounted) {
-                 const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
-                 if (data?.role === 'admin') {
-                     navigate('/admin', { replace: true });
-                 }
-            }
-        } catch (error) {
-            console.error("Check session error:", error);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+             const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
+             if (data?.role === 'admin') {
+                 navigate('/admin', { replace: true });
+             }
         }
     };
     checkSession();
-    return () => { mounted = false; };
   }, [navigate]);
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -41,76 +35,66 @@ const LoginAdmin = () => {
     setLoading(true);
 
     try {
-        // Tenta logar diretamente. O Supabase lida com a troca de sessão internamente.
-        // Removemos o signOut() prévio pois ele pode causar timeouts de rede desnecessários.
+        console.log("Iniciando login...");
+        
+        // 1. Login Simples e Direto
         const { data, error } = await supabase.auth.signInWithPassword({
             email: email.trim(),
             password: password.trim()
         });
         
-        // Se a senha estiver errada, o erro é pego AQUI e vai para o catch
         if (error) throw error;
         
-        if (!data.user) throw new Error("Erro de autenticação: Usuário não retornado.");
+        console.log("Login Auth sucesso:", data);
 
-        // Verificação de Perfil
-        // Usamos maybeSingle para evitar exceções de banco (retorna null se não achar)
+        // 2. Verificação Rápida de Perfil
+        // Se falhar aqui, não vamos travar o login, deixamos o ProtectedRoute lidar ou mostramos erro depois
         const { data: profile, error: profileError } = await supabase
             .from('profiles')
             .select('role')
             .eq('id', data.user.id)
             .maybeSingle();
         
+        console.log("Perfil carregado:", profile, "Erro:", profileError);
+
         if (profileError) {
-            // Se der erro de banco/rede ao buscar perfil
-            await supabase.auth.signOut();
-            throw new Error("Erro ao verificar perfil: " + profileError.message);
+             console.error("Erro RLS/Banco:", profileError);
+             // Não bloqueia, tenta ir pro admin e se falhar o router devolve
         }
 
-        if (!profile || profile.role !== 'admin') {
-            // Se logou mas não é admin
+        if (profile && profile.role !== 'admin') {
             await supabase.auth.signOut();
-            throw new Error("Acesso negado: Apenas administradores.");
+            throw new Error("Este usuário não tem permissão de Administrador.");
         }
         
-        // Sucesso
-        showSuccess("Acesso autorizado.");
-        navigate('/admin', { replace: true });
+        showSuccess("Login realizado com sucesso!");
+        
+        // Pequeno delay para garantir que o cookie de sessão foi gravado
+        setTimeout(() => {
+            navigate('/admin', { replace: true });
+        }, 500);
 
     } catch (e: any) {
-        console.error("Login Error:", e);
+        console.error("Erro no fluxo de login:", e);
         
-        // Tratamento de mensagens específicas
-        let msg = e.message || "Erro desconhecido.";
-        
-        if (msg.includes("Invalid login") || msg.includes("Invalid credentials")) {
-            msg = "Email ou senha incorretos.";
-        } else if (msg.includes("network")) {
-            msg = "Erro de conexão. Verifique sua internet.";
-        }
+        let msg = e.message || "Erro ao conectar.";
+        if (msg.includes("Invalid login")) msg = "Credenciais inválidas.";
         
         showError(msg);
-        
-        // Em caso de erro, garantimos logout para limpar estados sujos
-        // Fazemos isso sem await para não bloquear a UI
-        supabase.auth.signOut();
-        
-    } finally {
-        // O finally roda SEMPRE, seja sucesso ou erro.
-        // Isso garante que o botão destrave.
-        setLoading(false);
+        setLoading(false); // Destrava o botão
     }
+    // Nota: Não coloco setLoading(false) no sucesso para evitar que o botão
+    // "pisque" antes da página mudar.
   };
 
-  const handleForceClear = () => {
+  const handleForceClear = async () => {
+      await supabase.auth.signOut();
       localStorage.clear();
       window.location.reload();
   };
 
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden font-sans">
-       <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-blue-600/20 rounded-full blur-[120px] pointer-events-none animate-pulse" />
-       <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-yellow-500/10 rounded-full blur-[120px] pointer-events-none" />
        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none"></div>
 
        <div className="w-full max-w-md relative z-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
@@ -119,14 +103,14 @@ const LoginAdmin = () => {
                    <Shield className="w-8 h-8 text-yellow-500" />
                </div>
                <h1 className="text-3xl font-black text-white tracking-tight mb-2">Gold<span className="text-yellow-500">Admin</span></h1>
-               <p className="text-slate-400">Credenciais de alta segurança necessárias.</p>
+               <p className="text-slate-400">Acesso Restrito</p>
            </div>
 
            <Card className="bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl rounded-[32px] overflow-hidden">
                <CardContent className="p-8">
                    <form onSubmit={handleAuth} className="space-y-6">
                        <div className="space-y-2">
-                           <label className="text-xs font-bold uppercase text-slate-500 tracking-wider ml-1">ID Corporativo</label>
+                           <label className="text-xs font-bold uppercase text-slate-500 tracking-wider ml-1">Email</label>
                            <div className="relative group">
                                <div className="absolute left-4 top-3.5 text-slate-500 group-focus-within:text-yellow-500 transition-colors"><Shield className="w-5 h-5" /></div>
                                <Input 
@@ -141,7 +125,7 @@ const LoginAdmin = () => {
                        </div>
                        
                        <div className="space-y-2">
-                           <label className="text-xs font-bold uppercase text-slate-500 tracking-wider ml-1">Chave de Acesso</label>
+                           <label className="text-xs font-bold uppercase text-slate-500 tracking-wider ml-1">Senha</label>
                            <div className="relative group">
                                <div className="absolute left-4 top-3.5 text-slate-500 group-focus-within:text-yellow-500 transition-colors"><KeyRound className="w-5 h-5" /></div>
                                <Input 
@@ -166,7 +150,7 @@ const LoginAdmin = () => {
                            className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-400 hover:to-yellow-500 text-black font-black h-12 rounded-xl shadow-lg shadow-yellow-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]" 
                            disabled={loading}
                        >
-                           {loading ? <Loader2 className="animate-spin mr-2" /> : "AUTENTICAR SISTEMA"}
+                           {loading ? <Loader2 className="animate-spin mr-2" /> : "ENTRAR"}
                        </Button>
                    </form>
                </CardContent>
@@ -178,7 +162,7 @@ const LoginAdmin = () => {
                </Button>
                
                <div onClick={handleForceClear} className="text-[10px] text-slate-700 hover:text-red-500 cursor-pointer pt-4 uppercase font-bold tracking-widest flex items-center justify-center gap-1">
-                   <LogOut className="w-3 h-3" /> Resetar Dados Locais
+                   <LogOut className="w-3 h-3" /> Limpar Sessão (Debug)
                </div>
            </div>
        </div>
