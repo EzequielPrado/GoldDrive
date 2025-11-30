@@ -6,7 +6,7 @@ import {
   TrendingUp, Trash2, Edit, Mail, Search,
   CreditCard, Loader2, Save, AlertTriangle, Menu,
   Phone, Calendar, Star, CheckCircle2, FileText, XCircle, Banknote,
-  MapPin, Navigation, ArrowRight, KeyRound
+  MapPin, Navigation, ArrowRight, KeyRound, ZoomIn, X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -14,7 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -47,16 +47,19 @@ const AdminDashboard = () => {
   // Estados de Gerenciamento
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [viewUserData, setViewUserData] = useState<any>(null);
-  const [userRidesList, setUserRidesList] = useState<any[]>([]); // Lista de corridas do usuário selecionado
+  const [userRidesList, setUserRidesList] = useState<any[]>([]); 
   const [userStats, setUserStats] = useState({ totalRides: 0, totalMoney: 0, lastRide: '', canceledRides: 0 });
+  
+  // Aprovação Motorista
   const [requestModalOpen, setRequestModalOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
+  const [zoomedImage, setZoomedImage] = useState<string | null>(null); // Novo estado para zoom
   
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editFormData, setEditFormData] = useState({ first_name: "", last_name: "", phone: "", cpf: "" });
 
-  // Detalhes da Corrida (NOVO)
+  // Detalhes da Corrida
   const [viewRideData, setViewRideData] = useState<any>(null);
 
   // Configurações
@@ -80,7 +83,6 @@ const AdminDashboard = () => {
             setAdminProfile(profileData);
         }
 
-        // Buscas Otimizadas
         const { data: ridesData } = await supabase.rpc('get_admin_rides');
         const currentRides = Array.isArray(ridesData) ? ridesData : [];
         setRides(currentRides);
@@ -91,7 +93,6 @@ const AdminDashboard = () => {
         setDrivers(allProfiles.filter((p: any) => p.role === 'driver' && p.driver_status === 'APPROVED'));
         setPendingDrivers(allProfiles.filter((p: any) => p.role === 'driver' && p.driver_status === 'PENDING'));
 
-        // Configurações
         const { data: settings } = await supabase.from('app_settings').select('*');
         if (settings) {
             const wallet = settings.find(s => s.key === 'payment_wallet')?.value ?? true;
@@ -99,7 +100,6 @@ const AdminDashboard = () => {
             setPaymentSettings({ wallet, cash });
         }
 
-        // Stats
         const today = new Date().toDateString();
         setStats({
             revenue: currentRides.filter((r: any) => r.status === 'COMPLETED').reduce((acc: number, curr: any) => acc + (Number(curr.price) || 0), 0),
@@ -108,7 +108,6 @@ const AdminDashboard = () => {
             activeRides: currentRides.filter((r: any) => ['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(r.status)).length
         });
 
-        // Chart
         const chartMap = new Map();
         for(let i=6; i>=0; i--) {
             const d = new Date(); d.setDate(d.getDate() - i);
@@ -123,21 +122,8 @@ const AdminDashboard = () => {
         });
         setChartData(Array.from(chartMap.values()));
 
-        // Transactions Mock
-        const recentTrans = currentRides.slice(0, 15).map((r: any) => ({
-            id: r.id, 
-            date: r.created_at, 
-            amount: Number(r.platform_fee || 0), 
-            description: `Taxa Corrida #${r.id.substring(0,4)}`,
-            status: 'completed',
-            user: r.driver?.first_name || 'Motorista'
-        }));
-        setTransactions(recentTrans);
-
     } catch (e: any) { showError("Erro: " + e.message); } finally { setLoading(false); }
   };
-
-  // --- ACTIONS ---
 
   const handleApproveDriver = async (id: string, approve: boolean) => {
       try {
@@ -400,31 +386,100 @@ const AdminDashboard = () => {
       {/* MODAL: KYC REQUEST (Aprovação) */}
       <Dialog open={requestModalOpen} onOpenChange={setRequestModalOpen}>
           <DialogContent className="max-w-4xl bg-white rounded-[32px] border-0 p-0 overflow-hidden max-h-[90vh] overflow-y-auto">
-              <div className="bg-slate-900 p-6 text-white flex justify-between items-center">
-                  <div className="flex items-center gap-4">
-                      <Avatar className="w-16 h-16 border-2 border-white"><AvatarImage src={selectedRequest?.avatar_url}/><AvatarFallback>{selectedRequest?.first_name[0]}</AvatarFallback></Avatar>
-                      <div><h2 className="text-xl font-bold">{selectedRequest?.first_name} {selectedRequest?.last_name}</h2><p className="text-gray-400 text-sm">CPF: {selectedRequest?.cpf || 'N/A'}</p></div>
+              {/* Header do Modal */}
+              <div className="bg-slate-900 p-8 text-white flex justify-between items-center relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/20 rounded-full blur-3xl pointer-events-none -mr-16 -mt-16"></div>
+                  <div className="flex items-center gap-6 relative z-10">
+                      <Avatar className="w-20 h-20 border-4 border-white/20 shadow-xl"><AvatarImage src={selectedRequest?.avatar_url}/><AvatarFallback>{selectedRequest?.first_name[0]}</AvatarFallback></Avatar>
+                      <div>
+                          <h2 className="text-3xl font-black mb-1">{selectedRequest?.first_name} {selectedRequest?.last_name}</h2>
+                          <div className="flex items-center gap-3 text-slate-300">
+                             <Badge variant="outline" className="text-white border-white/20 bg-white/5">CPF: {selectedRequest?.cpf || 'N/A'}</Badge>
+                             <span>•</span>
+                             <span className="text-sm">Cadastrado em {new Date(selectedRequest?.created_at).toLocaleDateString()}</span>
+                          </div>
+                      </div>
                   </div>
-                  <Badge className="bg-orange-500 text-black">PENDENTE</Badge>
+                  <Badge className="bg-orange-500 text-black px-4 py-1.5 text-sm font-bold shadow-lg">ANÁLISE PENDENTE</Badge>
               </div>
-              <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="space-y-2"><Label>Rosto (Selfie)</Label><img src={selectedRequest?.face_photo_url} className="w-full h-48 object-cover rounded-xl bg-gray-100" alt="Rosto" /></div>
-                  <div className="space-y-2"><Label>CNH Frente</Label><img src={selectedRequest?.cnh_front_url} className="w-full h-48 object-cover rounded-xl bg-gray-100" alt="CNH Frente" /></div>
-                  <div className="space-y-2"><Label>CNH Verso</Label><img src={selectedRequest?.cnh_back_url} className="w-full h-48 object-cover rounded-xl bg-gray-100" alt="CNH Verso" /></div>
+
+              {/* Corpo do Modal */}
+              <div className="p-8 space-y-8 bg-slate-50/50">
+                  
+                  {/* Dados de Contato */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                          <p className="text-xs font-bold text-muted-foreground uppercase mb-1 flex items-center gap-2"><Mail className="w-3 h-3"/> Email</p>
+                          <p className="font-medium text-slate-900">{selectedRequest?.email}</p>
+                      </div>
+                      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                          <p className="text-xs font-bold text-muted-foreground uppercase mb-1 flex items-center gap-2"><Phone className="w-3 h-3"/> Telefone</p>
+                          <p className="font-medium text-slate-900">{selectedRequest?.phone || 'Não informado'}</p>
+                      </div>
+                  </div>
+
+                  {/* Documentos */}
+                  <div>
+                      <h3 className="text-sm font-bold text-slate-900 uppercase mb-4 flex items-center gap-2"><FileText className="w-4 h-4"/> Documentação Enviada</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          {[
+                              { label: "Rosto (Selfie)", src: selectedRequest?.face_photo_url },
+                              { label: "CNH Frente", src: selectedRequest?.cnh_front_url },
+                              { label: "CNH Verso", src: selectedRequest?.cnh_back_url }
+                          ].map((doc, idx) => (
+                              <div key={idx} className="group relative bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition-all">
+                                  <div className="aspect-[4/3] bg-slate-100 relative cursor-zoom-in" onClick={() => setZoomedImage(doc.src)}>
+                                      <img src={doc.src} className="w-full h-full object-cover transition-transform group-hover:scale-105" alt={doc.label} />
+                                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                          <ZoomIn className="text-white opacity-0 group-hover:opacity-100 transition-opacity w-8 h-8 drop-shadow-md" />
+                                      </div>
+                                  </div>
+                                  <div className="p-3 border-t border-slate-100 font-bold text-center text-sm text-slate-700">{doc.label}</div>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+
+                  {/* Veículo */}
+                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                       <h3 className="font-bold mb-4 flex items-center gap-2 text-slate-900 uppercase text-sm"><Car className="w-4 h-4"/> Veículo Cadastrado</h3>
+                       <div className="flex flex-wrap gap-3">
+                           <div className="px-4 py-2 bg-slate-100 rounded-xl border border-slate-200 text-center min-w-[100px]">
+                               <p className="text-[10px] text-muted-foreground uppercase font-bold">Modelo</p>
+                               <p className="font-bold text-slate-900">{selectedRequest?.car_model}</p>
+                           </div>
+                           <div className="px-4 py-2 bg-slate-100 rounded-xl border border-slate-200 text-center min-w-[100px]">
+                               <p className="text-[10px] text-muted-foreground uppercase font-bold">Placa</p>
+                               <p className="font-bold text-slate-900 font-mono">{selectedRequest?.car_plate}</p>
+                           </div>
+                           <div className="px-4 py-2 bg-slate-100 rounded-xl border border-slate-200 text-center min-w-[100px]">
+                               <p className="text-[10px] text-muted-foreground uppercase font-bold">Cor</p>
+                               <p className="font-bold text-slate-900">{selectedRequest?.car_color}</p>
+                           </div>
+                           <div className="px-4 py-2 bg-slate-100 rounded-xl border border-slate-200 text-center min-w-[100px]">
+                               <p className="text-[10px] text-muted-foreground uppercase font-bold">Ano</p>
+                               <p className="font-bold text-slate-900">{selectedRequest?.car_year}</p>
+                           </div>
+                       </div>
+                  </div>
               </div>
-              <div className="px-6 pb-6 bg-gray-50 p-4 rounded-xl m-6 mt-0">
-                   <h3 className="font-bold mb-2 flex items-center gap-2"><Car className="w-4 h-4"/> Veículo</h3>
-                   <div className="flex gap-4">
-                       <Badge variant="outline" className="bg-white">{selectedRequest?.car_model}</Badge>
-                       <Badge variant="outline" className="bg-white">{selectedRequest?.car_plate}</Badge>
-                       <Badge variant="outline" className="bg-white">{selectedRequest?.car_color}</Badge>
-                       <Badge variant="outline" className="bg-white">{selectedRequest?.car_year}</Badge>
-                   </div>
-              </div>
-              <DialogFooter className="p-6 bg-white border-t gap-3">
-                  <Button variant="destructive" className="flex-1 h-12 rounded-xl" onClick={() => handleApproveDriver(selectedRequest.id, false)}><XCircle className="mr-2"/> Reprovar</Button>
-                  <Button className="flex-1 h-12 rounded-xl bg-green-600 hover:bg-green-700 font-bold" onClick={() => handleApproveDriver(selectedRequest.id, true)}><CheckCircle2 className="mr-2"/> Aprovar Motorista</Button>
+
+              <DialogFooter className="p-6 bg-white border-t gap-4">
+                  <Button variant="outline" className="flex-1 h-14 rounded-xl border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 font-bold" onClick={() => handleApproveDriver(selectedRequest.id, false)}>
+                      <XCircle className="mr-2 w-5 h-5"/> Reprovar Cadastro
+                  </Button>
+                  <Button className="flex-1 h-14 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold shadow-lg shadow-green-600/20" onClick={() => handleApproveDriver(selectedRequest.id, true)}>
+                      <CheckCircle2 className="mr-2 w-5 h-5"/> Aprovar Motorista
+                  </Button>
               </DialogFooter>
+          </DialogContent>
+      </Dialog>
+      
+      {/* MODAL ZOOM IMAGEM */}
+      <Dialog open={!!zoomedImage} onOpenChange={() => setZoomedImage(null)}>
+          <DialogContent className="max-w-[90vw] h-[90vh] bg-black/95 border-0 p-0 flex items-center justify-center overflow-hidden">
+              <button onClick={() => setZoomedImage(null)} className="absolute top-4 right-4 text-white hover:text-gray-300 z-50 bg-black/50 p-2 rounded-full"><X className="w-8 h-8"/></button>
+              <img src={zoomedImage || ''} className="max-w-full max-h-full object-contain" alt="Zoom" />
           </DialogContent>
       </Dialog>
       
