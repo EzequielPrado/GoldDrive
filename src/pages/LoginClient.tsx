@@ -14,13 +14,17 @@ const LoginClient = () => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [name, setName] = useState("");
 
-  // Verificação em segundo plano (Não bloqueia a tela)
   useEffect(() => {
     const checkUser = async () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-            // Se já tiver sessão, redireciona suavemente
-            navigate('/client');
+            const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
+            if (data?.role === 'client') navigate('/client');
+            else if (data) {
+                // Se estiver logado mas não for cliente
+                await supabase.auth.signOut();
+                showError("Área exclusiva para passageiros.");
+            }
         }
     };
     checkUser();
@@ -41,11 +45,19 @@ const LoginClient = () => {
             if(error) throw error;
             showSuccess("Conta criada! Verifique seu email.");
         } else {
-            // REMOVIDO: await supabase.auth.signOut({ scope: 'global' });
-
             const { error } = await supabase.auth.signInWithPassword({ email, password });
             if(error) throw error;
-            navigate('/client');
+
+            // Verificação Pós-Login
+            const { data: { user } } = await supabase.auth.getUser();
+            if(user) {
+                const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+                if(data?.role !== 'client') {
+                    await supabase.auth.signOut();
+                    throw new Error("Login inválido. Você não é um passageiro.");
+                }
+                navigate('/client');
+            }
         }
     } catch (e: any) {
         showError(e.message);
@@ -86,8 +98,8 @@ const LoginClient = () => {
                <div className="mb-10 animate-in slide-in-from-bottom-4 duration-700">
                    <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">Gold<span className="text-yellow-500">Drive</span></h1>
                    <div className="h-1.5 w-16 bg-yellow-500 rounded-full mb-6" />
-                   <h2 className="text-2xl font-bold text-slate-800">{isSignUp ? "Comece sua jornada" : "Bem-vindo de volta"}</h2>
-                   <p className="text-gray-500 mt-2">{isSignUp ? "Preencha seus dados para criar uma conta gratuita." : "Faça login para solicitar sua próxima corrida."}</p>
+                   <h2 className="text-2xl font-bold text-slate-800">{isSignUp ? "Cadastro de Passageiro" : "Acesso Passageiro"}</h2>
+                   <p className="text-gray-500 mt-2">{isSignUp ? "Crie sua conta para começar a viajar." : "Faça login para solicitar sua corrida."}</p>
                </div>
 
                <form onSubmit={handleAuth} className="space-y-5 animate-in slide-in-from-bottom-8 duration-700 delay-150">
@@ -107,13 +119,13 @@ const LoginClient = () => {
                    </div>
                    {!isSignUp && <div className="flex justify-end"><span className="text-sm font-semibold text-gray-400 hover:text-yellow-600 cursor-pointer transition-colors">Esqueceu a senha?</span></div>}
                    <Button className="w-full h-14 text-lg font-bold rounded-2xl bg-slate-900 hover:bg-black text-white shadow-xl shadow-slate-200 transition-all hover:scale-[1.02] active:scale-[0.98]" disabled={loading}>
-                       {loading ? <Loader2 className="animate-spin" /> : (isSignUp ? "Criar Conta Grátis" : "Entrar na Plataforma")}
+                       {loading ? <Loader2 className="animate-spin" /> : (isSignUp ? "Criar Conta" : "Entrar")}
                        {!loading && <ArrowRight className="ml-2 w-5 h-5" />}
                    </Button>
                </form>
 
                <div className="mt-10 pt-6 border-t border-gray-100 text-center animate-in fade-in duration-1000 delay-300">
-                   <p className="text-gray-500">{isSignUp ? "Já possui cadastro?" : "Ainda não tem conta?"}<button onClick={() => setIsSignUp(!isSignUp)} className="ml-2 font-bold text-yellow-600 hover:text-yellow-700 hover:underline">{isSignUp ? "Fazer Login" : "Cadastre-se agora"}</button></p>
+                   <p className="text-gray-500">{isSignUp ? "Já possui conta?" : "Novo por aqui?"}<button onClick={() => setIsSignUp(!isSignUp)} className="ml-2 font-bold text-yellow-600 hover:text-yellow-700 hover:underline">{isSignUp ? "Fazer Login" : "Cadastre-se"}</button></p>
                </div>
            </div>
            
