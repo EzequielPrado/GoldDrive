@@ -18,8 +18,10 @@ const LoginAdmin = () => {
     // Limpeza forçada ao entrar
     const clearSession = async () => {
         await supabase.auth.signOut();
-        // @ts-ignore
-        localStorage.removeItem(`sb-${new URL((supabase as any).supabaseUrl).hostname.split('.')[0]}-auth-token`);
+        try {
+            // @ts-ignore
+            localStorage.removeItem(`sb-${new URL((supabase as any).supabaseUrl).hostname.split('.')[0]}-auth-token`);
+        } catch (e) { console.error(e); }
     };
     clearSession();
   }, []);
@@ -31,18 +33,10 @@ const LoginAdmin = () => {
     setLoading(true);
     
     try {
-        await supabase.auth.signOut();
-
-        const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("O servidor demorou para responder.")), 15000)
-        );
-
-        const loginPromise = supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
             email: email.trim(),
             password: password.trim()
         });
-
-        const { data, error } = await Promise.race([loginPromise, timeoutPromise]) as any;
         
         if (error) throw error;
         
@@ -97,7 +91,7 @@ const LoginAdmin = () => {
                            />
                        </div>
 
-                       <Button className="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-black h-12 rounded-xl" disabled={loading}>
+                       <Button type="submit" className="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-black h-12 rounded-xl" disabled={loading}>
                            {loading ? <Loader2 className="animate-spin mr-2" /> : "ENTRAR"}
                        </Button>
                    </form>

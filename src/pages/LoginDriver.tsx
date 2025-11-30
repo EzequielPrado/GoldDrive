@@ -63,18 +63,13 @@ const LoginDriver = () => {
       if (!email || !password) return showError("Preencha email e senha");
       
       setLoading(true);
+      console.log("Iniciando login de motorista...");
       
       try {
-          const timeoutPromise = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error("O servidor demorou para responder.")), 15000)
-          );
-
-          const loginPromise = supabase.auth.signInWithPassword({ 
+          const { data, error } = await supabase.auth.signInWithPassword({ 
               email: email.trim(), 
               password: password.trim() 
           });
-
-          const { data, error } = await Promise.race([loginPromise, timeoutPromise]) as any;
           
           if (error) throw error;
           if (!data.user) throw new Error("Usuário não encontrado.");
@@ -93,6 +88,7 @@ const LoginDriver = () => {
           else navigate('/client', { replace: true });
 
       } catch (e: any) {
+          console.error("Erro login motorista:", e);
           let msg = e.message || "Erro no login";
           if (msg.includes("Invalid login")) msg = "Email ou senha incorretos.";
           showError(msg);
@@ -183,7 +179,6 @@ const LoginDriver = () => {
              uploadFileSafe(cnhBack!, `cnh/${userId}`)
           ]);
 
-          // Correção: REMOVIDO CAMPO EMAIL DAQUI
           const { error: profileError } = await supabase.from('profiles').upsert({
               id: userId,
               role: 'driver',
@@ -237,7 +232,7 @@ const LoginDriver = () => {
                     <form onSubmit={handleLogin} className="space-y-5">
                         <div className="space-y-1"><Label>Email</Label><Input type="email" value={email} onChange={e => setEmail(e.target.value)} className="h-12" placeholder="seu@email.com"/></div>
                         <div className="space-y-1"><Label>Senha</Label><div className="relative"><Input type={showPassword?"text":"password"} value={password} onChange={e => setPassword(e.target.value)} className="h-12 pr-10" placeholder="••••••"/><button type="button" onClick={()=>setShowPassword(!showPassword)} className="absolute right-3 top-3 text-gray-400"><Eye className="w-5 h-5"/></button></div></div>
-                        <Button className="w-full h-14 font-bold bg-slate-900 text-white rounded-xl mt-4" disabled={loading}>{loading ? <Loader2 className="animate-spin" /> : "Acessar Painel"}</Button>
+                        <Button type="submit" className="w-full h-14 font-bold bg-slate-900 text-white rounded-xl mt-4" disabled={loading}>{loading ? <Loader2 className="animate-spin" /> : "Acessar Painel"}</Button>
                     </form>
                     <div className="mt-8 text-center pt-6 border-t border-gray-100"><Button variant="outline" onClick={() => setIsSignUp(true)} className="w-full h-12 font-bold rounded-xl">Criar Cadastro Gratuito</Button></div>
                 </div>

@@ -19,8 +19,12 @@ const LoginClient = () => {
   useEffect(() => {
     const clearSession = async () => {
         await supabase.auth.signOut();
-        // @ts-ignore
-        localStorage.removeItem(`sb-${new URL((supabase as any).supabaseUrl).hostname.split('.')[0]}-auth-token`);
+        try {
+            // @ts-ignore
+            localStorage.removeItem(`sb-${new URL((supabase as any).supabaseUrl).hostname.split('.')[0]}-auth-token`);
+        } catch (e) {
+            console.error("Erro ao limpar storage:", e);
+        }
     };
     clearSession();
   }, []);
@@ -60,18 +64,14 @@ const LoginClient = () => {
     if(isSignUp && !name) return showError("Digite seu nome");
 
     setLoading(true);
+    console.log("Iniciando autenticação...");
 
     try {
-        await supabase.auth.signOut();
-
-        const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("O servidor demorou para responder.")), 15000)
-        );
-
         let authData;
 
         if(isSignUp) {
-            const signUpPromise = supabase.auth.signUp({
+            console.log("Tentando cadastro...");
+            const { data, error } = await supabase.auth.signUp({
                 email: email.trim(), 
                 password: password.trim(),
                 options: { 
@@ -83,12 +83,10 @@ const LoginClient = () => {
                 }
             });
 
-            const { data, error: signUpError } = await Promise.race([signUpPromise, timeoutPromise]) as any;
-            if(signUpError) throw signUpError;
+            if(error) throw error;
             authData = data;
             
             if (authData.user) {
-                // Correção: REMOVIDO EMAIL DO UPSERT MANUAL
                 await ensureProfileExists(authData.user.id, name);
             }
 
@@ -100,17 +98,19 @@ const LoginClient = () => {
             }
 
         } else {
-            const loginPromise = supabase.auth.signInWithPassword({ 
+            console.log("Tentando login...");
+            const { data, error } = await supabase.auth.signInWithPassword({ 
                 email: email.trim(), 
                 password: password.trim() 
             });
 
-            const { data, error } = await Promise.race([loginPromise, timeoutPromise]) as any;
             if(error) throw error;
             authData = data;
 
             if (!authData.user) throw new Error("Erro na autenticação.");
             const role = await ensureProfileExists(authData.user.id, name || "Usuário");
+
+            console.log("Login sucesso, role:", role);
 
             if (role === 'driver') navigate('/driver', { replace: true });
             else if (role === 'admin') navigate('/admin', { replace: true });
@@ -118,7 +118,7 @@ const LoginClient = () => {
         }
 
     } catch (e: any) {
-        console.error(e);
+        console.error("Erro auth:", e);
         let msg = e.message || "Erro ao conectar.";
         if (msg.includes("Invalid login")) msg = "Email ou senha incorretos.";
         if (msg.includes("already registered")) msg = "Este email já está cadastrado.";
@@ -159,7 +159,7 @@ const LoginClient = () => {
                         </div>
                    </div>
 
-                   <Button className="w-full h-14 text-lg font-bold bg-slate-900 text-white rounded-xl mt-4" disabled={loading}>
+                   <Button type="submit" className="w-full h-14 text-lg font-bold bg-slate-900 text-white rounded-xl mt-4" disabled={loading}>
                        {loading ? <Loader2 className="animate-spin" /> : (isSignUp ? "Cadastrar" : "Entrar")}
                    </Button>
                </form>
