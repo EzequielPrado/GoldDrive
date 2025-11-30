@@ -5,7 +5,7 @@ import {
   Sun, Moon, PanelLeftClose, PanelLeftOpen, DollarSign, Clock, 
   CheckCircle, TrendingUp, Trash2, Edit, Mail, Search,
   CreditCard, BellRing, Save, AlertTriangle, Smartphone, Globe,
-  Menu, Banknote
+  Menu, Banknote, FileText, Check, X, ExternalLink
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -41,13 +41,15 @@ const AdminDashboard = () => {
   const [rides, setRides] = useState<any[]>([]);
   const [passengers, setPassengers] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
+  const [pendingDrivers, setPendingDrivers] = useState<any[]>([]); // Novo estado para pendentes
   const [chartData, setChartData] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
 
-  // Estados de Gerenciamento (Edit/Delete)
+  // Estados de Gerenciamento (Edit/Delete/Review)
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [reviewDriver, setReviewDriver] = useState<any>(null); // Estado para o modal de análise
   const [editFormData, setEditFormData] = useState({ first_name: "", last_name: "", phone: "" });
 
   // Configurações
@@ -69,7 +71,6 @@ const AdminDashboard = () => {
     try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-            // Verifica se é admin sem travar se der erro
             const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
             setAdminProfile(data);
             if (data?.role !== 'admin') {
@@ -79,41 +80,34 @@ const AdminDashboard = () => {
             }
         }
 
-        // 1. Buscar Corridas (Query direta para evitar complexidade excessiva de FK)
+        // 1. Buscar Corridas
         const { data: ridesData, error: rideError } = await supabase
             .from('rides')
             .select(`*, driver:profiles!public_rides_driver_id_fkey(*), customer:profiles!public_rides_customer_id_fkey(*)`)
             .order('created_at', { ascending: false });
 
         if (rideError) throw rideError;
-
         const currentRides = ridesData || [];
         setRides(currentRides);
 
         // 2. Buscar Perfis
         const { data: profilesData, error: profileError } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-        
         if (profileError) console.error("Erro profiles:", profileError);
 
         const allProfiles = profilesData || [];
         setPassengers(allProfiles.filter((p: any) => p.role === 'client'));
-        setDrivers(allProfiles.filter((p: any) => p.role === 'driver'));
+        
+        // Filtra motoristas aprovados e pendentes
+        const allDrivers = allProfiles.filter((p: any) => p.role === 'driver');
+        setDrivers(allDrivers);
+        setPendingDrivers(allDrivers.filter((p: any) => p.driver_status === 'PENDING'));
 
-        // 3. Buscar Configurações (App Settings)
+        // 3. Buscar Configurações
         const { data: settingsData } = await supabase.from('app_settings').select('*');
         if (settingsData) {
-            const fee = settingsData.find(s => s.key === 'platform_fee')?.value; // Assuming value maps to something, but schema says value is boolean. 
-            // NOTE: The schema provided says 'value' is boolean. If platformFee is text/number, we might need a workaround or another table.
-            // For now, I'll focus on the booleans requested by user.
-            
             const cash = settingsData.find(s => s.key === 'enable_cash');
             const wallet = settingsData.find(s => s.key === 'enable_wallet');
-
-            setConfig(prev => ({
-                ...prev,
-                enableCash: cash ? cash.value : true,
-                enableWallet: wallet ? wallet.value : true
-            }));
+            setConfig(prev => ({ ...prev, enableCash: cash ? cash.value : true, enableWallet: wallet ? wallet.value : true }));
         }
 
         // 4. Calcular Estatísticas
@@ -140,23 +134,10 @@ const AdminDashboard = () => {
             }
         });
         setChartData(Array.from(chartMap.values()));
+        setStats({ revenue: totalRevenue, adminRevenue: adminRev, ridesToday: ridesTodayCount, activeRides: activeCount });
         
-        // Stats Finais
-        setStats({
-            revenue: totalRevenue,
-            adminRevenue: adminRev,
-            ridesToday: ridesTodayCount,
-            activeRides: activeCount
-        });
-
-        // Mock Transactions baseadas nas corridas
         const recentTrans = currentRides.slice(0, 15).map(r => ({
-            id: r.id, 
-            date: r.created_at, 
-            amount: Number(r.platform_fee || 0), 
-            description: `Taxa Corrida #${r.id.substring(0,4)}`,
-            status: 'completed',
-            user: r.driver?.first_name || 'Motorista'
+            id: r.id, date: r.created_at, amount: Number(r.platform_fee || 0), description: `Taxa Corrida #${r.id.substring(0,4)}`, status: 'completed', user: r.driver?.first_name || 'Motorista'
         }));
         setTransactions(recentTrans);
 
@@ -169,86 +150,66 @@ const AdminDashboard = () => {
 
   const handleLogout = async () => {
     setLoading(true);
-    try {
-      await supabase.auth.signOut({ scope: 'global' });
-      // Limpar estados locais
-      setAdminProfile(null);
-      setStats({ revenue: 0, adminRevenue: 0, ridesToday: 0, activeRides: 0 });
-      setRides([]);
-      setPassengers([]);
-      setDrivers([]);
-      // Redirecionar
-      navigate('/login/admin', { replace: true });
-    } catch (error) {
-      showError('Erro ao fazer logout');
-    } finally {
-      setLoading(false);
-    }
+    try { await supabase.auth.signOut({ scope: 'global' }); setAdminProfile(null); navigate('/login/admin', { replace: true }); } catch (error) { showError('Erro ao fazer logout'); } finally { setLoading(false); }
   };
 
   // --- ACTIONS DE GESTÃO ---
-
-  const openEditUser = (user: any) => {
-      setSelectedUser(user);
-      setEditFormData({ first_name: user.first_name || "", last_name: user.last_name || "", phone: user.phone || "" });
-      setIsEditDialogOpen(true);
-  };
-
-  const handleSaveUser = async () => {
-      if (!selectedUser) return;
-      try {
-          const { error } = await supabase.from('profiles').update(editFormData).eq('id', selectedUser.id);
-          if (error) throw error;
-          showSuccess("Usuário atualizado!");
-          setIsEditDialogOpen(false);
-          fetchData();
-      } catch (e: any) { showError(e.message); }
-  };
-
-  const openDeleteUser = (user: any) => {
-      setSelectedUser(user);
-      setIsDeleteDialogOpen(true);
-  };
-
-  const handleDeleteUser = async () => {
-      if (!selectedUser) return;
-      try {
-          const { error } = await supabase.from('profiles').delete().eq('id', selectedUser.id);
-          if (error) throw error;
-          showSuccess("Perfil removido do sistema.");
-          setIsDeleteDialogOpen(false);
-          fetchData();
-      } catch (e: any) { showError(e.message); }
-  };
-
-  const handleResetPassword = async (email: string) => {
-      try {
-          const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/update-password' });
-          if (error) throw error;
-          showSuccess(`Email de redefinição enviado para ${email}`);
-      } catch (e: any) { showError(e.message); }
-  };
-
+  const openEditUser = (user: any) => { setSelectedUser(user); setEditFormData({ first_name: user.first_name || "", last_name: user.last_name || "", phone: user.phone || "" }); setIsEditDialogOpen(true); };
+  const handleSaveUser = async () => { if (!selectedUser) return; try { const { error } = await supabase.from('profiles').update(editFormData).eq('id', selectedUser.id); if (error) throw error; showSuccess("Usuário atualizado!"); setIsEditDialogOpen(false); fetchData(); } catch (e: any) { showError(e.message); } };
+  const openDeleteUser = (user: any) => { setSelectedUser(user); setIsDeleteDialogOpen(true); };
+  const handleDeleteUser = async () => { if (!selectedUser) return; try { const { error } = await supabase.from('profiles').delete().eq('id', selectedUser.id); if (error) throw error; showSuccess("Perfil removido do sistema."); setIsDeleteDialogOpen(false); fetchData(); } catch (e: any) { showError(e.message); } };
+  const handleResetPassword = async (email: string) => { try { const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/update-password' }); if (error) throw error; showSuccess(`Email de redefinição enviado para ${email}`); } catch (e: any) { showError(e.message); } };
+  
   const handleSaveConfig = async () => {
       setLoading(true);
+      try { const { error } = await supabase.from('app_settings').upsert([ { key: 'enable_cash', value: config.enableCash }, { key: 'enable_wallet', value: config.enableWallet } ]); if (error) throw error; showSuccess("Configurações salvas no sistema!"); } catch (e: any) { showError(e.message); } finally { setLoading(false); }
+  };
+
+  // --- APPROVAL LOGIC ---
+  const approveDriver = async (driver: any) => {
       try {
-        // Upsert para garantir que crie se não existir
-        const { error } = await supabase.from('app_settings').upsert([
-            { key: 'enable_cash', value: config.enableCash },
-            { key: 'enable_wallet', value: config.enableWallet }
-        ]);
-        
-        if (error) throw error;
-        showSuccess("Configurações salvas no sistema!");
+          // Atualiza status
+          const { error } = await supabase.from('profiles').update({ driver_status: 'APPROVED' }).eq('id', driver.id);
+          if (error) throw error;
+
+          showSuccess(`${driver.first_name} foi aprovado!`);
+          setReviewDriver(null);
+          fetchData(); // Atualiza listas
+
+          // Integração WhatsApp
+          if (driver.phone) {
+              const cleanPhone = driver.phone.replace(/\D/g, ''); // Remove formatação
+              // Adiciona 55 se não tiver (assumindo BR)
+              const finalPhone = cleanPhone.length <= 11 ? `55${cleanPhone}` : cleanPhone;
+              
+              const message = encodeURIComponent(
+                  `Olá ${driver.first_name}! 🚗💨\n\n` +
+                  `Sua conta de motorista na GoldDrive foi *APROVADA* com sucesso! 🎉\n\n` +
+                  `Você já pode acessar o aplicativo e começar a aceitar corridas.\n\n` +
+                  `Boas viagens!\nEquipe GoldDrive`
+              );
+              
+              window.open(`https://wa.me/${finalPhone}?text=${message}`, '_blank');
+          }
       } catch (e: any) {
-        showError(e.message);
-      } finally {
-        setLoading(false);
+          showError("Erro ao aprovar: " + e.message);
       }
   };
 
-  // --- UI COMPONENTS ---
+  const rejectDriver = async (driver: any) => {
+      try {
+          const { error } = await supabase.from('profiles').update({ driver_status: 'REJECTED' }).eq('id', driver.id);
+          if (error) throw error;
+          showSuccess("Motorista reprovado.");
+          setReviewDriver(null);
+          fetchData();
+      } catch (e: any) {
+          showError(e.message);
+      }
+  };
 
+
+  // --- UI COMPONENTS ---
   const StatCard = ({ title, value, icon: Icon, colorClass, subtext }: any) => (
       <Card className="border-0 shadow-lg bg-white/50 dark:bg-slate-900/50 backdrop-blur-xl transition-all duration-300 hover:scale-[1.02] hover:shadow-xl group overflow-hidden relative">
           <div className={`absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity ${colorClass}`}>
@@ -268,48 +229,26 @@ const AdminDashboard = () => {
   );
 
   const UserManagementTable = ({ data, type }: { data: any[], type: 'client' | 'driver' }) => {
-      const filtered = data.filter(u => 
-        (u.first_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || 
-        (u.email?.toLowerCase() || '').includes(searchTerm.toLowerCase())
-      );
-
+      const filtered = data.filter(u => (u.first_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || (u.email?.toLowerCase() || '').includes(searchTerm.toLowerCase()));
       return (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
               <div className="flex flex-col md:flex-row justify-between items-center bg-white/40 dark:bg-slate-900/40 p-4 rounded-2xl backdrop-blur-md gap-4">
-                   <div className="flex gap-4 text-sm font-bold text-muted-foreground w-full md:w-auto">
-                       <div className="flex items-center gap-2"><Users className="w-4 h-4"/> Total: <span className="text-foreground">{data.length}</span></div>
-                   </div>
-                   <div className="relative w-full md:w-64">
-                       <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-                       <Input placeholder="Buscar por nome ou email..." className="pl-9 bg-white/50 dark:bg-slate-900/50 border-0 rounded-xl" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-                   </div>
+                   <div className="flex gap-4 text-sm font-bold text-muted-foreground w-full md:w-auto"><div className="flex items-center gap-2"><Users className="w-4 h-4"/> Total: <span className="text-foreground">{data.length}</span></div></div>
+                   <div className="relative w-full md:w-64"><Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" /><Input placeholder="Buscar..." className="pl-9 bg-white/50 dark:bg-slate-900/50 border-0 rounded-xl" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
               </div>
-
               <Card className="border-0 shadow-xl bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[32px] overflow-hidden">
                   <CardHeader><CardTitle>Gerenciar {type === 'client' ? 'Passageiros' : 'Motoristas'}</CardTitle></CardHeader>
                   <CardContent className="p-0">
-                      {loading ? (
-                          <div className="p-10 text-center flex flex-col items-center gap-2"><Loader2 className="animate-spin w-8 h-8 text-yellow-500" /><p className="text-muted-foreground">Carregando usuários...</p></div>
-                      ) : filtered.length === 0 ? (
-                          <div className="p-10 text-center text-muted-foreground"><p>Nenhum usuário encontrado.</p></div>
-                      ) : (
+                      {loading ? <div className="p-10 text-center flex flex-col items-center gap-2"><Loader2 className="animate-spin w-8 h-8 text-yellow-500" /></div> : filtered.length === 0 ? <div className="p-10 text-center text-muted-foreground"><p>Nenhum usuário.</p></div> : (
                           <div className="max-h-[60vh] overflow-y-auto custom-scrollbar">
-                              <Table>
-                                  <TableHeader className="bg-slate-50/50 dark:bg-slate-800/50 sticky top-0 z-10 backdrop-blur-md"><TableRow><TableHead className="pl-8">Usuário</TableHead><TableHead>Contato</TableHead>{type === 'driver' && <TableHead>Veículo</TableHead>}<TableHead>Saldo</TableHead><TableHead className="text-right pr-8">Ações</TableHead></TableRow></TableHeader>
-                                  <TableBody>
-                                      {filtered.map(u => (
+                              <Table><TableHeader className="bg-slate-50/50 dark:bg-slate-800/50 sticky top-0 z-10 backdrop-blur-md"><TableRow><TableHead className="pl-8">Usuário</TableHead><TableHead>Contato</TableHead>{type === 'driver' && <TableHead>Status</TableHead>}<TableHead>Saldo</TableHead><TableHead className="text-right pr-8">Ações</TableHead></TableRow></TableHeader>
+                                  <TableBody>{filtered.map(u => (
                                           <TableRow key={u.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-border/50">
                                               <TableCell className="pl-8"><div className="flex items-center gap-3"><Avatar className="w-10 h-10 border-2 border-white shadow-sm"><AvatarImage src={u.avatar_url}/><AvatarFallback>{u.first_name?.[0]}</AvatarFallback></Avatar><div><p className="font-bold text-sm">{u.first_name} {u.last_name}</p><p className="text-xs text-muted-foreground">ID: {u.id.substring(0,6)}</p></div></div></TableCell>
                                               <TableCell><div className="text-sm"><p>{u.email}</p><p className="text-muted-foreground text-xs">{u.phone || 'Sem telefone'}</p></div></TableCell>
-                                              {type === 'driver' && <TableCell><Badge variant="secondary" className="font-mono">{u.car_model || 'N/A'} • {u.car_plate}</Badge></TableCell>}
+                                              {type === 'driver' && <TableCell><Badge variant="secondary" className={u.driver_status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}>{u.driver_status}</Badge></TableCell>}
                                               <TableCell className="font-bold text-green-600">R$ {u.balance?.toFixed(2)}</TableCell>
-                                              <TableCell className="text-right pr-8">
-                                                  <div className="flex justify-end gap-2">
-                                                      <Button variant="ghost" size="icon" title="Editar" onClick={() => openEditUser(u)}><Edit className="w-4 h-4 text-blue-500" /></Button>
-                                                      <Button variant="ghost" size="icon" title="Resetar Senha" onClick={() => handleResetPassword(u.email)}><Mail className="w-4 h-4 text-yellow-500" /></Button>
-                                                      <Button variant="ghost" size="icon" title="Excluir" onClick={() => openDeleteUser(u)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
-                                                  </div>
-                                              </TableCell>
+                                              <TableCell className="text-right pr-8"><div className="flex justify-end gap-2"><Button variant="ghost" size="icon" onClick={() => openEditUser(u)}><Edit className="w-4 h-4 text-blue-500" /></Button><Button variant="ghost" size="icon" onClick={() => handleResetPassword(u.email)}><Mail className="w-4 h-4 text-yellow-500" /></Button><Button variant="ghost" size="icon" onClick={() => openDeleteUser(u)}><Trash2 className="w-4 h-4 text-red-500" /></Button></div></TableCell>
                                           </TableRow>
                                       ))}
                                   </TableBody>
@@ -345,6 +284,7 @@ const AdminDashboard = () => {
          <nav className="flex-1 px-4 space-y-2 mt-4">
              {[
                  { id: 'overview', label: 'Dashboard', icon: LayoutDashboard },
+                 { id: 'requests', label: 'Solicitações', icon: FileText, badge: pendingDrivers.length },
                  { id: 'rides', label: 'Corridas', icon: MapIcon },
                  { id: 'users', label: 'Passageiros', icon: Users },
                  { id: 'drivers', label: 'Motoristas', icon: Car },
@@ -354,6 +294,11 @@ const AdminDashboard = () => {
                  <button key={item.id} onClick={() => setActiveTab(item.id)} className={`relative w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl text-sm font-bold transition-all duration-200 group overflow-hidden ${activeTab === item.id ? 'bg-slate-900 text-white dark:bg-white dark:text-black shadow-lg shadow-slate-900/20' : 'text-muted-foreground hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-foreground'} ${sidebarCollapsed ? 'justify-center px-2' : ''}`}>
                      <item.icon className={`w-5 h-5 shrink-0 transition-transform group-hover:scale-110 ${activeTab === item.id ? 'text-yellow-500' : ''}`} />
                      {!sidebarCollapsed && <span>{item.label}</span>}
+                     {item.badge ? (
+                        <div className={`ml-auto ${sidebarCollapsed ? 'absolute top-2 right-2' : ''}`}>
+                            <Badge className="bg-red-500 text-white hover:bg-red-600 border-0">{item.badge}</Badge>
+                        </div>
+                     ) : null}
                      {activeTab === item.id && !sidebarCollapsed && <div className="absolute right-4 w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />}
                  </button>
              ))}
@@ -374,7 +319,7 @@ const AdminDashboard = () => {
       <main className="flex-1 flex flex-col overflow-hidden relative z-10">
           <header className="lg:hidden h-16 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b px-4 flex items-center justify-between sticky top-0 z-50">
                <div className="flex items-center gap-2 font-black text-xl">Gold<span className="text-yellow-500">Admin</span></div>
-               <Sheet><SheetTrigger asChild><Button variant="ghost" size="icon"><Menu /></Button></SheetTrigger><SheetContent side="left" className="p-0 border-r-0 bg-slate-900 text-white w-72"><div className="p-6 font-black text-2xl">Menu</div><div className="px-4 space-y-2">{['overview', 'rides', 'users', 'drivers', 'finance', 'config'].map(id => (<Button key={id} variant="ghost" className="w-full justify-start text-lg capitalize h-14 rounded-xl" onClick={() => setActiveTab(id)}>{id}</Button>))}</div></SheetContent></Sheet>
+               <Sheet><SheetTrigger asChild><Button variant="ghost" size="icon"><Menu /></Button></SheetTrigger><SheetContent side="left" className="p-0 border-r-0 bg-slate-900 text-white w-72"><div className="p-6 font-black text-2xl">Menu</div><div className="px-4 space-y-2">{['overview', 'requests', 'rides', 'users', 'drivers', 'finance', 'config'].map(id => (<Button key={id} variant="ghost" className="w-full justify-start text-lg capitalize h-14 rounded-xl" onClick={() => setActiveTab(id)}>{id}</Button>))}</div></SheetContent></Sheet>
           </header>
 
           <div className="flex-1 overflow-y-auto p-4 lg:p-10 custom-scrollbar">
@@ -382,7 +327,7 @@ const AdminDashboard = () => {
                   
                   {/* Header da Página */}
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-700">
-                      <div><h1 className="text-4xl font-black tracking-tight text-slate-900 dark:text-white capitalize mb-1">{activeTab}</h1><p className="text-muted-foreground">Bem-vindo ao painel de controle.</p></div>
+                      <div><h1 className="text-4xl font-black tracking-tight text-slate-900 dark:text-white capitalize mb-1">{activeTab === 'requests' ? 'Solicitações' : activeTab}</h1><p className="text-muted-foreground">Bem-vindo ao painel de controle.</p></div>
                       <div className="flex gap-3"><Button variant="outline" className="rounded-xl h-12" onClick={fetchData}><RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Atualizar</Button><Button variant="destructive" className="rounded-xl h-12 font-bold px-6 shadow-red-500/20 shadow-lg" onClick={handleLogout}><LogOut className="w-4 h-4 mr-2" /> Sair</Button></div>
                   </div>
 
@@ -394,7 +339,7 @@ const AdminDashboard = () => {
                               <StatCard title="Receita Total" value={`R$ ${stats.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={DollarSign} colorClass="bg-green-500" subtext="+12% esse mês" />
                               <StatCard title="Lucro Plataforma" value={`R$ ${stats.adminRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={Wallet} colorClass="bg-blue-500" subtext="20% taxa" />
                               <StatCard title="Corridas Hoje" value={stats.ridesToday} icon={TrendingUp} colorClass="bg-red-500" subtext="Últimas 24h" />
-                              <StatCard title="Ativos Agora" value={stats.activeRides} icon={Clock} colorClass="bg-yellow-500" subtext="Em tempo real" />
+                              <StatCard title="Pendências" value={pendingDrivers.length} icon={FileText} colorClass="bg-orange-500" subtext="Aguardando Análise" />
                           </div>
 
                           {/* Charts Row */}
@@ -424,6 +369,54 @@ const AdminDashboard = () => {
                               </div>
                           </div>
                       </div>
+                  )}
+
+                  {/* --- TAB: REQUESTS (KYC) --- */}
+                  {activeTab === 'requests' && (
+                    <Card className="border-0 shadow-xl bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[32px] overflow-hidden animate-in fade-in slide-in-from-bottom-8">
+                        <CardHeader className="flex flex-row items-center justify-between px-8 pt-8">
+                            <div>
+                                <CardTitle className="text-2xl flex items-center gap-2"><FileText className="w-6 h-6 text-yellow-500" /> Solicitações Pendentes</CardTitle>
+                                <CardDescription>Motoristas aguardando aprovação de documentos.</CardDescription>
+                            </div>
+                            <Badge className="text-lg px-4 py-1 bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border-0">{pendingDrivers.length} Pendentes</Badge>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            {pendingDrivers.length === 0 ? (
+                                <div className="p-16 text-center">
+                                    <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <CheckCircle className="w-10 h-10 text-green-600" />
+                                    </div>
+                                    <h3 className="text-xl font-bold text-slate-900 dark:text-white">Tudo limpo!</h3>
+                                    <p className="text-muted-foreground">Não há novas solicitações de motoristas no momento.</p>
+                                </div>
+                            ) : (
+                                <Table>
+                                    <TableHeader className="bg-slate-50/50 dark:bg-slate-800/50"><TableRow><TableHead className="pl-8">Motorista</TableHead><TableHead>Veículo</TableHead><TableHead>Data Cadastro</TableHead><TableHead className="text-right pr-8">Ação</TableHead></TableRow></TableHeader>
+                                    <TableBody>
+                                        {pendingDrivers.map(driver => (
+                                            <TableRow key={driver.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-border/50">
+                                                <TableCell className="pl-8">
+                                                    <div className="flex items-center gap-3">
+                                                        <Avatar className="w-10 h-10 border-2 border-white shadow-sm"><AvatarImage src={driver.avatar_url} /><AvatarFallback>{driver.first_name[0]}</AvatarFallback></Avatar>
+                                                        <div>
+                                                            <p className="font-bold text-sm">{driver.first_name} {driver.last_name}</p>
+                                                            <p className="text-xs text-muted-foreground flex items-center gap-1"><Smartphone className="w-3 h-3" /> {driver.phone}</p>
+                                                        </div>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell><Badge variant="outline" className="font-mono">{driver.car_model || 'N/A'} • {driver.car_plate}</Badge></TableCell>
+                                                <TableCell className="text-muted-foreground">{new Date(driver.created_at).toLocaleDateString()}</TableCell>
+                                                <TableCell className="text-right pr-8">
+                                                    <Button onClick={() => setReviewDriver(driver)} className="bg-slate-900 text-white hover:bg-black font-bold h-10 px-6 rounded-xl shadow-lg shadow-slate-900/10">Analisar</Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            )}
+                        </CardContent>
+                    </Card>
                   )}
 
                   {/* --- TAB: RIDES --- */}
@@ -551,6 +544,103 @@ const AdminDashboard = () => {
           </div>
       </main>
       
+      {/* DIALOG DE ANÁLISE KYC */}
+      <Dialog open={!!reviewDriver} onOpenChange={(o) => !o && setReviewDriver(null)}>
+        <DialogContent className="max-w-3xl bg-white dark:bg-slate-950 rounded-[32px] border-0 shadow-2xl p-0 overflow-hidden">
+            {reviewDriver && (
+                <div className="flex flex-col h-[85vh]">
+                    {/* Header */}
+                    <div className="bg-slate-900 text-white p-6 shrink-0">
+                        <div className="flex items-center gap-4">
+                            <Avatar className="w-16 h-16 border-4 border-yellow-500 shadow-xl">
+                                <AvatarImage src={reviewDriver.avatar_url} />
+                                <AvatarFallback className="text-black bg-yellow-500 font-bold text-xl">{reviewDriver.first_name[0]}</AvatarFallback>
+                            </Avatar>
+                            <div>
+                                <h2 className="text-2xl font-black">{reviewDriver.first_name} {reviewDriver.last_name}</h2>
+                                <div className="flex items-center gap-3 text-sm text-gray-300">
+                                    <span className="flex items-center gap-1"><Smartphone className="w-3 h-3" /> {reviewDriver.phone}</span>
+                                    <span className="w-1 h-1 bg-gray-500 rounded-full" />
+                                    <span className="font-mono">CPF: {reviewDriver.cpf}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Content Scrollable */}
+                    <ScrollArea className="flex-1 bg-gray-50 dark:bg-slate-900 p-6">
+                        <div className="space-y-6">
+                            {/* Veículo Card */}
+                            <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-border/50">
+                                <h3 className="text-sm font-bold uppercase text-muted-foreground mb-3 flex items-center gap-2"><Car className="w-4 h-4" /> Dados do Veículo</h3>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div className="bg-slate-50 dark:bg-slate-900 p-3 rounded-xl">
+                                        <p className="text-xs text-muted-foreground">Modelo</p>
+                                        <p className="font-bold">{reviewDriver.car_model}</p>
+                                    </div>
+                                    <div className="bg-slate-50 dark:bg-slate-900 p-3 rounded-xl">
+                                        <p className="text-xs text-muted-foreground">Placa</p>
+                                        <p className="font-bold font-mono uppercase">{reviewDriver.car_plate}</p>
+                                    </div>
+                                    <div className="bg-slate-50 dark:bg-slate-900 p-3 rounded-xl">
+                                        <p className="text-xs text-muted-foreground">Cor</p>
+                                        <p className="font-bold">{reviewDriver.car_color}</p>
+                                    </div>
+                                    <div className="bg-slate-50 dark:bg-slate-900 p-3 rounded-xl">
+                                        <p className="text-xs text-muted-foreground">Ano</p>
+                                        <p className="font-bold">{reviewDriver.car_year}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Documentos */}
+                            <div>
+                                <h3 className="text-sm font-bold uppercase text-muted-foreground mb-3 flex items-center gap-2"><FileText className="w-4 h-4" /> Documentação (CNH)</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <p className="text-xs font-bold pl-2">Frente</p>
+                                        <div className="aspect-video bg-black rounded-xl overflow-hidden shadow-lg border-2 border-slate-200 dark:border-slate-700 relative group cursor-pointer" onClick={() => window.open(reviewDriver.cnh_front_url, '_blank')}>
+                                            <img src={reviewDriver.cnh_front_url} className="w-full h-full object-cover transition-transform group-hover:scale-105" alt="CNH Frente" />
+                                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                                <ExternalLink className="text-white w-8 h-8" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <p className="text-xs font-bold pl-2">Verso</p>
+                                        <div className="aspect-video bg-black rounded-xl overflow-hidden shadow-lg border-2 border-slate-200 dark:border-slate-700 relative group cursor-pointer" onClick={() => window.open(reviewDriver.cnh_back_url, '_blank')}>
+                                            <img src={reviewDriver.cnh_back_url} className="w-full h-full object-cover transition-transform group-hover:scale-105" alt="CNH Verso" />
+                                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                                <ExternalLink className="text-white w-8 h-8" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </ScrollArea>
+
+                    {/* Footer Actions */}
+                    <div className="p-4 bg-white dark:bg-slate-950 border-t border-border flex gap-3 shrink-0">
+                        <Button 
+                            variant="destructive" 
+                            className="flex-1 h-14 rounded-xl font-bold text-lg" 
+                            onClick={() => rejectDriver(reviewDriver)}
+                        >
+                            <X className="mr-2 w-5 h-5" /> Reprovar
+                        </Button>
+                        <Button 
+                            className="flex-[2] h-14 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-lg shadow-lg shadow-green-600/20" 
+                            onClick={() => approveDriver(reviewDriver)}
+                        >
+                            <Check className="mr-2 w-5 h-5" /> Aprovar e Notificar
+                        </Button>
+                    </div>
+                </div>
+            )}
+        </DialogContent>
+      </Dialog>
+
       {/* DIALOGS DE GESTÃO */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogContent className="rounded-2xl">
