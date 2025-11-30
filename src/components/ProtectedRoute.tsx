@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { Loader2 } from "lucide-react";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -8,90 +9,82 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
-  const [isChecking, setIsChecking] = useState(true);
-  const [canAccess, setCanAccess] = useState(false);
-  const [redirectPath, setRedirectPath] = useState<string | null>(null);
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null); // null = carregando
   const location = useLocation();
 
   useEffect(() => {
     let mounted = true;
 
-    const verify = async () => {
-      // Timeout de segurança: se o Supabase não responder em 2s, assume que não está logado para não travar
-      const timeout = new Promise((resolve) => setTimeout(resolve, 2000));
-      
-      const check = async () => {
-         const { data: { session } } = await supabase.auth.getSession();
-         if (!session) return false;
-
-         // Se já tiver a role no metadata (cache), usa ela pra ser instantâneo
-         let role = session.user.user_metadata?.role;
-         
-         // Se não tiver, busca no banco rapidinho
-         if (!role) {
-             const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
-             role = data?.role;
-         }
-
-         return { role, match: role && allowedRoles.includes(role) };
-      };
-
+    const checkAuth = async () => {
       try {
-        // Corrida entre verificação e timeout
-        const result: any = await Promise.race([check(), timeout]);
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+          if (mounted) setIsAuthorized(false);
+          return;
+        }
+
+        // Tenta pegar a role do metadata (mais rápido e sem request ao banco)
+        let role = session.user.user_metadata?.role;
+
+        // Se não tiver no metadata, tenta via RPC (seguro contra RLS loop)
+        if (!role) {
+            const { data } = await supabase.rpc('get_my_role');
+            role = data;
+        }
+
+        // Se ainda não tiver, tenta fallback para tabela profiles
+        if (!role) {
+            const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
+            role = data?.role;
+        }
 
         if (mounted) {
-            if (!result || !result.role) {
-                // Não logado ou erro
-                setRedirectPath(determineLoginRoute(location.pathname));
-            } else if (result.match) {
-                // Sucesso total
-                setCanAccess(true);
+            // Verifica se a role encontrada está na lista de permitidos
+            if (role && allowedRoles.includes(role)) {
+                setIsAuthorized(true);
             } else {
-                // Logado mas role errada
-                setRedirectPath(determineRedirectByRole(result.role));
+                console.warn(`Acesso negado. Role do usuário: ${role}, Permitido: ${allowedRoles}`);
+                setIsAuthorized(false);
             }
         }
-      } catch (e) {
-        console.error("Auth Error", e);
-        if (mounted) setRedirectPath("/login");
-      } finally {
-        if (mounted) setIsChecking(false);
+      } catch (error) {
+        console.error("Erro na verificação de auth:", error);
+        if (mounted) setIsAuthorized(false);
       }
     };
 
-    verify();
+    checkAuth();
 
     return () => { mounted = false; };
-  }, [location.pathname, allowedRoles]);
+  }, [allowedRoles]);
 
-  const determineLoginRoute = (path: string) => {
-      if (path.includes('/admin')) return "/login/admin";
-      if (path.includes('/driver')) return "/login/driver";
-      return "/login";
-  };
-
-  const determineRedirectByRole = (role: string) => {
-      if (role === 'admin') return "/admin";
-      if (role === 'driver') return "/driver";
-      return "/client";
-  };
-
-  // Enquanto verifica, não mostra NADA (melhor que loader travado) ou um loader invisível
-  // Se demorar muito, o timeout libera.
-  if (isChecking) {
-      return null; // Tela branca rápida é melhor que "Carregando..." eterno
+  // Estado de Carregamento
+  if (isAuthorized === null) {
+    return (
+        <div className="h-screen w-full flex items-center justify-center bg-zinc-50 dark:bg-zinc-950">
+            <div className="flex flex-col items-center gap-2">
+                <Loader2 className="w-8 h-8 animate-spin text-yellow-500" />
+                <p className="text-xs text-gray-400 font-medium">Verificando acesso...</p>
+            </div>
+        </div>
+    );
   }
 
-  if (redirectPath) {
-      return <Navigate to={redirectPath} replace />;
+  // Não autorizado -> Redireciona para Login
+  if (!isAuthorized) {
+      // Evita loop: Se já estiver no login, não faz nada (embora o Router deva cuidar disso)
+      
+      // Define para qual login mandar baseado na tentativa
+      let target = "/login";
+      if (location.pathname.includes('/admin')) target = "/login/admin";
+      else if (location.pathname.includes('/driver')) target = "/login/driver";
+      
+      return <Navigate to={target} replace />;
   }
 
-  if (canAccess) {
-      return <>{children}</>;
-  }
-
-  return <Navigate to="/login" replace />;
+  // Autorizado -> Renderiza o componente
+  return <>{children}</>;
 };
 
 export default ProtectedRoute;

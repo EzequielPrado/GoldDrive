@@ -1,5 +1,4 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,12 +8,26 @@ import { AlertCircle, CheckCircle2, ShieldAlert } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const AdminLoginSecure = () => {
-  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Limpa qualquer sessão anterior ao carregar a página para garantir estado limpo
+  useEffect(() => {
+    const clearSession = async () => {
+        // Se já tiver sessão, verifica se é admin. Se não for, desloga.
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+            const { data: role } = await supabase.rpc('get_my_role');
+            if (role === 'admin') {
+                window.location.href = '/admin'; // Já está logado, vai direto
+            }
+        }
+    };
+    clearSession();
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,43 +36,35 @@ const AdminLoginSecure = () => {
     setLoading(true);
 
     try {
-      console.log("Iniciando login...");
-      
-      // 1. Autenticação Básica
+      // 1. Login
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password: password.trim(),
       });
 
       if (authError) throw new Error(authError.message);
-      if (!authData.user) throw new Error("Usuário não identificado.");
+      if (!authData.user) throw new Error("Usuário não encontrado.");
 
-      setSuccessMsg("Autenticado. Verificando permissões via RPC...");
+      setSuccessMsg("Credenciais válidas.");
 
-      // 2. Verificação via RPC (Remote Procedure Call)
-      // Isso evita ler a tabela 'profiles' diretamente, fugindo de qualquer loop de RLS
+      // 2. Verificação RPC
       const { data: role, error: rpcError } = await supabase.rpc('get_my_role');
 
       if (rpcError) {
           console.error("Erro RPC:", rpcError);
-          // Fallback: Tenta ler do metadata se o RPC falhar
-          const metaRole = authData.user.user_metadata?.role;
-          if (metaRole !== 'admin') throw new Error("Erro ao verificar permissão do servidor.");
-      } else {
-          console.log("Role recebida:", role);
-          if (role !== 'admin') {
-             await supabase.auth.signOut();
-             throw new Error("ACESSO NEGADO: Usuário não é administrador.");
-          }
+          // Fallback Metadata
+          if (authData.user.user_metadata?.role !== 'admin') throw new Error("Erro de permissão (RPC Fail).");
+      } else if (role !== 'admin') {
+          await supabase.auth.signOut();
+          throw new Error("ACESSO NEGADO: Usuário não é admin.");
       }
 
-      // 3. Sucesso
       setSuccessMsg("Acesso autorizado! Redirecionando...");
       
+      // 3. HARD REFRESH - Isso mata qualquer loop de estado do React
       setTimeout(() => {
-          // Força um reload para limpar qualquer estado de cache do React
           window.location.href = '/admin';
-      }, 1000);
+      }, 500);
 
     } catch (err: any) {
       console.error("Login Error:", err);
@@ -79,7 +84,7 @@ const AdminLoginSecure = () => {
           </div>
           <CardTitle className="text-2xl font-bold text-white">Admin Secure Login</CardTitle>
           <CardDescription className="text-zinc-400">
-            Modo de Segurança (RPC Bypass)
+            Modo de Recuperação de Acesso
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
@@ -132,6 +137,12 @@ const AdminLoginSecure = () => {
             >
               {loading ? "Processando..." : "ENTRAR"}
             </Button>
+
+            <div className="pt-4 text-center">
+                 <button type="button" onClick={() => { supabase.auth.signOut(); window.location.reload(); }} className="text-xs text-red-500 hover:text-red-400 underline">
+                     Forçar Logout Geral
+                 </button>
+            </div>
           </form>
         </CardContent>
       </Card>
