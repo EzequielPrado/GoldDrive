@@ -10,36 +10,27 @@ import { Card, CardContent } from "@/components/ui/card";
 const LoginAdmin = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [checking, setChecking] = useState(true);
+  // MUDANÇA CRÍTICA: Começa como false para NÃO travar a tela
+  const [checking, setChecking] = useState(false); 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // Verificação em segundo plano mais segura
+  // Verificação silenciosa (Não bloqueia a UI)
   useEffect(() => {
-    let mounted = true;
-    
-    const checkUser = async () => {
+    const checkSession = async () => {
         try {
-            // Pequeno delay para garantir que o Supabase carregou o token do storage
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
             const { data: { session } } = await supabase.auth.getSession();
-            if (session && mounted) {
-                 const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
+            if (session) {
+                 const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
                  if (data?.role === 'admin') {
                      navigate('/admin', { replace: true });
-                     return;
                  }
             }
         } catch (error) {
-            console.error("Erro na verificação automática:", error);
-        } finally {
-            if (mounted) setChecking(false);
+            console.error("Verificação silenciosa falhou:", error);
         }
     };
-    
-    checkUser();
-    return () => { mounted = false; };
+    checkSession();
   }, [navigate]);
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -48,15 +39,15 @@ const LoginAdmin = () => {
 
     setLoading(true);
     try {
-        // 1. Limpa qualquer sessão anterior para evitar conflitos
+        // Força logout antes de tentar logar para limpar estados sujos
         await supabase.auth.signOut();
 
-        // 2. Tenta o login
+        // Login
         const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password });
         if(error) throw error;
         
         if(authData.user) {
-            // 3. Verifica se é admin
+            // Verifica role
             const { data: profile } = await supabase.from('profiles').select('role').eq('id', authData.user.id).single();
             
             if(profile?.role !== 'admin') {
@@ -64,17 +55,16 @@ const LoginAdmin = () => {
                 throw new Error("Acesso negado: Este usuário não é um administrador.");
             }
             
-            // 4. Sucesso - Redireciona
             navigate('/admin', { replace: true });
         }
     } catch (e: any) {
         showError(e.message || "Erro ao autenticar");
-        setLoading(false); // Só destrava se der erro
+        setLoading(false);
     }
   };
 
-  const handleForceLogout = async () => {
-      await supabase.auth.signOut();
+  const handleForceClear = () => {
+      localStorage.clear(); // Limpa tudo do navegador
       window.location.reload();
   };
 
@@ -100,7 +90,14 @@ const LoginAdmin = () => {
                            <label className="text-xs font-bold uppercase text-slate-500 tracking-wider ml-1">ID Corporativo</label>
                            <div className="relative group">
                                <div className="absolute left-4 top-3.5 text-slate-500 group-focus-within:text-yellow-500 transition-colors"><Shield className="w-5 h-5" /></div>
-                               <Input type="email" placeholder="admin@golddrive.com" className="bg-slate-900/50 border-white/10 pl-12 h-12 rounded-xl text-white placeholder:text-slate-600 focus:border-yellow-500/50 focus:ring-yellow-500/20 transition-all" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" />
+                               <Input 
+                                   type="email" 
+                                   placeholder="admin@golddrive.com" 
+                                   className="bg-slate-900/50 border-white/10 pl-12 h-12 rounded-xl text-white placeholder:text-slate-600 focus:border-yellow-500/50 focus:ring-yellow-500/20 transition-all" 
+                                   value={email} 
+                                   onChange={e => setEmail(e.target.value)} 
+                                   autoComplete="email" 
+                               />
                            </div>
                        </div>
                        
@@ -108,13 +105,23 @@ const LoginAdmin = () => {
                            <label className="text-xs font-bold uppercase text-slate-500 tracking-wider ml-1">Chave de Acesso</label>
                            <div className="relative group">
                                <div className="absolute left-4 top-3.5 text-slate-500 group-focus-within:text-yellow-500 transition-colors"><KeyRound className="w-5 h-5" /></div>
-                               <Input type="password" placeholder="••••••••••••" className="bg-slate-900/50 border-white/10 pl-12 h-12 rounded-xl text-white placeholder:text-slate-600 focus:border-yellow-500/50 focus:ring-yellow-500/20 transition-all" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" />
+                               <Input 
+                                   type="password" 
+                                   placeholder="••••••••••••" 
+                                   className="bg-slate-900/50 border-white/10 pl-12 h-12 rounded-xl text-white placeholder:text-slate-600 focus:border-yellow-500/50 focus:ring-yellow-500/20 transition-all" 
+                                   value={password} 
+                                   onChange={e => setPassword(e.target.value)} 
+                                   autoComplete="current-password" 
+                               />
                                <Lock className="absolute right-4 top-3.5 w-4 h-4 text-slate-600" />
                            </div>
                        </div>
 
-                       <Button className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-400 hover:to-yellow-500 text-black font-black h-12 rounded-xl shadow-lg shadow-yellow-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]" disabled={loading || checking}>
-                           {loading || checking ? <Loader2 className="animate-spin mr-2" /> : "AUTENTICAR SISTEMA"}
+                       <Button 
+                           className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-400 hover:to-yellow-500 text-black font-black h-12 rounded-xl shadow-lg shadow-yellow-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]" 
+                           disabled={loading} // Removido 'checking' daqui
+                       >
+                           {loading ? <Loader2 className="animate-spin mr-2" /> : "AUTENTICAR SISTEMA"}
                        </Button>
                    </form>
                </CardContent>
@@ -125,9 +132,9 @@ const LoginAdmin = () => {
                    <ArrowLeft className="w-4 h-4" /> Voltar ao Início
                </Button>
                
-               {/* Botão de emergência caso trave */}
-               <div onClick={handleForceLogout} className="text-[10px] text-slate-700 hover:text-red-500 cursor-pointer pt-4 uppercase font-bold tracking-widest flex items-center justify-center gap-1">
-                   <LogOut className="w-3 h-3" /> Limpar Sessão Travada
+               {/* Botão de limpeza profunda */}
+               <div onClick={handleForceClear} className="text-[10px] text-slate-700 hover:text-red-500 cursor-pointer pt-4 uppercase font-bold tracking-widest flex items-center justify-center gap-1">
+                   <LogOut className="w-3 h-3" /> Resetar Dados Locais
                </div>
            </div>
        </div>
