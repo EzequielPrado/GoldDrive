@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { showError, showSuccess } from "@/utils/toast";
-import { ArrowLeft, Loader2, ArrowRight, Car, User, FileText, Camera, ShieldCheck, Mail, Lock, Phone, CreditCard, Eye, EyeOff, AlertCircle, Clock } from "lucide-react";
+import { ArrowLeft, Loader2, Camera, FileText, Car, Eye, EyeOff } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -36,7 +36,6 @@ const LoginDriver = () => {
   const [carColor, setCarColor] = useState("");
   const [carYear, setCarYear] = useState("");
 
-  // Limpeza de sessão ao entrar
   useEffect(() => {
     const clearSession = async () => {
       await supabase.auth.signOut();
@@ -66,7 +65,6 @@ const LoginDriver = () => {
       setLoading(true);
       
       try {
-          // Timeout de segurança
           const timeoutPromise = new Promise((_, reject) => 
               setTimeout(() => reject(new Error("O servidor demorou para responder.")), 15000)
           );
@@ -81,7 +79,6 @@ const LoginDriver = () => {
           if (error) throw error;
           if (!data.user) throw new Error("Usuário não encontrado.");
 
-          // Busca perfil
           const { data: profile } = await supabase
             .from('profiles')
             .select('role, driver_status')
@@ -100,7 +97,7 @@ const LoginDriver = () => {
           if (msg.includes("Invalid login")) msg = "Email ou senha incorretos.";
           showError(msg);
       } finally {
-          setLoading(false); // GARANTE QUE O LOADING PARA
+          setLoading(false);
       }
   };
 
@@ -154,7 +151,6 @@ const LoginDriver = () => {
       setLoading(true);
 
       try {
-          // 1. CRIA O USUÁRIO NO AUTH
           const { data: authData, error: authError } = await supabase.auth.signUp({
               email: email.trim(),
               password: password.trim(),
@@ -169,7 +165,6 @@ const LoginDriver = () => {
 
           let userId = authData?.user?.id;
 
-          // Se der erro de "já registrado", tenta logar para recuperar o ID e atualizar o perfil
           if (authError) {
               if (authError.message.includes("already registered")) {
                    const { data: loginData } = await supabase.auth.signInWithPassword({ email, password });
@@ -182,18 +177,16 @@ const LoginDriver = () => {
 
           if (!userId) throw new Error("Erro ao criar usuário. Tente novamente.");
 
-          // 2. UPLOAD ARQUIVOS (Paralelo para ser mais rápido)
           const [faceUrl, cnhFrontUrl, cnhBackUrl] = await Promise.all([
              uploadFileSafe(facePhoto!, `face/${userId}`),
              uploadFileSafe(cnhFront!, `cnh/${userId}`),
              uploadFileSafe(cnhBack!, `cnh/${userId}`)
           ]);
 
-          // 3. CRIAÇÃO/ATUALIZAÇÃO DO PERFIL (Manual para garantir sincronia)
+          // Correção: REMOVIDO CAMPO EMAIL DAQUI
           const { error: profileError } = await supabase.from('profiles').upsert({
               id: userId,
               role: 'driver',
-              email: email.trim(),
               first_name: name.split(' ')[0],
               last_name: name.split(' ').slice(1).join(' '),
               cpf,
@@ -214,18 +207,16 @@ const LoginDriver = () => {
               throw new Error("Erro ao salvar dados do perfil. Tente novamente.");
           }
 
-          // SUCESSO
           navigate('/success', { replace: true });
 
       } catch (e: any) {
           console.error(e);
           showError(e.message || "Erro no cadastro");
       } finally {
-          setLoading(false); // GARANTE QUE O LOADING PARA
+          setLoading(false);
       }
   };
 
-  // TELA DE LOGIN
   if (!isSignUp) {
       return (
         <div className="min-h-screen relative flex items-center justify-center font-sans overflow-hidden bg-slate-900">
@@ -255,7 +246,6 @@ const LoginDriver = () => {
       );
   }
 
-  // TELA DE CADASTRO
   return (
     <div className="min-h-screen relative flex items-center justify-center p-4 lg:p-8 font-sans overflow-hidden bg-slate-900">
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?q=80&w=2583')] bg-cover bg-center opacity-20" />

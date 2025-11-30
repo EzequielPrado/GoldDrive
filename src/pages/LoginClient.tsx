@@ -19,26 +19,22 @@ const LoginClient = () => {
   useEffect(() => {
     const clearSession = async () => {
         await supabase.auth.signOut();
+        localStorage.removeItem(`sb-${new URL(supabase.supabaseUrl).hostname.split('.')[0]}-auth-token`);
     };
     clearSession();
   }, []);
 
-  // Função de segurança: Garante que o perfil existe na tabela 'profiles'
-  const ensureProfileExists = async (userId: string, userEmail: string, fullName: string) => {
+  const ensureProfileExists = async (userId: string, fullName: string) => {
       try {
-          // 1. Tenta buscar
-          const { data, error } = await supabase.from('profiles').select('id, role').eq('id', userId).maybeSingle();
-          
-          if (data) return data.role; // Perfil existe, retorna a role
+          const { data } = await supabase.from('profiles').select('id, role').eq('id', userId).maybeSingle();
+          if (data) return data.role;
 
-          // 2. Se não existe, cria na força bruta
           console.warn("Perfil não encontrado, criando manualmente...");
           const firstName = fullName.split(' ')[0] || "Usuário";
           const lastName = fullName.split(' ').slice(1).join(' ') || "";
           
           const { error: insertError } = await supabase.from('profiles').insert({
               id: userId,
-              email: userEmail,
               first_name: firstName,
               last_name: lastName,
               role: 'client',
@@ -67,7 +63,6 @@ const LoginClient = () => {
     try {
         await supabase.auth.signOut();
 
-        // Timeout de segurança (15s)
         const timeoutPromise = new Promise((_, reject) => 
             setTimeout(() => reject(new Error("O servidor demorou para responder.")), 15000)
         );
@@ -75,7 +70,6 @@ const LoginClient = () => {
         let authData;
 
         if(isSignUp) {
-            // CADASTRO
             const signUpPromise = supabase.auth.signUp({
                 email: email.trim(), 
                 password: password.trim(),
@@ -88,24 +82,23 @@ const LoginClient = () => {
                 }
             });
 
-            const { data, error } = await Promise.race([signUpPromise, timeoutPromise]) as any;
-            if(error) throw error;
+            const { data, error: signUpError } = await Promise.race([signUpPromise, timeoutPromise]) as any;
+            if(signUpError) throw signUpError;
             authData = data;
             
             if (authData.user) {
-                // Força criação do perfil imediatamente
-                await ensureProfileExists(authData.user.id, email, name);
+                // Correção: REMOVIDO EMAIL DO UPSERT MANUAL
+                await ensureProfileExists(authData.user.id, name);
             }
 
-            if (!authData.session) {
+            if (data.session) {
+                navigate('/client', { replace: true });
+            } else {
                 showSuccess("Conta criada! Faça login.");
                 setIsSignUp(false);
-                setLoading(false);
-                return;
             }
 
         } else {
-            // LOGIN
             const loginPromise = supabase.auth.signInWithPassword({ 
                 email: email.trim(), 
                 password: password.trim() 
@@ -114,21 +107,20 @@ const LoginClient = () => {
             const { data, error } = await Promise.race([loginPromise, timeoutPromise]) as any;
             if(error) throw error;
             authData = data;
+
+            if (!authData.user) throw new Error("Erro na autenticação.");
+            const role = await ensureProfileExists(authData.user.id, name || "Usuário");
+
+            if (role === 'driver') navigate('/driver', { replace: true });
+            else if (role === 'admin') navigate('/admin', { replace: true });
+            else navigate('/client', { replace: true });
         }
-
-        if (!authData.user) throw new Error("Erro na autenticação.");
-
-        // Verificação final do perfil antes de redirecionar
-        const role = await ensureProfileExists(authData.user.id, email, name || "Usuário");
-
-        if (role === 'driver') navigate('/driver', { replace: true });
-        else if (role === 'admin') navigate('/admin', { replace: true });
-        else navigate('/client', { replace: true });
 
     } catch (e: any) {
         console.error(e);
-        let msg = e.message || "Erro desconhecido";
+        let msg = e.message || "Erro ao conectar.";
         if (msg.includes("Invalid login")) msg = "Email ou senha incorretos.";
+        if (msg.includes("already registered")) msg = "Este email já está cadastrado.";
         showError(msg);
     } finally {
         setLoading(false);
