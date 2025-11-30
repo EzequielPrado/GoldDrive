@@ -151,6 +151,12 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleLogout = async () => {
+    setLoading(true);
+    await supabase.auth.signOut();
+    navigate('/login/admin');
+  };
+
   // --- ACTIONS DE GESTÃO ---
 
   const openEditUser = (user: any) => {
@@ -334,7 +340,7 @@ const AdminDashboard = () => {
                   {/* Header da Página */}
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-700">
                       <div><h1 className="text-4xl font-black tracking-tight text-slate-900 dark:text-white capitalize mb-1">{activeTab}</h1><p className="text-muted-foreground">Bem-vindo ao painel de controle.</p></div>
-                      <div className="flex gap-3"><Button variant="outline" className="rounded-xl h-12" onClick={fetchData}><RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Atualizar</Button><Button variant="destructive" className="rounded-xl h-12 font-bold px-6 shadow-red-500/20 shadow-lg" onClick={() => navigate('/')}><LogOut className="w-4 h-4 mr-2" /> Sair</Button></div>
+                      <div className="flex gap-3"><Button variant="outline" className="rounded-xl h-12" onClick={fetchData}><RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Atualizar</Button><Button variant="destructive" className="rounded-xl h-12 font-bold px-6 shadow-red-500/20 shadow-lg" onClick={handleLogout}><LogOut className="w-4 h-4 mr-2" /> Sair</Button></div>
                   </div>
 
                   {/* --- TAB: OVERVIEW --- */}
@@ -383,15 +389,16 @@ const AdminDashboard = () => {
                            <CardHeader className="flex flex-row items-center justify-between px-8 pt-8"><div><CardTitle className="text-2xl">Gerenciamento de Corridas</CardTitle><CardDescription>Total de {rides.length} corridas</CardDescription></div><div className="flex items-center gap-3"><Select value={filterStatus} onValueChange={setFilterStatus}><SelectTrigger className="w-[180px] h-10 rounded-xl bg-white dark:bg-slate-800"><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="ALL">Todos os Status</SelectItem><SelectItem value="COMPLETED">Finalizadas</SelectItem><SelectItem value="CANCELLED">Canceladas</SelectItem><SelectItem value="IN_PROGRESS">Em Andamento</SelectItem></SelectContent></Select></div></CardHeader>
                            <CardContent className="p-0">
                                <Table>
-                                   <TableHeader className="bg-slate-50/50 dark:bg-slate-800/50"><TableRow><TableHead className="pl-8">ID</TableHead><TableHead>Passageiro</TableHead><TableHead>Motorista</TableHead><TableHead>Status</TableHead><TableHead>Taxa App</TableHead><TableHead className="text-right pr-8">Valor Total</TableHead></TableRow></TableHeader>
+                                   <TableHeader className="bg-slate-50/50 dark:bg-slate-800/50"><TableRow><TableHead className="pl-8">ID</TableHead><TableHead>Passageiro</TableHead><TableHead>Motorista</TableHead><TableHead>Data/Hora</TableHead><TableHead>Status</TableHead><TableHead>Taxa (Lucro)</TableHead><TableHead className="text-right pr-8">Valor Total</TableHead></TableRow></TableHeader>
                                    <TableBody>
                                        {rides.filter(r => filterStatus === 'ALL' ? true : r.status === filterStatus).map(r => (
                                            <TableRow key={r.id} onClick={()=>setSelectedRide(r)} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b border-border/50">
                                                <TableCell className="pl-8 font-mono text-xs opacity-50">#{r.id.substring(0,8)}</TableCell>
                                                <TableCell><div className="flex items-center gap-3"><Avatar className="w-8 h-8"><AvatarImage src={r.customer?.avatar_url}/><AvatarFallback>{r.customer?.first_name?.[0]}</AvatarFallback></Avatar><span className="font-medium">{r.customer?.first_name || 'Usuário'}</span></div></TableCell>
                                                <TableCell>{r.driver ? <div className="flex items-center gap-3"><Avatar className="w-8 h-8"><AvatarImage src={r.driver?.avatar_url}/><AvatarFallback>{r.driver?.first_name?.[0]}</AvatarFallback></Avatar><div><p className="font-medium text-sm">{r.driver.first_name}</p></div></div> : <span className="text-muted-foreground text-sm italic">--</span>}</TableCell>
+                                               <TableCell><span className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleString('pt-BR')}</span></TableCell>
                                                <TableCell><Badge className={`rounded-lg px-3 py-1 ${r.status === 'COMPLETED' ? 'bg-green-100 text-green-700' : r.status === 'CANCELLED' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{r.status}</Badge></TableCell>
-                                               <TableCell className="font-bold text-slate-500">R$ {Number(r.platform_fee || 0).toFixed(2)}</TableCell>
+                                               <TableCell className="font-bold text-green-600">R$ {Number(r.platform_fee || 0).toFixed(2)}</TableCell>
                                                <TableCell className="text-right pr-8 font-bold text-base">R$ {Number(r.price).toFixed(2)}</TableCell>
                                            </TableRow>
                                        ))}
@@ -516,11 +523,25 @@ const AdminDashboard = () => {
                        </div>
                   </div>
 
-                  {/* Resumo Financeiro Admin */}
-                  <div className="space-y-2 border-t pt-4">
-                      <div className="flex justify-between"><span className="text-sm text-muted-foreground">Preço Total</span><span className="font-bold">R$ {Number(selectedRide?.price).toFixed(2)}</span></div>
-                      <div className="flex justify-between"><span className="text-sm text-muted-foreground">Ganho Motorista</span><span className="font-bold">R$ {Number(selectedRide?.driver_earnings).toFixed(2)}</span></div>
-                      <div className="flex justify-between text-green-600"><span className="text-sm font-bold uppercase">Taxa Admin (Lucro)</span><span className="font-black">R$ {Number(selectedRide?.platform_fee).toFixed(2)}</span></div>
+                  {/* Resumo Financeiro Detalhado */}
+                  <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 space-y-3 border border-border/50">
+                      <div className="flex justify-between items-center pb-2 border-b border-border/50">
+                          <span className="text-sm text-muted-foreground font-medium">Preço Cobrado</span>
+                          <span className="font-black text-lg">R$ {Number(selectedRide?.price).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm">
+                          <span className="text-muted-foreground">Repasse Motorista (80%)</span>
+                          <span className="font-bold">R$ {Number(selectedRide?.driver_earnings).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm">
+                          <span className="text-muted-foreground">Taxa Plataforma (20%)</span>
+                          <span className="font-bold text-green-600">R$ {Number(selectedRide?.platform_fee).toFixed(2)}</span>
+                      </div>
+                      {selectedRide?.payment_method && (
+                          <div className="pt-2 flex justify-end">
+                              <Badge variant="outline" className="text-xs">{selectedRide.payment_method === 'WALLET' ? 'Pago via Carteira' : 'Pago em Dinheiro'}</Badge>
+                          </div>
+                      )}
                   </div>
               </div>
           </DialogContent>
