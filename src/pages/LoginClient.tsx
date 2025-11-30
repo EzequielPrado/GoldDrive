@@ -25,6 +25,17 @@ const LoginClient = () => {
 
     setLoading(true);
 
+    // Timeout de segurança: Evita travamento infinito
+    const timeoutId = setTimeout(() => {
+        setLoading((current) => {
+            if (current) {
+                showError("O servidor demorou para responder. Verifique sua conexão.");
+                return false;
+            }
+            return false;
+        });
+    }, 15000);
+
     try {
         if(isSignUp) {
             // CADASTRO DIRETO
@@ -36,12 +47,24 @@ const LoginClient = () => {
 
             if(error) throw error;
             
+            clearTimeout(timeoutId);
+
             // Se cadastro deu certo e já tem sessão (sem confirmação de email), entra direto
             if (data.session) {
                 navigate('/client', { replace: true });
             } else {
-                showSuccess("Conta criada! Se necessário, verifique seu email.");
-                // Opcional: tentar login automático se não precisar confirmar email
+                showSuccess("Conta criada com sucesso!");
+                // Em alguns casos o supabase não loga direto se precisar de email confirm, 
+                // mas aqui assumimos que pode logar ou pede login
+                if (!data.user) {
+                     // Fallback raro
+                     setIsSignUp(false);
+                } else {
+                     // Tenta login automatico se a sessão não veio mas o user sim (raro em config padrao)
+                     const { data: loginData } = await supabase.auth.signInWithPassword({ email, password });
+                     if (loginData.session) navigate('/client', { replace: true });
+                     else setIsSignUp(false); // Volta pra tela de login
+                }
             }
         } else {
             // LOGIN DIRETO
@@ -52,9 +75,12 @@ const LoginClient = () => {
             
             if(error) throw error;
 
-            // Redirecionamento robusto (sem depender de leituras complexas)
             // Tenta ler o perfil, mas se falhar, assume 'client' se estiver nesta tela
             const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).maybeSingle();
+            
+            clearTimeout(timeoutId);
+            setLoading(false);
+
             const role = profile?.role || 'client';
 
             if (role === 'driver') navigate('/driver', { replace: true });
@@ -62,12 +88,13 @@ const LoginClient = () => {
             else navigate('/client', { replace: true });
         }
     } catch (e: any) {
+        clearTimeout(timeoutId);
+        setLoading(false);
         console.error(e);
         let msg = e.message || "Erro ao conectar.";
         if (msg.includes("Invalid login")) msg = "Email ou senha incorretos.";
+        if (msg.includes("already registered")) msg = "Este email já está cadastrado.";
         showError(msg);
-    } finally {
-        setLoading(false);
     }
   };
 
