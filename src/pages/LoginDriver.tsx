@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { showError, showSuccess } from "@/utils/toast";
-import { ArrowLeft, Loader2, ArrowRight, CheckCircle2, User, FileText, Camera, ShieldCheck, Mail, Lock, Phone, CreditCard, Eye, EyeOff, AlertCircle, Clock } from "lucide-react";
+import { ArrowLeft, Loader2, ArrowRight, Car, CheckCircle2, User, FileText, Camera, ShieldCheck, Mail, Lock, Phone, CreditCard, Eye, EyeOff, AlertCircle, Clock } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -355,7 +355,7 @@ const LoginDriver = () => {
                         <div className="space-y-1.5">
                             <Label className="text-slate-900 font-bold ml-1">Email</Label>
                             <div className="relative group">
-                                <Mail className={`absolute left-4 top-3.5 w-5 h-5 transition-colors ${errors.email ? 'text-red-500' : 'text-gray-400 group-focus-within:text-yellow-600'}`} />
+                                <Mail className={`absolute left-4 top-3.5 w-5 h-5 transition-colors ${errors.email ? 'text-red-500' : 'text-gray-400 group-focus-within:text-yellow-500'}`} />
                                 <Input 
                                     type="email" 
                                     className={`h-12 pl-12 bg-slate-50 border-slate-200 text-slate-900 rounded-xl transition-all ${errors.email ? 'border-red-500 ring-1 ring-red-500 bg-red-50' : 'focus:ring-2 focus:ring-yellow-500'}`} 
@@ -368,7 +368,7 @@ const LoginDriver = () => {
                         <div className="space-y-1.5">
                             <Label className="text-slate-900 font-bold ml-1">Senha</Label>
                             <div className="relative group">
-                                <Lock className={`absolute left-4 top-3.5 w-5 h-5 transition-colors ${errors.password ? 'text-red-500' : 'text-gray-400 group-focus-within:text-yellow-600'}`} />
+                                <Lock className={`absolute left-4 top-3.5 w-5 h-5 transition-colors ${errors.password ? 'text-red-500' : 'text-gray-400 group-focus-within:text-yellow-500'}`} />
                                 <Input 
                                     type={showPassword ? "text" : "password"}
                                     className={`h-12 pl-12 pr-12 bg-slate-50 border-slate-200 text-slate-900 rounded-xl transition-all ${errors.password ? 'border-red-500 ring-1 ring-red-500 bg-red-50' : 'focus:ring-2 focus:ring-yellow-500'}`} 
