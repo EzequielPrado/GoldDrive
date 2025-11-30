@@ -6,7 +6,7 @@ import {
   TrendingUp, Trash2, Edit, Mail, Search,
   CreditCard, Loader2, Save, AlertTriangle, Menu,
   Phone, Calendar, Star, CheckCircle2, FileText, XCircle, Banknote,
-  MapPin, Navigation, ArrowRight, KeyRound, ZoomIn, X
+  MapPin, Navigation, ArrowRight, KeyRound, ZoomIn, X, Send
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -53,7 +53,11 @@ const AdminDashboard = () => {
   // Aprovação Motorista
   const [requestModalOpen, setRequestModalOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
-  const [zoomedImage, setZoomedImage] = useState<string | null>(null); // Novo estado para zoom
+  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+  
+  // WhatsApp Notification State
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+  const [approvedDriverData, setApprovedDriverData] = useState<{name: string, phone: string} | null>(null);
   
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -125,14 +129,33 @@ const AdminDashboard = () => {
     } catch (e: any) { showError("Erro: " + e.message); } finally { setLoading(false); }
   };
 
-  const handleApproveDriver = async (id: string, approve: boolean) => {
+  const handleApproveDriver = async (id: string, approve: boolean, driverData: any) => {
       try {
           const status = approve ? 'APPROVED' : 'REJECTED';
           await supabase.from('profiles').update({ driver_status: status }).eq('id', id);
-          showSuccess(approve ? "Motorista aprovado!" : "Motorista reprovado.");
+          
+          if (approve) {
+              setApprovedDriverData({
+                  name: driverData.first_name,
+                  phone: driverData.phone || ''
+              });
+              setShowWhatsAppModal(true);
+          } else {
+              showSuccess("Motorista reprovado.");
+          }
+
           setRequestModalOpen(false);
           fetchData();
       } catch (e: any) { showError(e.message); }
+  };
+
+  const openWhatsApp = () => {
+      if (!approvedDriverData) return;
+      const cleanPhone = approvedDriverData.phone.replace(/\D/g, '');
+      const msg = `Olá ${approvedDriverData.name}! 🎉 Sua conta de motorista na GoldDrive foi aprovada. Acesse o app agora para começar a lucrar: https://golddrive.app/login`;
+      const url = `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(msg)}`;
+      window.open(url, '_blank');
+      setShowWhatsAppModal(false);
   };
 
   const handleTogglePayment = async (key: string, checked: boolean) => {
@@ -465,10 +488,10 @@ const AdminDashboard = () => {
               </div>
 
               <DialogFooter className="p-6 bg-white border-t gap-4">
-                  <Button variant="outline" className="flex-1 h-14 rounded-xl border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 font-bold" onClick={() => handleApproveDriver(selectedRequest.id, false)}>
+                  <Button variant="outline" className="flex-1 h-14 rounded-xl border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 font-bold" onClick={() => handleApproveDriver(selectedRequest.id, false, selectedRequest)}>
                       <XCircle className="mr-2 w-5 h-5"/> Reprovar Cadastro
                   </Button>
-                  <Button className="flex-1 h-14 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold shadow-lg shadow-green-600/20" onClick={() => handleApproveDriver(selectedRequest.id, true)}>
+                  <Button className="flex-1 h-14 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold shadow-lg shadow-green-600/20" onClick={() => handleApproveDriver(selectedRequest.id, true, selectedRequest)}>
                       <CheckCircle2 className="mr-2 w-5 h-5"/> Aprovar Motorista
                   </Button>
               </DialogFooter>
@@ -480,6 +503,27 @@ const AdminDashboard = () => {
           <DialogContent className="max-w-[90vw] h-[90vh] bg-black/95 border-0 p-0 flex items-center justify-center overflow-hidden">
               <button onClick={() => setZoomedImage(null)} className="absolute top-4 right-4 text-white hover:text-gray-300 z-50 bg-black/50 p-2 rounded-full"><X className="w-8 h-8"/></button>
               <img src={zoomedImage || ''} className="max-w-full max-h-full object-contain" alt="Zoom" />
+          </DialogContent>
+      </Dialog>
+
+      {/* MODAL NOTIFICAÇÃO WHATSAPP */}
+      <Dialog open={showWhatsAppModal} onOpenChange={setShowWhatsAppModal}>
+          <DialogContent className="bg-white rounded-[32px] border-0 text-center p-8 max-w-sm">
+             <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-in zoom-in">
+                 <CheckCircle2 className="w-10 h-10 text-green-600" />
+             </div>
+             <h2 className="text-2xl font-black text-slate-900 mb-2">Motorista Aprovado!</h2>
+             <p className="text-gray-500 mb-6">
+                 Deseja enviar uma mensagem automática de boas-vindas para <strong>{approvedDriverData?.name}</strong> no WhatsApp?
+             </p>
+             <div className="flex flex-col gap-3">
+                 <Button className="h-14 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl shadow-lg shadow-green-500/20" onClick={openWhatsApp}>
+                     <Send className="w-5 h-5 mr-2" /> Enviar Mensagem
+                 </Button>
+                 <Button variant="ghost" className="h-14 rounded-xl font-bold" onClick={() => setShowWhatsAppModal(false)}>
+                     Agora não
+                 </Button>
+             </div>
           </DialogContent>
       </Dialog>
       

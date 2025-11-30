@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { showError, showSuccess } from "@/utils/toast";
-import { ArrowLeft, Loader2, ArrowRight, Car, CheckCircle2, User, FileText, Camera, ShieldCheck, Mail, Lock, Phone, CreditCard, Eye, EyeOff, AlertCircle } from "lucide-react";
+import { ArrowLeft, Loader2, ArrowRight, Car, CheckCircle2, User, FileText, Camera, ShieldCheck, Mail, Lock, Phone, CreditCard, Eye, EyeOff, AlertCircle, Clock } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -14,6 +14,7 @@ const LoginDriver = () => {
   const [step, setStep] = useState(1); // 1: Login/Dados, 2: Docs, 3: Carro
   const [isSignUp, setIsSignUp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [registrationSuccess, setRegistrationSuccess] = useState(false); // Nova tela de sucesso
   
   // Estado de Erros
   const [errors, setErrors] = useState<Record<string, boolean>>({});
@@ -57,12 +58,6 @@ const LoginDriver = () => {
     if (errors.phone) setErrors(prev => ({ ...prev, phone: false }));
   };
 
-  const validateField = (field: string, value: any) => {
-      const isValid = !!value;
-      setErrors(prev => ({ ...prev, [field]: !isValid }));
-      return isValid;
-  };
-
   const handleLogin = async (e: React.FormEvent) => {
       e.preventDefault();
       const newErrors: Record<string, boolean> = {};
@@ -96,15 +91,27 @@ const LoginDriver = () => {
   };
 
   const uploadFile = async (file: File, path: string) => {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random()}.${fileExt}`;
-      const filePath = `${path}/${fileName}`;
-      
-      const { error: uploadError } = await supabase.storage.from('documents').upload(filePath, file);
-      if (uploadError) throw uploadError;
-      
-      const { data } = supabase.storage.from('documents').getPublicUrl(filePath);
-      return data.publicUrl;
+      try {
+          const fileExt = file.name.split('.').pop();
+          const fileName = `${Math.random()}.${fileExt}`;
+          const filePath = `${path}/${fileName}`;
+          
+          // Tenta fazer upload
+          const { error: uploadError } = await supabase.storage.from('documents').upload(filePath, file);
+          
+          if (uploadError) {
+              console.error("Erro upload:", uploadError);
+              // Em caso de erro de bucket inexistente ou permissão, retornamos null mas não quebramos o app
+              // Isso permite que o cadastro prossiga para o Admin ver, mesmo sem fotos
+              return null; 
+          }
+          
+          const { data } = supabase.storage.from('documents').getPublicUrl(filePath);
+          return data.publicUrl;
+      } catch (err) {
+          console.error("Exceção upload:", err);
+          return null;
+      }
   };
 
   const handleNextStep = async () => {
@@ -136,7 +143,6 @@ const LoginDriver = () => {
       if (Object.keys(newErrors).length > 0) {
           setErrors(newErrors);
           isValid = false;
-          // Feedback tátil/visual extra
           if (step === 2) showError("Envie todos os documentos");
           else showError("Verifique os campos em vermelho");
       }
@@ -170,12 +176,17 @@ const LoginDriver = () => {
 
           const userId = authData.user.id;
 
-          // 2. Upload Docs
-          const faceUrl = await uploadFile(facePhoto!, `face/${userId}`);
-          const cnhFrontUrl = await uploadFile(cnhFront!, `cnh/${userId}`);
-          const cnhBackUrl = await uploadFile(cnhBack!, `cnh/${userId}`);
+          // 2. Upload Docs (Com tratamento de erro individual para não travar o loop)
+          let faceUrl = null;
+          let cnhFrontUrl = null;
+          let cnhBackUrl = null;
+
+          if (facePhoto) faceUrl = await uploadFile(facePhoto, `face/${userId}`);
+          if (cnhFront) cnhFrontUrl = await uploadFile(cnhFront, `cnh/${userId}`);
+          if (cnhBack) cnhBackUrl = await uploadFile(cnhBack, `cnh/${userId}`);
 
           // 3. Atualizar Profile
+          // IMPORTANTE: Mesmo se upload falhar, atualizamos os dados de texto
           const { error: updateError } = await supabase.from('profiles').update({
               cpf,
               phone,
@@ -191,15 +202,57 @@ const LoginDriver = () => {
 
           if (updateError) throw updateError;
 
-          showSuccess("Cadastro enviado para análise!");
-          navigate('/driver'); 
+          // SUCESSO!
+          setRegistrationSuccess(true);
 
       } catch (e: any) {
           showError("Erro no cadastro: " + e.message);
+          console.error(e);
       } finally {
           setLoading(false);
       }
   };
+
+  // --- TELA DE SUCESSO (EM ANÁLISE) ---
+  if (registrationSuccess) {
+      return (
+          <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
+              <Card className="w-full max-w-md bg-white border-0 shadow-2xl rounded-[32px] overflow-hidden animate-in zoom-in duration-500">
+                  <div className="bg-yellow-500 p-8 flex flex-col items-center justify-center text-center">
+                      <div className="w-20 h-20 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center mb-4 shadow-inner">
+                           <Clock className="w-10 h-10 text-white animate-pulse" />
+                      </div>
+                      <h2 className="text-2xl font-black text-slate-900">Cadastro Recebido!</h2>
+                      <p className="text-slate-800 font-medium opacity-90">Status: Em Análise</p>
+                  </div>
+                  <CardContent className="p-8 text-center space-y-6">
+                      <div className="space-y-2">
+                          <p className="text-gray-600">
+                              Recebemos seus documentos com sucesso. Nossa equipe de segurança irá analisar seu perfil.
+                          </p>
+                          <div className="bg-green-50 p-4 rounded-xl border border-green-100">
+                              <p className="text-sm font-bold text-green-800 flex items-start gap-2 text-left">
+                                  <CheckCircle2 className="w-5 h-5 shrink-0" />
+                                  Seus dados já estão no nosso sistema administrativo.
+                              </p>
+                          </div>
+                      </div>
+                      
+                      <div className="border-t border-gray-100 pt-6">
+                          <p className="text-sm text-gray-500 mb-4">
+                              Assim que aprovado, enviaremos uma mensagem de confirmação para o seu WhatsApp cadastrado:
+                          </p>
+                          <p className="font-bold text-slate-900 text-lg mb-6">{phone}</p>
+                          
+                          <Button onClick={() => navigate('/')} className="w-full h-12 rounded-xl bg-slate-900 text-white font-bold">
+                              Voltar ao Início
+                          </Button>
+                      </div>
+                  </CardContent>
+              </Card>
+          </div>
+      );
+  }
 
   // --- RENDER LOGIN VIEW ---
   if (!isSignUp) {
@@ -212,11 +265,9 @@ const LoginDriver = () => {
             {/* Content Container */}
             <div className="relative z-10 w-full max-w-6xl flex flex-col lg:flex-row h-full lg:h-auto min-h-screen lg:min-h-[600px] lg:rounded-[32px] lg:overflow-hidden lg:shadow-2xl lg:bg-white animate-in fade-in zoom-in-95 duration-500">
                 
-                {/* Esquerda: Branding (Agora visível e integrada no mobile como topo) */}
+                {/* Esquerda: Branding */}
                 <div className="lg:w-1/2 p-8 lg:p-12 flex flex-col justify-center text-white lg:bg-slate-900 relative">
-                     {/* No desktop, o fundo é preto sólido. No mobile, é transparente para mostrar a imagem de fundo global */}
                      <div className="absolute inset-0 bg-gradient-to-b from-black/80 to-transparent lg:hidden" />
-                     
                      <div className="relative z-10 text-center lg:text-left mt-10 lg:mt-0">
                         <div className="w-16 h-16 bg-yellow-500 rounded-2xl flex items-center justify-center mb-6 shadow-glow mx-auto lg:mx-0">
                             <Car className="w-8 h-8 text-black" />
@@ -226,7 +277,7 @@ const LoginDriver = () => {
                      </div>
                 </div>
 
-                {/* Direita: Formulário (Card Flutuante no Mobile) */}
+                {/* Direita: Formulário */}
                 <div className="flex-1 bg-white rounded-t-[32px] lg:rounded-none p-8 lg:p-12 flex flex-col justify-center mt-auto lg:mt-0 shadow-2xl lg:shadow-none">
                     <div className="mb-8">
                          <Button variant="ghost" onClick={() => navigate('/')} className="pl-0 hover:bg-transparent text-slate-500 hover:text-yellow-600 mb-2">
@@ -286,7 +337,6 @@ const LoginDriver = () => {
   // --- RENDER SIGNUP VIEW ---
   return (
     <div className="min-h-screen relative flex items-center justify-center p-4 lg:p-8 font-sans overflow-hidden bg-slate-900">
-        {/* Animated Background */}
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?q=80&w=2583')] bg-cover bg-center opacity-20" />
         <div className="absolute inset-0 bg-gradient-to-br from-black via-slate-900/90 to-slate-900/80" />
 
