@@ -7,7 +7,7 @@ import {
   CreditCard, BellRing, Save, AlertTriangle, Smartphone, Globe,
   Menu, Banknote, FileText, Check, X, ExternalLink, Camera, User,
   Moon as MoonIcon, List, Plus, Power, Pencil, Star, Calendar, ArrowUpRight, ArrowDownLeft,
-  Activity, BarChart3, PieChart, Coins, Lock, Unlock, Calculator, Info, MapPin, Zap
+  Activity, BarChart3, PieChart, Coins, Lock, Unlock, Calculator, Info, MapPin, Zap, XCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -938,6 +938,22 @@ const AdminDashboard = () => {
               <AlertDialogFooter>
                   <AlertDialogCancel className="rounded-xl">Revisar</AlertDialogCancel>
                   <AlertDialogAction onClick={handleSaveConfig} className="bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold">Salvar Definitivamente</AlertDialogAction>
+              </AlertDialogFooter>
+          </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showStrategySaveAlert} onOpenChange={setShowStrategySaveAlert}>
+          <AlertDialogContent className="rounded-[24px]">
+              <AlertDialogHeader>
+                  <AlertDialogTitle className="flex items-center gap-2 text-blue-600"><Settings className="w-5 h-5"/> Alterar Estratégia de Preço</AlertDialogTitle>
+                  <AlertDialogDescription>
+                      Você está alterando a forma como o preço das corridas é calculado. 
+                      Isso afetará todas as novas solicitações imediatamente. Tem certeza?
+                  </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                  <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleSaveConfig} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold">Confirmar Mudança</AlertDialogAction>
               </AlertDialogFooter>
           </AlertDialogContent>
       </AlertDialog>
