@@ -455,7 +455,6 @@ const AdminDashboard = () => {
               <div className="max-w-7xl mx-auto space-y-8 pb-20">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-700"><div><h1 className="text-4xl font-black tracking-tight text-slate-900 dark:text-white capitalize mb-1">{activeTab === 'requests' ? 'Solicitações' : activeTab === 'overview' ? 'Painel Geral' : activeTab === 'rides' ? 'Corridas' : activeTab === 'users' ? 'Passageiros' : activeTab === 'drivers' ? 'Motoristas' : activeTab === 'finance' ? 'Financeiro' : 'Configurações'}</h1><p className="text-muted-foreground">Bem-vindo ao painel de controle.</p></div><div className="flex gap-3"><Button variant="outline" className="rounded-xl h-12" onClick={() => fetchData(true)}><RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Atualizar</Button><Button variant="destructive" className="rounded-xl h-12 font-bold px-6 shadow-red-500/20 shadow-lg" onClick={handleLogout}><LogOut className="w-4 h-4 mr-2" /> Sair</Button></div></div>
 
-                  {/* TABS CONTENT */}
                   {activeTab === 'overview' && (
                       <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-6"><StatCard title="Valor Total Corridas" value={`R$ ${stats.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={DollarSign} colorClass="bg-green-500" description="Volume transacionado em viagens" />{!config.isSubscriptionMode && (<><StatCard title="Lucro Plataforma" value={`R$ ${stats.adminRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={Wallet} colorClass="bg-blue-500" subtext={`${config.platformFee}% taxa`} /><StatCard title="Repasse Motoristas" value={`R$ ${stats.driverEarnings.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={Coins} colorClass="bg-orange-500" description="Valor distribuído" /></>)}<StatCard title="Cadastros Pendentes" value={pendingDrivers.length} icon={FileText} colorClass="bg-yellow-500" description="Aguardando aprovação" /></div>
@@ -470,7 +469,60 @@ const AdminDashboard = () => {
                   
                   {activeTab === 'users' && <UserManagementTable data={passengers} type="client" />}
                   {activeTab === 'drivers' && <UserManagementTable data={drivers} type="driver" />}
-                  {activeTab === 'finance' && <div className="space-y-6 animate-in fade-in slide-in-from-bottom-8"><div className="grid grid-cols-1 md:grid-cols-2 gap-8"><div className="bg-slate-900 text-white rounded-[32px] p-8 shadow-2xl relative overflow-hidden h-64 flex flex-col justify-between group hover:scale-[1.01] transition-transform"><div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-yellow-500/20 to-transparent rounded-full blur-[80px]" /><div className="relative z-10 flex justify-between items-start"><CreditCard className="w-10 h-10 text-yellow-500" /><span className="font-mono text-sm opacity-60">GOLD MOBILE</span></div><div className="relative z-10"><p className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-1">Saldo Disponível</p><h2 className="text-5xl font-black tracking-tight">R$ {stats.adminRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h2></div><div className="relative z-10 flex justify-between items-end"><div><p className="text-xs text-slate-500 uppercase font-bold">Titular</p><p className="font-bold">ADMINISTRADOR</p></div><div className="flex gap-2"><div className="w-8 h-8 rounded-full bg-red-500/80" /><div className="w-8 h-8 rounded-full bg-yellow-500/80 -ml-4" /></div></div></div><Card className="border-0 shadow-xl bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[32px] overflow-hidden"><CardHeader><CardTitle>Histórico de Transações</CardTitle></CardHeader><CardContent className="p-0"><Table><TableHeader className="bg-slate-50/50 dark:bg-slate-800/50"><TableRow><TableHead className="pl-8">Descrição</TableHead><TableHead>Usuário</TableHead><TableHead>Data</TableHead><TableHead className="text-right pr-8">Valor</TableHead></TableRow></TableHeader><TableBody>{transactions.map((t, i) => (<TableRow key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-border/50"><TableCell className="pl-8 font-bold">{t.description}</TableCell><TableCell>{t.user}</TableCell><TableCell className="text-muted-foreground">{new Date(t.date).toLocaleDateString()}</TableCell><TableCell className="text-right pr-8 font-black text-green-600">+ R$ {t.amount.toFixed(2)}</TableCell></TableRow>))}</TableBody></Table></CardContent></Card></div>}
+                  {activeTab === 'finance' && (
+                      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-8">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                              <div className="bg-slate-900 text-white rounded-[32px] p-8 shadow-2xl relative overflow-hidden h-64 flex flex-col justify-between group hover:scale-[1.01] transition-transform">
+                                  <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-yellow-500/20 to-transparent rounded-full blur-[80px]" />
+                                  <div className="relative z-10 flex justify-between items-start">
+                                      <CreditCard className="w-10 h-10 text-yellow-500" />
+                                      <span className="font-mono text-sm opacity-60">GOLD MOBILE</span>
+                                  </div>
+                                  <div className="relative z-10">
+                                      <p className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-1">Saldo Disponível</p>
+                                      <h2 className="text-5xl font-black tracking-tight">R$ {stats.adminRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h2>
+                                  </div>
+                                  <div className="relative z-10 flex justify-between items-end">
+                                      <div>
+                                          <p className="text-xs text-slate-500 uppercase font-bold">Titular</p>
+                                          <p className="font-bold">ADMINISTRADOR</p>
+                                      </div>
+                                      <div className="flex gap-2">
+                                          <div className="w-8 h-8 rounded-full bg-red-500/80" />
+                                          <div className="w-8 h-8 rounded-full bg-yellow-500/80 -ml-4" />
+                                      </div>
+                                  </div>
+                              </div>
+                              <Card className="border-0 shadow-xl bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[32px] overflow-hidden">
+                                  <CardHeader>
+                                      <CardTitle>Histórico de Transações</CardTitle>
+                                  </CardHeader>
+                                  <CardContent className="p-0">
+                                      <Table>
+                                          <TableHeader className="bg-slate-50/50 dark:bg-slate-800/50">
+                                              <TableRow>
+                                                  <TableHead className="pl-8">Descrição</TableHead>
+                                                  <TableHead>Usuário</TableHead>
+                                                  <TableHead>Data</TableHead>
+                                                  <TableHead className="text-right pr-8">Valor</TableHead>
+                                              </TableRow>
+                                          </TableHeader>
+                                          <TableBody>
+                                              {transactions.map((t, i) => (
+                                                  <TableRow key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-border/50">
+                                                      <TableCell className="pl-8 font-bold">{t.description}</TableCell>
+                                                      <TableCell>{t.user}</TableCell>
+                                                      <TableCell className="text-muted-foreground">{new Date(t.date).toLocaleDateString()}</TableCell>
+                                                      <TableCell className="text-right pr-8 font-black text-green-600">+ R$ {t.amount.toFixed(2)}</TableCell>
+                                                  </TableRow>
+                                              ))}
+                                          </TableBody>
+                                      </Table>
+                                  </CardContent>
+                              </Card>
+                          </div>
+                      </div>
+                  )}
 
                   {/* CONFIGURAÇÕES (NOVO LAYOUT) */}
                   {activeTab === 'config' && (
@@ -742,6 +794,9 @@ const AdminDashboard = () => {
                                                                                   className="pl-9 font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 rounded-xl"
                                                                               />
                                                                           </div>
+                                                                      </TableCell>
+                                                                      <TableCell className="text-xs text-muted-foreground text-right pr-6">
+                                                                          <Pencil className="w-4 h-4 opacity-50" />
                                                                       </TableCell>
                                                                   </TableRow>
                                                               ))}
