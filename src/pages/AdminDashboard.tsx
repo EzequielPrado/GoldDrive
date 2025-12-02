@@ -7,7 +7,7 @@ import {
   CreditCard, BellRing, Save, AlertTriangle, Smartphone, Globe,
   Menu, Banknote, FileText, Check, X, ExternalLink, Camera, User,
   Moon as MoonIcon, List, Plus, Power, Pencil, Star, Calendar, ArrowUpRight, ArrowDownLeft,
-  Activity, BarChart3, PieChart
+  Activity, BarChart3, PieChart, Coins
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -43,6 +43,7 @@ const AdminDashboard = () => {
   const [stats, setStats] = useState({ 
       revenue: 0, 
       adminRevenue: 0, 
+      driverEarnings: 0,
       ridesToday: 0, 
       ridesWeek: 0, 
       ridesMonth: 0,
@@ -72,7 +73,7 @@ const AdminDashboard = () => {
 
   // Configurações
   const [config, setConfig] = useState({
-      platformFee: "20",
+      platformFee: "10", // Default 10%
       enableCash: true,
       enableWallet: true,
   });
@@ -171,6 +172,7 @@ const AdminDashboard = () => {
 
         const totalRevenue = currentRides.filter(r => r.status === 'COMPLETED').reduce((acc, curr) => acc + (Number(curr.price) || 0), 0);
         const adminRev = currentRides.reduce((acc, curr) => acc + (Number(curr.platform_fee) || 0), 0);
+        const driverEarn = currentRides.reduce((acc, curr) => acc + (Number(curr.driver_earnings) || 0), 0);
         
         // Active Rides
         const activeCount = currentRides.filter(r => ['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(r.status)).length;
@@ -198,7 +200,8 @@ const AdminDashboard = () => {
         
         setStats({ 
             revenue: totalRevenue, 
-            adminRevenue: adminRev, 
+            adminRevenue: adminRev,
+            driverEarnings: driverEarn, 
             ridesToday: ridesTodayCount, 
             ridesWeek: ridesWeekCount,
             ridesMonth: ridesMonthCount,
@@ -221,9 +224,6 @@ const AdminDashboard = () => {
   const handleLogout = async () => {
     setLoading(true);
     try {
-      if (adminProfile?.role === 'driver') {
-          await supabase.from('profiles').update({ is_online: false }).eq('id', adminProfile.id);
-      }
       Object.keys(localStorage).forEach(key => {
         if (key.includes('supabase') || key.includes('golddrive') || key.includes('sb-')) {
           localStorage.removeItem(key);
@@ -347,7 +347,12 @@ const AdminDashboard = () => {
           }
 
           for (const cat of categories) {
-              const { error: catError } = await supabase.from('car_categories').update({ name: cat.name, active: cat.active }).eq('id', cat.id);
+              const { error: catError } = await supabase.from('car_categories').update({ 
+                  base_fare: cat.base_fare,
+                  cost_per_km: cat.cost_per_km,
+                  min_fare: cat.min_fare,
+                  active: cat.active 
+              }).eq('id', cat.id);
               if (catError) throw catError;
           }
 
@@ -532,28 +537,28 @@ const AdminDashboard = () => {
                   {activeTab === 'overview' && (
                       <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
                           
-                          {/* LINHA 1: FINANCEIRO E PENDÊNCIAS */}
+                          {/* LINHA 1: FINANCEIRO */}
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                               <StatCard 
-                                title="Valor Total Corridas" 
+                                title="Faturamento Total" 
                                 value={`R$ ${stats.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} 
                                 icon={DollarSign} 
                                 colorClass="bg-green-500" 
-                                description="Volume transacionado em viagens" 
+                                description="Valor total gerado por corridas" 
                               />
                               <StatCard 
-                                title="Lucro Plataforma" 
+                                title="Lucro Plataforma (10%)" 
                                 value={`R$ ${stats.adminRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} 
                                 icon={Wallet} 
                                 colorClass="bg-blue-500" 
                                 subtext={`${config.platformFee}% taxa`} 
                               />
                               <StatCard 
-                                title="Cadastros Pendentes" 
-                                value={pendingDrivers.length} 
-                                icon={FileText} 
+                                title="Repasse Motoristas" 
+                                value={`R$ ${stats.driverEarnings.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} 
+                                icon={Coins} 
                                 colorClass="bg-orange-500" 
-                                description="Aguardando aprovação" 
+                                description="Valor distribuído" 
                               />
                           </div>
 
@@ -676,7 +681,7 @@ const AdminDashboard = () => {
                               <TabsList className="bg-slate-200 dark:bg-slate-800 rounded-xl p-1 mb-6">
                                   <TabsTrigger value="general" className="rounded-lg">Geral</TabsTrigger>
                                   <TabsTrigger value="values" className="rounded-lg">Valores & Tabela</TabsTrigger>
-                                  <TabsTrigger value="categories" className="rounded-lg">Categorias</TabsTrigger>
+                                  <TabsTrigger value="categories" className="rounded-lg">Categorias (Abas)</TabsTrigger>
                               </TabsList>
 
                               <TabsContent value="general">
@@ -751,17 +756,6 @@ const AdminDashboard = () => {
                                                   </div>
                                               </CardContent>
                                           </Card>
-
-                                          <Card className="border-0 bg-yellow-100 border-yellow-200 text-yellow-900 rounded-[32px]">
-                                              <CardContent className="p-6">
-                                                  <h4 className="font-bold mb-2 flex items-center gap-2"><AlertTriangle className="w-4 h-4"/> Regras Importantes</h4>
-                                                  <ul className="text-sm space-y-2 list-disc list-inside">
-                                                      <li>Acima de 8 km o valor é negociado ou calculado livremente.</li>
-                                                      <li>Paradas e "Bate e Volta" devem ser combinados no chat.</li>
-                                                      <li>Estas configurações afetam o cálculo automático do app para o passageiro.</li>
-                                                  </ul>
-                                              </CardContent>
-                                          </Card>
                                       </div>
 
                                       {/* Coluna Direita: Tabela de Preços */}
@@ -769,7 +763,7 @@ const AdminDashboard = () => {
                                           <Card className="border-0 shadow-xl bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[32px] overflow-hidden">
                                               <CardHeader className="flex flex-row items-center justify-between">
                                                   <div>
-                                                      <CardTitle className="flex items-center gap-2"><List className="w-5 h-5" /> Tabela de Preços Fixa</CardTitle>
+                                                      <CardTitle className="flex items-center gap-2"><List className="w-5 h-5" /> Tabela de Preços Fixa (GoldPromo)</CardTitle>
                                                       <CardDescription>Defina o valor cobrado por distância.</CardDescription>
                                                   </div>
                                                   <Button onClick={handleSaveConfig} disabled={loading} className="bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg"><Save className="w-4 h-4 mr-2" /> Salvar Alterações</Button>
@@ -820,38 +814,60 @@ const AdminDashboard = () => {
                               </TabsContent>
 
                               <TabsContent value="categories">
-                                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                      <Card className="border-0 shadow-xl bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[32px] overflow-hidden">
-                                          <CardHeader className="flex flex-row items-center justify-between">
-                                              <div>
-                                                  <CardTitle className="flex items-center gap-2"><Car className="w-5 h-5" /> Categorias de Veículos</CardTitle>
-                                                  <CardDescription>Ative, desative ou renomeie as categorias.</CardDescription>
-                                              </div>
-                                              <Button onClick={handleSaveConfig} disabled={loading} className="bg-slate-900 text-white font-bold rounded-xl"><Save className="w-4 h-4 mr-2" /> Salvar</Button>
-                                          </CardHeader>
-                                          <CardContent className="p-0">
-                                              <Table>
-                                                  <TableHeader className="bg-slate-100 dark:bg-slate-800"><TableRow><TableHead className="pl-6">Nome da Categoria</TableHead><TableHead className="text-right pr-6">Status</TableHead></TableRow></TableHeader>
-                                                  <TableBody>
-                                                      {categories.map(cat => (
-                                                          <TableRow key={cat.id} className="hover:bg-slate-50">
-                                                              <TableCell className="pl-6">
-                                                                  <Input value={cat.name} onChange={e => updateCategory(cat.id, 'name', e.target.value)} className="font-bold border-0 bg-transparent focus-visible:ring-0 p-0 h-auto text-base" />
-                                                                  <p className="text-xs text-muted-foreground mt-1">{cat.description}</p>
-                                                              </TableCell>
-                                                              <TableCell className="text-right pr-6">
-                                                                  <div className="flex items-center justify-end gap-2">
-                                                                      <span className={`text-xs font-bold ${cat.active ? 'text-green-600' : 'text-slate-400'}`}>{cat.active ? 'ATIVA' : 'INATIVA'}</span>
-                                                                      <Switch checked={cat.active} onCheckedChange={(val) => updateCategory(cat.id, 'active', val)} />
+                                  {categories.length > 0 && (
+                                      <Tabs defaultValue={categories[0].id} className="w-full">
+                                          <TabsList className="bg-slate-100 dark:bg-slate-900 p-1 mb-4 flex-wrap h-auto">
+                                              {categories.map(cat => (
+                                                  <TabsTrigger key={cat.id} value={cat.id} className="rounded-lg">{cat.name}</TabsTrigger>
+                                              ))}
+                                          </TabsList>
+                                          
+                                          {categories.map(cat => (
+                                              <TabsContent key={cat.id} value={cat.id}>
+                                                  <Card className="border-0 shadow-xl bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[32px] overflow-hidden">
+                                                      <CardHeader className="flex flex-row items-center justify-between">
+                                                          <div>
+                                                              <CardTitle className="flex items-center gap-2">Configurar {cat.name}</CardTitle>
+                                                              <CardDescription>Ajuste os valores base para esta categoria.</CardDescription>
+                                                          </div>
+                                                          <div className="flex items-center gap-2">
+                                                              <Label className="text-sm font-bold">Ativa</Label>
+                                                              <Switch checked={cat.active} onCheckedChange={(val) => updateCategory(cat.id, 'active', val)} />
+                                                          </div>
+                                                      </CardHeader>
+                                                      <CardContent className="space-y-6">
+                                                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                              <div className="space-y-2">
+                                                                  <Label>Valor Base (Bandeirada)</Label>
+                                                                  <div className="relative">
+                                                                      <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">R$</span>
+                                                                      <Input type="number" value={cat.base_fare} onChange={e => updateCategory(cat.id, 'base_fare', e.target.value)} className="pl-10 h-12 rounded-xl" />
                                                                   </div>
-                                                              </TableCell>
-                                                          </TableRow>
-                                                      ))}
-                                                  </TableBody>
-                                              </Table>
-                                          </CardContent>
-                                      </Card>
-                                  </div>
+                                                              </div>
+                                                              <div className="space-y-2">
+                                                                  <Label>Custo por KM</Label>
+                                                                  <div className="relative">
+                                                                      <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">R$</span>
+                                                                      <Input type="number" value={cat.cost_per_km} onChange={e => updateCategory(cat.id, 'cost_per_km', e.target.value)} className="pl-10 h-12 rounded-xl" />
+                                                                  </div>
+                                                              </div>
+                                                              <div className="space-y-2">
+                                                                  <Label>Valor Mínimo da Corrida</Label>
+                                                                  <div className="relative">
+                                                                      <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">R$</span>
+                                                                      <Input type="number" value={cat.min_fare} onChange={e => updateCategory(cat.id, 'min_fare', e.target.value)} className="pl-10 h-12 rounded-xl" />
+                                                                  </div>
+                                                              </div>
+                                                          </div>
+                                                      </CardContent>
+                                                      <CardFooter>
+                                                          <Button onClick={handleSaveConfig} className="w-full bg-slate-900 text-white font-bold h-12 rounded-xl"><Save className="w-4 h-4 mr-2" /> Salvar Configuração de {cat.name}</Button>
+                                                      </CardFooter>
+                                                  </Card>
+                                              </TabsContent>
+                                          ))}
+                                      </Tabs>
+                                  )}
                               </TabsContent>
                           </Tabs>
                       </div>

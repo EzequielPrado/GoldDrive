@@ -318,8 +318,10 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
   const finishRide = async (rideId: string) => {
       if (!ride) return;
       const price = Number(ride.price);
-      const driverEarn = price * 0.8;
-      const platformFee = price * 0.2;
+      
+      // TAXA: 10%
+      const platformFee = price * 0.1;
+      const driverEarn = price - platformFee; // 90%
 
       await supabase.from('rides').update({ status: 'COMPLETED', driver_earnings: driverEarn, platform_fee: platformFee }).eq('id', rideId);
       
@@ -338,6 +340,7 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
                });
           }
       } else {
+          // Em dinheiro, o motorista recebeu tudo. Desconta os 10% do saldo dele.
           if (ride.driver_id) {
                const { data: dProfile } = await supabase.from('profiles').select('balance').eq('id', ride.driver_id).single();
                await supabase.from('profiles').update({ balance: (dProfile?.balance || 0) - platformFee }).eq('id', ride.driver_id);
