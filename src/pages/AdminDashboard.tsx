@@ -180,18 +180,24 @@ const AdminDashboard = () => {
   };
 
   const handleLogout = async () => {
+    setLoading(true);
     try {
-        setLoading(true);
-        // Tenta fazer logout no Supabase
-        await supabase.auth.signOut();
-    } catch (error) {
-        console.error("Erro ao fazer logout:", error);
-    } finally {
-        // Força limpeza local e redirecionamento, independente de erro no Supabase
-        localStorage.clear();
-        sessionStorage.clear();
-        // Usar window.location.replace para garantir que a página seja recarregada e o estado limpo
-        window.location.replace('/login/admin');
+      // Limpar localStorage manualmente
+      Object.keys(localStorage).forEach(key => {
+        if (key.includes('supabase') || key.includes('golddrive') || key.includes('sb-')) {
+          localStorage.removeItem(key);
+        }
+      });
+      
+      // Fazer signOut
+      await supabase.auth.signOut({ scope: 'global' });
+      
+      // Redirecionar forçando reload
+      window.location.href = '/';
+      
+    } catch (error: any) {
+      console.error('Erro logout:', error);
+      window.location.href = '/';
     }
   };
 
