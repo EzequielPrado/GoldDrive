@@ -76,7 +76,7 @@ const AdminDashboard = () => {
       platformFee: "10", 
       enableCash: true,
       enableWallet: true,
-      isSubscriptionMode: false // Novo: Modo Mensalidade
+      isSubscriptionMode: false 
   });
   
   // Tabela de Preços e Configs
@@ -116,8 +116,8 @@ const AdminDashboard = () => {
           setStats(prev => ({ ...prev, driversOnline: count || 0 }));
       };
 
-      const interval = setInterval(fetchOnlineCount, 5000); // Atualiza a cada 5s
-      fetchOnlineCount(); // Primeira execução
+      const interval = setInterval(fetchOnlineCount, 5000); 
+      fetchOnlineCount(); 
       return () => clearInterval(interval);
   }, []);
 
@@ -137,7 +137,6 @@ const AdminDashboard = () => {
             }
         }
 
-        // 1. Buscar Corridas
         const { data: ridesData } = await supabase
             .from('rides')
             .select(`*, driver:profiles!public_rides_driver_id_fkey(*), customer:profiles!public_rides_customer_id_fkey(*)`)
@@ -145,7 +144,6 @@ const AdminDashboard = () => {
         const currentRides = ridesData || [];
         setRides(currentRides);
 
-        // 2. Buscar Perfis
         const { data: profilesData } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
         const allProfiles = profilesData || [];
         setPassengers(allProfiles.filter((p: any) => p.role === 'client'));
@@ -154,7 +152,6 @@ const AdminDashboard = () => {
         setDrivers(allDrivers);
         setPendingDrivers(allDrivers.filter((p: any) => p.driver_status === 'PENDING'));
 
-        // 3. Buscar Configurações Básicas
         const { data: settingsData } = await supabase.from('app_settings').select('*');
         if (settingsData) {
             const cash = settingsData.find(s => s.key === 'enable_cash');
@@ -169,7 +166,6 @@ const AdminDashboard = () => {
             }));
         }
 
-        // 4. Buscar Tabela de Preços e Categorias
         const { data: pricingData } = await supabase.from('pricing_tiers').select('*').order('display_order', { ascending: true });
         if (pricingData) setPricingTiers(pricingData);
 
@@ -182,16 +178,14 @@ const AdminDashboard = () => {
             adminConfigData.forEach((item: any) => newConf[item.key] = item.value);
             setAdminConfigs(prev => ({ ...prev, ...newConf }));
             
-            // Sincronizar o estado local config.platformFee com o que veio do banco
             if (newConf.platform_fee) {
                 setConfig(prev => ({ ...prev, platformFee: newConf.platform_fee }));
             }
         }
 
-        // 5. Calcular Estatísticas
         const now = new Date();
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay())); // Domingo
+        const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
         const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
         const ridesTodayCount = currentRides.filter(r => new Date(r.created_at) >= startOfDay).length;
@@ -202,13 +196,9 @@ const AdminDashboard = () => {
         const adminRev = currentRides.reduce((acc, curr) => acc + (Number(curr.platform_fee) || 0), 0);
         const driverEarn = currentRides.reduce((acc, curr) => acc + (Number(curr.driver_earnings) || 0), 0);
         
-        // Active Rides
         const activeCount = currentRides.filter(r => ['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(r.status)).length;
-        
-        // Drivers Online (Contagem inicial, depois o effect atualiza)
         const driversOnlineCount = allDrivers.filter((d: any) => d.is_online).length;
 
-        // Gráfico
         const chartMap = new Map();
         for(let i=6; i>=0; i--) {
             const d = new Date(); d.setDate(d.getDate() - i);
@@ -253,9 +243,6 @@ const AdminDashboard = () => {
   const handleLogout = async () => {
     setLoading(true);
     try {
-      if (adminProfile?.role === 'driver') {
-          await supabase.from('profiles').update({ is_online: false }).eq('id', adminProfile.id);
-      }
       Object.keys(localStorage).forEach(key => {
         if (key.includes('supabase') || key.includes('golddrive') || key.includes('sb-')) {
           localStorage.removeItem(key);
@@ -269,7 +256,6 @@ const AdminDashboard = () => {
     }
   };
 
-  // ... (User Detail Logic) ...
   const openUserDetail = async (user: any) => {
       setDetailUser(user);
       setIsDetailLoading(true);
@@ -359,7 +345,7 @@ const AdminDashboard = () => {
           
           setDetailUser(prev => ({ ...prev, is_blocked: newStatus }));
           showSuccess(newStatus ? "Usuário bloqueado com sucesso." : "Usuário desbloqueado.");
-          fetchData(); // Atualiza lista
+          fetchData(); 
       } catch (e: any) {
           showError(e.message);
       }
@@ -387,11 +373,13 @@ const AdminDashboard = () => {
           ]);
           if (settingsError) throw settingsError;
           
-          // Salva taxa rígida no admin_config
-          const adminConfigUpdates = [
-              ...Object.entries(adminConfigs).map(([key, value]) => ({ key, value })),
-              { key: 'platform_fee', value: config.platformFee } // Garante que a taxa seja salva
-          ];
+          // CORREÇÃO: Removemos platform_fee de adminConfigs antes de mapear para evitar duplicação
+          const adminConfigUpdates = Object.entries(adminConfigs)
+              .filter(([key]) => key !== 'platform_fee') // Filtra para não duplicar
+              .map(([key, value]) => ({ key, value }));
+          
+          // Adiciona explicitamente o valor do input
+          adminConfigUpdates.push({ key: 'platform_fee', value: config.platformFee });
           
           const { error: adminConfigError } = await supabase.from('admin_config').upsert(adminConfigUpdates);
           if (adminConfigError) throw adminConfigError;
@@ -428,7 +416,6 @@ const AdminDashboard = () => {
       setCategories(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
   };
 
-  // --- APPROVAL LOGIC ---
   const openReview = (driver: any) => { setReviewDriver(driver); setJustApproved(false); };
   
   const sendWhatsAppNotice = (driver: any) => {
@@ -1210,7 +1197,7 @@ const AdminDashboard = () => {
                                                           {detailUser.is_blocked ? <><Unlock className="mr-2 w-4 h-4"/> Desbloquear Motorista</> : <><Lock className="mr-2 w-4 h-4"/> Bloquear Motorista</>}
                                                       </Button>
                                                   )}
-                                                  <Button variant="outline" className="w-full h-12 font-bold rounded-xl" onClick={() => handleResetPassword(detailUser.email)}><Mail className="mr-2 w-4 h-4" /> Redefinir Senha</Button>
+                                                  <Button variant="outline" className="w-full h-12 font-bold rounded-xl" onClick={() => handleResetPassword(detailUser.email)}><Mail className="mr-2 w-4 h-4" /> Enviar Redefinição de Senha</Button>
                                                   <Button variant="ghost" className="w-full h-12 font-bold rounded-xl text-red-600 hover:bg-red-50" onClick={() => setIsDeleteDialogOpen(true)}><Trash2 className="mr-2 w-4 h-4" /> Excluir Conta</Button>
                                               </div>
                                           </div>
@@ -1242,7 +1229,6 @@ const AdminDashboard = () => {
                                       </TabsContent>
 
                                       <TabsContent value="history" className="h-full overflow-y-auto p-0 m-0">
-                                          {/* ... Mantido igual ... */}
                                           {detailUserHistory.length === 0 ? (
                                               <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
                                                   <MapIcon className="w-12 h-12 mb-2 opacity-20" />
@@ -1271,7 +1257,6 @@ const AdminDashboard = () => {
                                       </TabsContent>
 
                                       <TabsContent value="edit" className="h-full p-8 m-0 overflow-y-auto">
-                                          {/* ... Mantido igual ... */}
                                           <Card className="max-w-lg mx-auto border-0 shadow-none bg-transparent">
                                               <CardContent className="space-y-6">
                                                   <div className="grid grid-cols-2 gap-4">
