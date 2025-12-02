@@ -180,18 +180,18 @@ const AdminDashboard = () => {
   };
 
   const handleLogout = async () => {
-    setLoading(true);
     try {
-        await supabase.auth.signOut({ scope: 'global' });
-        localStorage.clear(); // Garante limpeza total
-        navigate('/login/admin', { replace: true });
-    } catch (error: any) {
-        showError('Erro ao sair: ' + error.message);
-        // Força saída mesmo com erro
-        localStorage.clear();
-        window.location.href = '/login/admin';
+        setLoading(true);
+        // Tenta fazer logout no Supabase
+        await supabase.auth.signOut();
+    } catch (error) {
+        console.error("Erro ao fazer logout:", error);
     } finally {
-        setLoading(false);
+        // Força limpeza local e redirecionamento, independente de erro no Supabase
+        localStorage.clear();
+        sessionStorage.clear();
+        // Usar window.location.replace para garantir que a página seja recarregada e o estado limpo
+        window.location.replace('/login/admin');
     }
   };
 
