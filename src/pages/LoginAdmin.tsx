@@ -20,9 +20,6 @@ const LoginAdmin = () => {
     
     const checkExistingSession = async () => {
         try {
-            // Pequeno delay artificial para garantir que o storage foi lido
-            await new Promise(resolve => setTimeout(resolve, 500));
-
             const { data: { session } } = await supabase.auth.getSession();
             
             if (session) {
@@ -31,7 +28,6 @@ const LoginAdmin = () => {
                  if (mounted) {
                      if (data?.role === 'admin') {
                          navigate('/admin', { replace: true });
-                         return; // Importante: para a execução aqui se redirecionar
                      } else {
                          // Se tiver logado mas não for admin, força logout para evitar conflito
                          await supabase.auth.signOut();
@@ -47,18 +43,7 @@ const LoginAdmin = () => {
     
     checkExistingSession();
     
-    // Timeout de segurança: Se em 3 segundos não carregar, libera a tela de login
-    const timeout = setTimeout(() => {
-        if (mounted && checkingSession) {
-            console.warn("Verificação de sessão demorou muito, forçando exibição do login.");
-            setCheckingSession(false);
-        }
-    }, 3000);
-    
-    return () => { 
-        mounted = false; 
-        clearTimeout(timeout);
-    };
+    return () => { mounted = false; };
   }, [navigate]);
 
   const handleAuth = async (e: React.FormEvent) => {
