@@ -262,10 +262,12 @@ const ClientDashboard = () => {
              </div>
           </div>
 
-          <div className="pointer-events-auto bg-black text-white px-4 py-2.5 rounded-full flex items-center gap-2 shadow-xl animate-in slide-in-from-top duration-500 delay-100 cursor-pointer hover:bg-zinc-800 transition-colors" onClick={() => navigate('/wallet')}>
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="font-bold text-sm tracking-tight">R$ {userProfile?.balance?.toFixed(2) || '0.00'}</span>
-          </div>
+          {appSettings.enableWallet && (
+              <div className="pointer-events-auto bg-black text-white px-4 py-2.5 rounded-full flex items-center gap-2 shadow-xl animate-in slide-in-from-top duration-500 delay-100 cursor-pointer hover:bg-zinc-800 transition-colors" onClick={() => navigate('/wallet')}>
+                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                  <span className="font-bold text-sm tracking-tight">R$ {userProfile?.balance?.toFixed(2) || '0.00'}</span>
+              </div>
+          )}
       </div>
 
       <div className="absolute inset-0 z-10 flex flex-col justify-end pb-32 md:pb-10 md:justify-center items-center pointer-events-none p-4">

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, CreditCard, QrCode, Wallet as WalletIcon, CheckCircle2, Loader2, ArrowUpRight, ArrowDownLeft } from "lucide-react";
+import { ArrowLeft, CreditCard, QrCode, Wallet as WalletIcon, CheckCircle2, Loader2, ArrowUpRight, ArrowDownLeft, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRide } from "@/context/RideContext";
 import { showSuccess, showError } from "@/utils/toast";
@@ -17,10 +17,19 @@ const Wallet = () => {
   const [showQR, setShowQR] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [walletEnabled, setWalletEnabled] = useState(true);
 
   useEffect(() => {
     fetchData();
+    fetchSettings();
   }, []);
+
+  const fetchSettings = async () => {
+      const { data } = await supabase.from('app_settings').select('*').eq('key', 'enable_wallet').single();
+      if (data) {
+          setWalletEnabled(data.value);
+      }
+  };
 
   const fetchData = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -93,40 +102,52 @@ const Wallet = () => {
 
           {/* Actions */}
           <div className="mb-8">
-             <div className="bg-white/80 backdrop-blur-xl border border-white/40 p-6 rounded-[32px] shadow-lg">
-                  <h3 className="font-bold text-slate-900 mb-4">Adicionar Créditos</h3>
-                  
-                  {!showQR ? (
-                      <div className="space-y-4">
-                          <div className="relative">
-                              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">R$</span>
-                              <Input type="number" placeholder="0,00" className="pl-10 h-14 bg-gray-50 border-0 rounded-2xl text-lg font-bold" value={amount} onChange={(e) => setAmount(e.target.value)} />
-                          </div>
-                          <div className="flex gap-2">
-                              {[20, 50, 100].map(val => (
-                                  <button key={val} onClick={() => setAmount(val.toString())} className="flex-1 py-2 rounded-xl border border-gray-200 hover:border-black hover:bg-black hover:text-white transition-all font-bold text-sm">
-                                      +{val}
-                                  </button>
-                              ))}
-                          </div>
-                          <Button className="w-full h-14 bg-black text-white rounded-2xl font-bold hover:bg-zinc-800" onClick={handleGeneratePIX} disabled={!amount}>
-                              <QrCode className="mr-2 w-5 h-5" /> Gerar PIX
-                          </Button>
-                      </div>
-                  ) : (
-                      <div className="text-center animate-in zoom-in-95">
-                          <div className="bg-white p-4 rounded-2xl border-2 border-dashed border-gray-200 mb-4 inline-block">
-                             <div className="w-48 h-48 bg-slate-900 flex items-center justify-center text-white text-xs rounded-lg">[QR CODE PIX]</div>
-                          </div>
-                          <div className="flex gap-3">
-                              <Button variant="outline" className="flex-1 h-12 rounded-xl" onClick={() => setShowQR(false)}>Voltar</Button>
-                              <Button className="flex-1 h-12 rounded-xl bg-green-600 hover:bg-green-700 font-bold" onClick={handlePay} disabled={processing}>
-                                  {processing ? <Loader2 className="animate-spin" /> : "Pagar Agora"}
+             {!walletEnabled && (
+                <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-r-xl mb-6 flex items-start gap-3 animate-in slide-in-from-left">
+                     <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                     <div>
+                         <p className="font-bold">Carteira Digital Indisponível</p>
+                         <p className="text-sm">No momento só estamos aceitando pagamento no momento da corrida.</p>
+                     </div>
+                </div>
+             )}
+
+             {walletEnabled && (
+                 <div className="bg-white/80 backdrop-blur-xl border border-white/40 p-6 rounded-[32px] shadow-lg">
+                      <h3 className="font-bold text-slate-900 mb-4">Adicionar Créditos</h3>
+                      
+                      {!showQR ? (
+                          <div className="space-y-4">
+                              <div className="relative">
+                                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">R$</span>
+                                  <Input type="number" placeholder="0,00" className="pl-10 h-14 bg-gray-50 border-0 rounded-2xl text-lg font-bold" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                              </div>
+                              <div className="flex gap-2">
+                                  {[20, 50, 100].map(val => (
+                                      <button key={val} onClick={() => setAmount(val.toString())} className="flex-1 py-2 rounded-xl border border-gray-200 hover:border-black hover:bg-black hover:text-white transition-all font-bold text-sm">
+                                          +{val}
+                                      </button>
+                                  ))}
+                              </div>
+                              <Button className="w-full h-14 bg-black text-white rounded-2xl font-bold hover:bg-zinc-800" onClick={handleGeneratePIX} disabled={!amount}>
+                                  <QrCode className="mr-2 w-5 h-5" /> Gerar PIX
                               </Button>
                           </div>
-                      </div>
-                  )}
-             </div>
+                      ) : (
+                          <div className="text-center animate-in zoom-in-95">
+                              <div className="bg-white p-4 rounded-2xl border-2 border-dashed border-gray-200 mb-4 inline-block">
+                                 <div className="w-48 h-48 bg-slate-900 flex items-center justify-center text-white text-xs rounded-lg">[QR CODE PIX]</div>
+                              </div>
+                              <div className="flex gap-3">
+                                  <Button variant="outline" className="flex-1 h-12 rounded-xl" onClick={() => setShowQR(false)}>Voltar</Button>
+                                  <Button className="flex-1 h-12 rounded-xl bg-green-600 hover:bg-green-700 font-bold" onClick={handlePay} disabled={processing}>
+                                      {processing ? <Loader2 className="animate-spin" /> : "Pagar Agora"}
+                                  </Button>
+                              </div>
+                          </div>
+                      )}
+                 </div>
+             )}
           </div>
 
           {/* Histórico */}
