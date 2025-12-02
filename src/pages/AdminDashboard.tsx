@@ -354,20 +354,36 @@ const AdminDashboard = () => {
 
   const handleToggleBlock = async () => {
       if (!detailUser) return;
+      
+      const currentStatus = !!detailUser.is_blocked; // Force boolean
+      const newStatus = !currentStatus;
+      
       try {
-          const newStatus = !detailUser.is_blocked;
-          const { error } = await supabase.from('profiles').update({ is_blocked: newStatus }).eq('id', detailUser.id);
+          const { error } = await supabase
+            .from('profiles')
+            .update({ is_blocked: newStatus })
+            .eq('id', detailUser.id);
+            
           if (error) throw error;
           
-          setDetailUser(prev => ({ ...prev, is_blocked: newStatus }));
+          // Update local detail state immediately
+          setDetailUser((prev: any) => ({ ...prev, is_blocked: newStatus }));
+          
+          // Update the list state to reflect changes in the table immediately
+          setDrivers(prev => prev.map(d => d.id === detailUser.id ? { ...d, is_blocked: newStatus } : d));
+          setPassengers(prev => prev.map(p => p.id === detailUser.id ? { ...p, is_blocked: newStatus } : p));
+          
           showSuccess(newStatus ? "Usuário bloqueado com sucesso." : "Usuário desbloqueado.");
-          fetchData(); 
       } catch (e: any) {
-          showError(e.message);
+          showError("Erro ao atualizar: " + e.message);
       }
   };
 
   const handleResetPassword = async (email: string) => {
+      if (!email) {
+          showError("Usuário sem email cadastrado.");
+          return;
+      }
       try {
           const { error } = await supabase.auth.resetPasswordForEmail(email, {
               redirectTo: window.location.origin + '/update-password',
@@ -389,12 +405,10 @@ const AdminDashboard = () => {
           ]);
           if (settingsError) throw settingsError;
           
-          // CORREÇÃO: Removemos platform_fee de adminConfigs antes de mapear para evitar duplicação
           const adminConfigUpdates = Object.entries(adminConfigs)
-              .filter(([key]) => key !== 'platform_fee') // Filtra para não duplicar
+              .filter(([key]) => key !== 'platform_fee')
               .map(([key, value]) => ({ key, value }));
           
-          // Adiciona explicitamente o valor do input
           adminConfigUpdates.push({ key: 'platform_fee', value: config.platformFee });
           
           const { error: adminConfigError } = await supabase.from('admin_config').upsert(adminConfigUpdates);
@@ -1210,7 +1224,15 @@ const AdminDashboard = () => {
                                                           className={`w-full h-12 font-bold rounded-xl ${detailUser.is_blocked ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
                                                           onClick={handleToggleBlock}
                                                       >
-                                                          {detailUser.is_blocked ? <><Unlock className="mr-2 w-4 h-4"/> Desbloquear Motorista</> : <><Lock className="mr-2 w-4 h-4"/> Bloquear Motorista</>}
+                                                          {detailUser.is_blocked ? (
+                                                              <>
+                                                                  <Unlock className="mr-2 w-4 h-4"/> Desbloquear Motorista
+                                                              </>
+                                                          ) : (
+                                                              <>
+                                                                  <Lock className="mr-2 w-4 h-4"/> Bloquear Motorista
+                                                              </>
+                                                          )}
                                                       </Button>
                                                   )}
                                                   <Button variant="outline" className="w-full h-12 font-bold rounded-xl" onClick={() => handleResetPassword(detailUser.email)}><Mail className="mr-2 w-4 h-4" /> Enviar Redefinição de Senha</Button>
