@@ -10,60 +10,44 @@ import { Card, CardContent } from "@/components/ui/card";
 const LoginAdmin = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // Verifica sessão existente ao carregar a página
   useEffect(() => {
-    let mounted = true;
-    
     const checkExistingSession = async () => {
-        try {
-            const { data: { session } } = await supabase.auth.getSession();
-            
-            if (session) {
-                 const { data, error } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
-                 
-                 if (mounted) {
-                     if (data?.role === 'admin') {
-                         navigate('/admin', { replace: true });
-                     } else {
-                         // Se tiver logado mas não for admin, força logout para evitar conflito
-                         await supabase.auth.signOut();
-                     }
-                 }
-            }
-        } catch (error) {
-            console.error("Erro ao verificar sessão:", error);
-        } finally {
-            if (mounted) setCheckingSession(false);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+             const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
+             if (data?.role === 'admin') {
+                 navigate('/admin', { replace: true });
+             }
         }
     };
-    
     checkExistingSession();
-    
-    return () => { mounted = false; };
   }, [navigate]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    console.log('🔐 Tentando login...');
     
     try {
-        // Tenta login
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        // REMOVIDO: await supabase.auth.signOut({ scope: 'global' });
+        
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
         if(error) throw error;
         
-        if(data.user) {
-            // Verifica se é realmente admin
-            const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).single();
-            
-            if(profile?.role !== 'admin') {
-                await supabase.auth.signOut();
+        console.log('✅ Login bem-sucedido, verificando role...');
+        
+        const { data: { user } } = await supabase.auth.getUser();
+        if(user) {
+            const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+            if(data?.role !== 'admin') {
+                await supabase.auth.signOut({ scope: 'global' });
                 throw new Error("Acesso negado: Este usuário não é um administrador.");
             }
             
+            console.log('🚀 Redirecionando para admin dashboard...');
             navigate('/admin', { replace: true });
         }
     } catch (e: any) {
@@ -72,15 +56,6 @@ const LoginAdmin = () => {
         setLoading(false);
     }
   };
-
-  // Enquanto verifica a sessão inicial, mostra loading limpo
-  if (checkingSession) {
-      return (
-        <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-            <Loader2 className="w-10 h-10 text-yellow-500 animate-spin" />
-        </div>
-      );
-  }
 
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden font-sans">
