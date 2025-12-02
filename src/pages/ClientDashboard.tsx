@@ -145,65 +145,78 @@ const ClientDashboard = () => {
 
   const handleRequest = () => { if (!pickup || !destinationId) { showError("Preencha origem e destino"); return; } setStep('confirm'); };
 
-  // --- LÓGICA DE PREÇO (IMPORTANTE) ---
+  // --- LÓGICA DE PREÇO ATUALIZADA ---
   const calculatePrice = () => {
       const dest = MOCK_LOCATIONS.find(l => l.id === destinationId);
       const category = categories.find(c => c.id === selectedCategoryId);
       
-      if (!dest || !category || pricingTiers.length === 0) return 0;
+      if (!dest || !category) return 0;
 
       const distanceKm = dest.km;
       let finalPrice = 0;
-
-      // 1. Cálculo baseado na Categoria (Base Fare + Cost per KM)
-      const baseFare = Number(category.base_fare || 0);
-      const costPerKm = Number(category.cost_per_km || 0);
       
-      finalPrice = baseFare + (distanceKm * costPerKm);
+      // Verifica a estratégia definida no Admin
+      // Padrão é FIXED se não estiver definido
+      const strategy = adminConfig.pricing_strategy || 'FIXED'; 
 
-      // 2. Aplica Regra de Preço Fixo por Faixa (Se aplicável)
-      // Se a distância se encaixa em uma faixa de preço fixo, usa o preço fixo.
-      // Ordenado por max_distance, pega o primeiro que cobre a distância
-      let tier = pricingTiers.find(t => t.max_distance >= distanceKm);
-      
-      if (tier) {
-          // Se o preço calculado pela categoria for menor que o preço fixo da faixa, usa o preço fixo.
-          // Isso garante que o preço mínimo da faixa seja respeitado.
-          if (finalPrice < Number(tier.price)) {
+      if (strategy === 'FIXED') {
+          // --- ESTRATÉGIA: TABELA FIXA (GOLD PROMO) ---
+          // Busca o primeiro tier que cobre a distância (ordenado por max_distance ASC)
+          const tier = pricingTiers.find(t => t.max_distance >= distanceKm);
+          
+          if (tier) {
               finalPrice = Number(tier.price);
+          } else {
+              // Se a distância for maior que a maior faixa, usa o último tier como base
+              // Ou poderia cair para o cálculo dinâmico como fallback
+              const maxTier = pricingTiers[pricingTiers.length - 1];
+              if (maxTier) finalPrice = Number(maxTier.price);
+              else finalPrice = 10; // Fallback extremo
           }
       } else {
-          // Se a distância for maior que a maior faixa, usa o cálculo da categoria.
-          // O preço mínimo da última faixa (se houver) pode ser usado como fallback mínimo.
-          const maxTier = pricingTiers[pricingTiers.length - 1];
-          if (maxTier && finalPrice < Number(maxTier.price)) {
-              finalPrice = Number(maxTier.price);
+          // --- ESTRATÉGIA: CÁLCULO DINÂMICO (BASE + KM) ---
+          const baseFare = Number(category.base_fare || 0);
+          const costPerKm = Number(category.cost_per_km || 0);
+          const minFare = Number(category.min_fare || 0);
+          
+          finalPrice = baseFare + (distanceKm * costPerKm);
+          if (finalPrice < minFare) finalPrice = minFare;
+      }
+      
+      // --- TAXA NOTURNA (GLOBAL) ---
+      // Só aplica se estiver ativada no admin
+      if (adminConfig.night_active === 'true') {
+          const now = new Date();
+          const currentHour = now.getHours();
+          const currentMinute = now.getMinutes();
+          
+          const parseTime = (timeStr: string) => {
+              if(!timeStr) return 0;
+              const [h, m] = timeStr.split(':').map(Number);
+              return h * 60 + m;
+          };
+
+          const nowMinutes = currentHour * 60 + currentMinute;
+          const startNight = adminConfig.night_start ? parseTime(adminConfig.night_start) : 21 * 60; // Padrão 21:00
+          
+          // Tratamento para virada do dia (ex: fim 00:00 ou 05:00)
+          // Se o fim for menor que o início, assume que é no dia seguinte
+          // Simulação simples: se é >= startNight OU < endNight (madrugada)
+          
+          // Simplificação: Horário noturno geralmente cruza a meia noite.
+          // Regra 1: Adicional Noturno (ex: +3 reais)
+          // Regra 2: Mínimo da Madrugada (ex: min 25 reais)
+          
+          // Vamos assumir "Noite" como >= startNight. E "Madrugada" como < 5am (hardcoded ou config)
+          if (nowMinutes >= startNight || currentHour < 5) {
+              finalPrice += Number(adminConfig.night_increase || 0);
           }
-      }
-      
-      // 3. Aplica Regra Noturna
-      const now = new Date();
-      const currentHour = now.getHours();
-      const currentMinute = now.getMinutes();
-      
-      const parseTime = (timeStr: string) => {
-          const [h, m] = timeStr.split(':').map(Number);
-          return h * 60 + m;
-      };
-
-      const nowMinutes = currentHour * 60 + currentMinute;
-      const startNight = adminConfig.night_start ? parseTime(adminConfig.night_start) : 21 * 60; // Padrão 21:00
-      const endNight = adminConfig.night_end ? parseTime(adminConfig.night_end) : 0; // Padrão 00:00 (meia-noite)
-
-      // Verifica se está no período noturno (ex: 21:00 até 00:00)
-      if (nowMinutes >= startNight) {
-          finalPrice += Number(adminConfig.night_increase || 0);
-      }
-      
-      // Regra de Mínima da Madrugada (00h até 05h, por exemplo)
-      if (currentHour >= 0 && currentHour < 5) {
-           const minMidnight = Number(adminConfig.midnight_min_price || 0);
-           if (finalPrice < minMidnight) finalPrice = minMidnight;
+          
+          // Regra de Mínima da Madrugada (00h até 05h)
+          if (currentHour >= 0 && currentHour < 5) {
+               const minMidnight = Number(adminConfig.midnight_min_price || 0);
+               if (finalPrice < minMidnight) finalPrice = minMidnight;
+          }
       }
 
       return parseFloat(finalPrice.toFixed(2));
@@ -322,26 +335,28 @@ const ClientDashboard = () => {
 
                         {/* Pagamento Seletor (Condicional) */}
                         <div 
-                            className={`mb-4 bg-gray-50 p-3 rounded-2xl border border-gray-100 flex items-center justify-between transition-colors ${!isSinglePaymentMethod ? 'cursor-pointer hover:bg-white' : ''}`}
+                            className={`mb-4 bg-gray-50 p-3 rounded-2xl border border-gray-100 flex items-center justify-center transition-colors ${!isSinglePaymentMethod ? 'cursor-pointer hover:bg-white' : ''}`}
                             onClick={() => {
                                 if (!isSinglePaymentMethod) {
                                     setPaymentMethod(prev => prev === 'WALLET' ? 'CASH' : 'WALLET');
                                 }
                             }}
                         >
-                             <div className="flex items-center gap-3">
-                                 <div className="w-10 h-10 bg-black text-white rounded-xl flex items-center justify-center">
-                                     {paymentMethod === 'WALLET' ? <Wallet className="w-5 h-5" /> : <Banknote className="w-5 h-5" />}
+                             <div className="flex items-center gap-3 w-full justify-between">
+                                 <div className="flex items-center gap-3">
+                                     <div className="w-10 h-10 bg-black text-white rounded-xl flex items-center justify-center">
+                                         {paymentMethod === 'WALLET' ? <Wallet className="w-5 h-5" /> : <Banknote className="w-5 h-5" />}
+                                     </div>
+                                     <div className="text-left">
+                                         <p className="text-xs text-gray-400 font-bold uppercase">Pagamento</p>
+                                         <p className="font-bold text-slate-900">{paymentMethod === 'WALLET' ? 'Saldo da Carteira' : 'Dinheiro / PIX'}</p>
+                                     </div>
                                  </div>
-                                 <div>
-                                     <p className="text-xs text-gray-400 font-bold uppercase">Pagamento</p>
-                                     <p className="font-bold text-slate-900">{paymentMethod === 'WALLET' ? 'Saldo da Carteira' : 'Dinheiro / PIX'}</p>
-                                 </div>
+                                 {/* Só mostra botão de trocar se ambos estiverem ativos */}
+                                 {!isSinglePaymentMethod && (
+                                     <div className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">Trocar</div>
+                                 )}
                              </div>
-                             {/* Só mostra botão de trocar se ambos estiverem ativos */}
-                             {!isSinglePaymentMethod && (
-                                 <div className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">Trocar</div>
-                             )}
                         </div>
 
                         <Button className="w-full h-14 text-lg font-bold rounded-2xl bg-black hover:bg-zinc-800" onClick={confirmRide} disabled={!selectedCategoryId || isRequesting || loadingCats}>{isRequesting ? <Loader2 className="animate-spin" /> : "Confirmar Gold Mobile"}</Button>
