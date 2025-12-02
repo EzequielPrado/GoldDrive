@@ -294,19 +294,28 @@ const ClientDashboard = () => {
                         <div className="space-y-4">
                             <div className="relative group">
                                 <div className="absolute left-4 top-4 w-3 h-3 rounded-full bg-blue-500 ring-4 ring-blue-500/20 z-10"></div>
-                                <Input value={pickup} onChange={(e) => setPickup(e.target.value)} placeholder="Sua localização" className="pl-12 h-14 bg-gray-50/50 border-transparent hover:bg-white focus:bg-white rounded-2xl transition-all shadow-sm" />
+                                <Input 
+                                    value={pickup} 
+                                    onChange={(e) => setPickup(e.target.value)} 
+                                    placeholder="Sua localização" 
+                                    className="pl-12 h-14 bg-white border-gray-200 text-slate-900 rounded-2xl transition-all shadow-sm font-medium placeholder:text-gray-400" 
+                                />
                                 <Button size="icon" variant="ghost" className="absolute right-2 top-2 text-blue-600 hover:bg-blue-50 rounded-xl" onClick={getCurrentLocation} disabled={loadingLocation}><Navigation className={`w-5 h-5 ${loadingLocation ? 'animate-spin' : ''}`} /></Button>
                             </div>
                             <div className="relative group">
                                 <div className="absolute left-[19px] -top-6 w-0.5 h-8 bg-gray-300 z-0"></div>
                                 <div className="absolute left-4 top-4.5 w-3 h-3 bg-black ring-4 ring-black/10 z-10"></div>
                                 <Select onValueChange={setDestinationId} value={destinationId}>
-                                    <SelectTrigger className="pl-12 h-14 bg-gray-50/50 border-transparent hover:bg-white rounded-2xl transition-all shadow-sm text-base font-medium"><SelectValue placeholder="Selecione o destino" /></SelectTrigger>
-                                    <SelectContent>{MOCK_LOCATIONS.map(loc => (<SelectItem key={loc.id} value={loc.id}>{loc.label}</SelectItem>))}</SelectContent>
+                                    <SelectTrigger className="pl-12 h-14 bg-white border-gray-200 text-slate-900 rounded-2xl transition-all shadow-sm text-base font-medium">
+                                        <SelectValue placeholder="Selecione o destino" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-white border-gray-200 text-slate-900">
+                                        {MOCK_LOCATIONS.map(loc => (<SelectItem key={loc.id} value={loc.id} className="hover:bg-gray-100 cursor-pointer">{loc.label}</SelectItem>))}
+                                    </SelectContent>
                                 </Select>
                             </div>
                         </div>
-                        <Button className="w-full mt-6 h-14 text-lg font-bold rounded-2xl bg-black hover:bg-zinc-800 shadow-xl shadow-black/10 transition-transform active:scale-95" onClick={handleRequest} disabled={!destinationId || !pickup}>Continuar <ChevronRight className="ml-2 w-5 h-5 opacity-50" /></Button>
+                        <Button className="w-full mt-6 h-14 text-lg font-bold rounded-2xl bg-black text-white hover:bg-zinc-800 shadow-xl shadow-black/10 transition-transform active:scale-95" onClick={handleRequest} disabled={!destinationId || !pickup}>Continuar <ChevronRight className="ml-2 w-5 h-5 opacity-50" /></Button>
                     </div>
                 )}
 
@@ -314,8 +323,8 @@ const ClientDashboard = () => {
                 {step === 'confirm' && (
                     <div className={cardBaseClasses}>
                         <div className="flex items-center gap-3 mb-6 cursor-pointer" onClick={() => setStep('search')}>
-                            <div className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><ArrowLeft className="w-5 h-5" /></div>
-                            <h2 className="text-xl font-bold">Escolha a Categoria</h2>
+                            <div className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><ArrowLeft className="w-5 h-5 text-slate-900" /></div>
+                            <h2 className="text-xl font-bold text-slate-900">Escolha a Categoria</h2>
                         </div>
                         {loadingCats ? <div className="py-10 text-center flex flex-col items-center gap-3"><Loader2 className="animate-spin text-yellow-500 w-8 h-8" /><p className="text-gray-400 text-sm">Buscando categorias...</p></div> : 
                          categories.length === 0 ? <div className="py-10 text-center"><p className="text-red-500 font-bold">Nenhuma categoria disponível.</p></div> : 
@@ -365,7 +374,7 @@ const ClientDashboard = () => {
                              </div>
                         </div>
 
-                        <Button className="w-full h-14 text-lg font-bold rounded-2xl bg-black hover:bg-zinc-800" onClick={confirmRide} disabled={!selectedCategoryId || isRequesting || loadingCats}>{isRequesting ? <Loader2 className="animate-spin" /> : "Confirmar Gold Mobile"}</Button>
+                        <Button className="w-full h-14 text-lg font-bold rounded-2xl bg-black text-white hover:bg-zinc-800" onClick={confirmRide} disabled={!selectedCategoryId || isRequesting || loadingCats}>{isRequesting ? <Loader2 className="animate-spin" /> : "Confirmar Gold Mobile"}</Button>
                     </div>
                 )}
 
@@ -424,13 +433,13 @@ const ClientDashboard = () => {
                                 onChange={e => setRatingComment(e.target.value)}
                             />
                          </div>
-                         <Button className="w-full h-14 text-lg font-bold bg-black rounded-2xl" onClick={() => { rateRide(ride!.id, rating || 5, false, ratingComment); setStep('search'); setRatingComment(""); setRating(0); }}>Enviar Avaliação</Button>
+                         <Button className="w-full h-14 text-lg font-bold bg-black text-white rounded-2xl hover:bg-zinc-800" onClick={() => { rateRide(ride!.id, rating || 5, false, ratingComment); setStep('search'); setRatingComment(""); setRating(0); }}>Enviar Avaliação</Button>
                      </div>
                 )}
 
                 {/* CANCELLED */}
                 {step === 'cancelled' && (
-                     <div className={`${cardBaseClasses} text-center`}><div className="w-20 h-20 bg-red-100 rounded-full mx-auto flex items-center justify-center mb-6"><XCircle className="w-10 h-10 text-red-600" /></div><h2 className="text-2xl font-black text-slate-900 mb-2">Cancelado</h2><p className="text-gray-500 mb-8">A corrida foi cancelada.</p><Button className="w-full h-14 text-lg font-bold bg-black rounded-2xl" onClick={() => { clearRide(); setStep('search'); }}>Voltar</Button></div>
+                     <div className={`${cardBaseClasses} text-center`}><div className="w-20 h-20 bg-red-100 rounded-full mx-auto flex items-center justify-center mb-6"><XCircle className="w-10 h-10 text-red-600" /></div><h2 className="text-2xl font-black text-slate-900 mb-2">Cancelado</h2><p className="text-gray-500 mb-8">A corrida foi cancelada.</p><Button className="w-full h-14 text-lg font-bold bg-black text-white rounded-2xl hover:bg-zinc-800" onClick={() => { clearRide(); setStep('search'); }}>Voltar</Button></div>
                 )}
             </div>
         )}
@@ -452,7 +461,7 @@ const ClientDashboard = () => {
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center shrink-0"><MapPin className="w-5 h-5 text-gray-500" /></div>
                                 <div className="flex-1 min-w-0">
-                                    <p className="font-medium truncate text-sm">{item.destination_address}</p>
+                                    <p className="font-medium truncate text-sm text-slate-900">{item.destination_address}</p>
                                     <p className="text-xs text-gray-500">
                                         {new Date(item.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} • R$ {Number(item.price).toFixed(2)}
                                     </p>
@@ -486,7 +495,7 @@ const ClientDashboard = () => {
                        </div>
                   </div>
                   
-                  <Button className="w-full h-14 rounded-2xl text-lg font-bold bg-black hover:bg-zinc-800" onClick={() => setShowArrivalPopup(false)}>Estou indo!</Button>
+                  <Button className="w-full h-14 rounded-2xl text-lg font-bold bg-black text-white hover:bg-zinc-800" onClick={() => setShowArrivalPopup(false)}>Estou indo!</Button>
               </div>
           </DialogContent>
       </Dialog>
@@ -503,8 +512,8 @@ const ClientDashboard = () => {
       </Dialog>
 
       {/* MODAIS GERAIS */}
-      <Dialog open={showBalanceAlert} onOpenChange={setShowBalanceAlert}><DialogContent className="sm:max-w-md bg-white rounded-3xl border-0"><DialogHeader><DialogTitle className="text-red-600 flex items-center gap-2"><Wallet /> Saldo Insuficiente</DialogTitle></DialogHeader><div className="text-center py-6"><p className="text-gray-500 mb-1">Faltam</p><h2 className="text-5xl font-black text-slate-900">R$ {missingAmount.toFixed(2)}</h2></div><DialogFooter><Button className="w-full rounded-xl h-12 font-bold" onClick={() => navigate('/wallet')}>Recarregar Agora</Button></DialogFooter></DialogContent></Dialog>
-      <AlertDialog open={showCancelAlert} onOpenChange={setShowCancelAlert}><AlertDialogContent className="rounded-3xl bg-white border-0"><AlertDialogHeader><AlertDialogTitle className="flex items-center gap-2 text-red-600"><AlertTriangle /> Cancelar Corrida?</AlertDialogTitle><AlertDialogDescription>Deseja realmente cancelar? Uma taxa pode ser cobrada.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel className="rounded-xl h-12">Voltar</AlertDialogCancel><AlertDialogAction onClick={() => { cancelRide(ride!.id); setShowCancelAlert(false); }} className="bg-red-600 hover:bg-red-700 rounded-xl h-12 font-bold">Sim, Cancelar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      <Dialog open={showBalanceAlert} onOpenChange={setShowBalanceAlert}><DialogContent className="sm:max-w-md bg-white rounded-3xl border-0"><DialogHeader><DialogTitle className="text-red-600 flex items-center gap-2"><Wallet /> Saldo Insuficiente</DialogTitle></DialogHeader><div className="text-center py-6"><p className="text-gray-500 mb-1">Faltam</p><h2 className="text-5xl font-black text-slate-900">R$ {missingAmount.toFixed(2)}</h2></div><DialogFooter><Button className="w-full rounded-xl h-12 font-bold bg-black text-white" onClick={() => navigate('/wallet')}>Recarregar Agora</Button></DialogFooter></DialogContent></Dialog>
+      <AlertDialog open={showCancelAlert} onOpenChange={setShowCancelAlert}><AlertDialogContent className="rounded-3xl bg-white border-0"><AlertDialogHeader><AlertDialogTitle className="flex items-center gap-2 text-red-600"><AlertTriangle /> Cancelar Corrida?</AlertDialogTitle><AlertDialogDescription>Deseja realmente cancelar? Uma taxa pode ser cobrada.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel className="rounded-xl h-12">Voltar</AlertDialogCancel><AlertDialogAction onClick={() => { cancelRide(ride!.id); setShowCancelAlert(false); }} className="bg-red-600 hover:bg-red-700 rounded-xl h-12 font-bold text-white">Sim, Cancelar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
 
       {/* MODAL DETALHES HISTÓRICO */}
       <Dialog open={!!selectedHistoryItem} onOpenChange={(o) => !o && setSelectedHistoryItem(null)}>
@@ -525,7 +534,7 @@ const ClientDashboard = () => {
                   <div className="flex justify-between items-center pt-2 border-t border-gray-100">
                       <div className="text-left">
                           <p className="text-xs text-gray-500 font-bold uppercase">Data/Hora</p>
-                          <p className="text-sm font-medium">{selectedHistoryItem ? new Date(selectedHistoryItem.created_at).toLocaleString('pt-BR') : '--'}</p>
+                          <p className="text-sm font-medium text-slate-900">{selectedHistoryItem ? new Date(selectedHistoryItem.created_at).toLocaleString('pt-BR') : '--'}</p>
                       </div>
                       <div className="text-right">
                           <p className="text-xs text-gray-500 font-bold uppercase">Total Pago</p>

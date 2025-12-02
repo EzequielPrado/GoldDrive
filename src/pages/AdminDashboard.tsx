@@ -73,6 +73,7 @@ const AdminDashboard = () => {
   const [showNightSaveAlert, setShowNightSaveAlert] = useState(false);
   const [showTableSaveAlert, setShowTableSaveAlert] = useState(false);
   const [showStrategySaveAlert, setShowStrategySaveAlert] = useState(false);
+  const [isSavingGold, setIsSavingGold] = useState(false);
   
   // Form de Edição
   const [editFormData, setEditFormData] = useState({ first_name: "", last_name: "", phone: "", email: "" });
@@ -233,6 +234,7 @@ const AdminDashboard = () => {
     }
   };
 
+  // ... Detalhes User e Outros mantidos igual ...
   const openUserDetail = async (user: any) => {
       setDetailUser(user); setIsDetailLoading(true); setIsEditingInDetail(false);
       setEditFormData({ first_name: user.first_name || "", last_name: user.last_name || "", phone: user.phone || "", email: user.email || "" });
@@ -306,9 +308,25 @@ const AdminDashboard = () => {
           const { error: adminConfigError } = await supabase.from('admin_config').upsert(adminConfigUpdates);
           if (adminConfigError) throw adminConfigError;
           for (const tier of pricingTiers) { const { error: tierError } = await supabase.from('pricing_tiers').update({ price: tier.price, label: tier.label }).eq('id', tier.id); if (tierError) throw tierError; }
-          for (const cat of categories) { const { error: catError } = await supabase.from('car_categories').update({ base_fare: cat.base_fare, cost_per_km: cat.cost_per_km, min_fare: cat.min_fare, active: cat.active }).eq('id', cat.id); if (catError) throw catError; }
+          // Salva apenas categorias dinâmicas aqui
+          for (const cat of categories.filter(c => c.name !== 'Gold Driver')) { const { error: catError } = await supabase.from('car_categories').update({ base_fare: cat.base_fare, cost_per_km: cat.cost_per_km, min_fare: cat.min_fare, active: cat.active }).eq('id', cat.id); if (catError) throw catError; }
           showSuccess("Configurações salvas!"); await fetchData(true); 
       } catch (e: any) { showError(e.message); } finally { setLoading(false); }
+  };
+
+  const handleSaveGoldDriver = async () => {
+      if (!goldDriverCategory) return;
+      setIsSavingGold(true);
+      try {
+          const { error } = await supabase.from('car_categories').update({ active: goldDriverCategory.active }).eq('id', goldDriverCategory.id);
+          if (error) throw error;
+          showSuccess("Status Gold Driver atualizado!");
+          await fetchData();
+      } catch (e: any) {
+          showError(e.message);
+      } finally {
+          setIsSavingGold(false);
+      }
   };
 
   const updatePriceTier = (id: string, field: string, value: any) => { setPricingTiers(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t)); };
@@ -444,95 +462,91 @@ const AdminDashboard = () => {
                               </TabsContent>
 
                               <TabsContent value="categories">
-                                  <div className="space-y-8">
+                                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                                       {/* SEÇÃO 1: CATEGORIAS FIXAS (GOLD DRIVER) */}
-                                      <div className="space-y-4">
-                                          <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                                              <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" /> Categorias Fixas
-                                          </h3>
-                                          
-                                          {goldDriverCategory ? (
-                                              <Card className="border-0 shadow-lg bg-gradient-to-r from-yellow-50 to-white dark:from-slate-800 dark:to-slate-900 border-l-4 border-l-yellow-500 overflow-hidden">
-                                                  <CardContent className="p-6 flex flex-col md:flex-row items-center justify-between gap-6">
-                                                      <div className="flex items-center gap-4">
-                                                          <div className="w-16 h-16 bg-yellow-500 rounded-2xl flex items-center justify-center shadow-lg text-black">
-                                                              <Car className="w-8 h-8" />
+                                      <div className="space-y-6">
+                                          <Card className="border-0 shadow-lg bg-gradient-to-r from-yellow-50 to-white dark:from-slate-800 dark:to-slate-900 border-l-4 border-l-yellow-500 overflow-hidden">
+                                              <CardHeader>
+                                                  <CardTitle className="text-xl flex items-center gap-2 text-slate-900 dark:text-white"><Star className="w-5 h-5 text-yellow-500 fill-yellow-500" /> Categorias Fixas</CardTitle>
+                                                  <CardDescription>Valores definidos pela tabela fixa (Aba Valores & Tabela).</CardDescription>
+                                              </CardHeader>
+                                              <CardContent>
+                                                  {goldDriverCategory ? (
+                                                      <div className="flex flex-col gap-4">
+                                                          <div className={`flex items-center justify-between p-5 rounded-2xl border transition-all ${goldDriverCategory.active ? 'bg-white dark:bg-slate-800 border-yellow-500 shadow-md ring-1 ring-yellow-500/20' : 'bg-slate-50 dark:bg-slate-900 border-transparent opacity-60'}`}>
+                                                              <div className="flex items-center gap-4">
+                                                                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${goldDriverCategory.active ? 'bg-yellow-500 text-black' : 'bg-slate-200 text-slate-500'}`}>
+                                                                      <Car className="w-6 h-6" />
+                                                                  </div>
+                                                                  <div>
+                                                                      <span className="font-bold text-lg block">{goldDriverCategory.name}</span>
+                                                                      <span className="text-[10px] uppercase font-bold text-yellow-600 bg-yellow-50 dark:bg-yellow-900/30 dark:text-yellow-300 px-2 py-0.5 rounded-full">Tabela Fixa</span>
+                                                                  </div>
+                                                              </div>
+                                                              <Switch 
+                                                                  checked={goldDriverCategory.active} 
+                                                                  onCheckedChange={(val) => updateCategory(goldDriverCategory.id, 'active', val)} 
+                                                                  className="data-[state=checked]:bg-yellow-500 scale-125"
+                                                              />
                                                           </div>
-                                                          <div>
-                                                              <h4 className="text-2xl font-black text-slate-900 dark:text-white mb-1">Gold Driver</h4>
-                                                              <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md">
-                                                                  Esta é a categoria principal do aplicativo. Os preços são definidos pela tabela fixa na aba <strong>Valores & Tabela</strong>.
-                                                              </p>
-                                                          </div>
+                                                          <Button onClick={handleSaveGoldDriver} disabled={isSavingGold} className="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-bold h-12 rounded-xl">
+                                                              {isSavingGold ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-2" /> Salvar Status Gold Driver</>}
+                                                          </Button>
                                                       </div>
-                                                      
-                                                      <div className="flex items-center gap-4 bg-white/50 dark:bg-black/20 p-4 rounded-xl border border-yellow-500/20">
-                                                          <div className="text-right mr-2">
-                                                              <p className="font-bold text-sm">Status no App</p>
-                                                              <p className="text-xs text-muted-foreground">{goldDriverCategory.active ? 'Visível para passageiros' : 'Oculto'}</p>
-                                                          </div>
-                                                          <Switch 
-                                                              checked={goldDriverCategory.active} 
-                                                              onCheckedChange={(val) => updateCategory(goldDriverCategory.id, 'active', val)} 
-                                                              className="data-[state=checked]:bg-yellow-500 scale-125"
-                                                          />
+                                                  ) : (
+                                                      <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-2xl">
+                                                          <p className="text-muted-foreground">Categoria Gold Driver não encontrada.</p>
                                                       </div>
-                                                  </CardContent>
-                                              </Card>
-                                          ) : (
-                                              <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-2xl">
-                                                  <p className="text-muted-foreground">Categoria Gold Driver não encontrada.</p>
-                                              </div>
-                                          )}
-                                      </div>
+                                                  )}
+                                              </CardContent>
+                                          </Card>
 
-                                      <Separator className="bg-slate-200 dark:bg-slate-800" />
-
-                                      {/* SEÇÃO 2: CATEGORIAS DINÂMICAS */}
-                                      <div className="space-y-4">
-                                          <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                                              <Activity className="w-5 h-5 text-blue-500" /> Categorias Dinâmicas
-                                          </h3>
-                                          
-                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                              {dynamicCategories.map(cat => (
-                                                  <Card key={cat.id} className={`border-0 shadow-sm transition-all ${cat.active ? 'bg-white dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700' : 'bg-slate-50 dark:bg-slate-900/50 opacity-70'}`}>
-                                                      <CardContent className="p-5 flex items-center justify-between">
-                                                          <div className="flex items-center gap-3">
-                                                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${cat.active ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-slate-200 text-slate-500'}`}>
-                                                                  <Car className="w-5 h-5" />
+                                          <Card className="border-0 shadow-xl bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[32px] overflow-hidden">
+                                              <CardHeader>
+                                                  <CardTitle className="text-xl">Categorias Dinâmicas</CardTitle>
+                                                  <CardDescription>Utilizam cálculo base (Bandeirada + KM rodado).</CardDescription>
+                                              </CardHeader>
+                                              <CardContent className="grid grid-cols-1 gap-4">
+                                                  {dynamicCategories.map(cat => (
+                                                      <div key={cat.id} className={`flex items-center justify-between p-5 rounded-2xl border transition-all ${cat.active ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm' : 'bg-slate-50 dark:bg-slate-900 border-transparent opacity-60'}`}>
+                                                          <div className="flex items-center gap-4">
+                                                              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${cat.active ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                                                                  <Car className="w-6 h-6" />
                                                               </div>
                                                               <div>
-                                                                  <p className="font-bold text-slate-900 dark:text-white">{cat.name}</p>
-                                                                  <p className="text-xs text-muted-foreground">Preço base + KM</p>
+                                                                  <span className="font-bold text-lg block">{cat.name}</span>
+                                                                  <span className="text-[10px] uppercase font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-0.5 rounded-full">Dinâmico</span>
                                                               </div>
                                                           </div>
                                                           <Switch checked={cat.active} onCheckedChange={(val) => updateCategory(cat.id, 'active', val)} />
-                                                      </CardContent>
-                                                  </Card>
-                                              ))}
-                                          </div>
+                                                      </div>
+                                                  ))}
+                                              </CardContent>
+                                              <CardFooter>
+                                                  <Button onClick={handleSaveConfig} className="w-full bg-slate-900 text-white font-bold h-12 rounded-xl"><Save className="w-4 h-4 mr-2" /> Salvar Categorias Dinâmicas</Button>
+                                              </CardFooter>
+                                          </Card>
                                       </div>
 
-                                      {/* SEÇÃO 3: CONFIGURAÇÃO DE VALORES DINÂMICOS */}
-                                      {activeCategories.length > 0 && (
-                                          <div className="space-y-4 pt-4">
-                                              <div className="bg-slate-900 text-white p-6 rounded-[24px] mb-4 relative overflow-hidden">
-                                                  <div className="relative z-10">
-                                                      <h3 className="font-bold text-lg mb-1 flex items-center gap-2"><Settings className="w-5 h-5 text-blue-400"/> Configurar Valores Dinâmicos</h3>
-                                                      <p className="text-slate-400 text-sm">Ajuste aqui o preço base e custo por KM das categorias dinâmicas ativas.</p>
-                                                  </div>
-                                                  <div className="absolute top-0 right-0 p-4 opacity-10"><Zap className="w-24 h-24"/></div>
+                                      {/* COLUNA DIREITA: CONFIGURAÇÃO DE VALORES (DINÂMICOS) */}
+                                      <div className="flex flex-col h-full">
+                                          <div className="bg-slate-900 text-white p-6 rounded-[32px] mb-6 shadow-lg relative overflow-hidden">
+                                              <div className="relative z-10">
+                                                  <h3 className="font-bold text-lg mb-2 flex items-center gap-2"><Settings className="w-5 h-5 text-blue-400"/> Valores Base</h3>
+                                                  <p className="text-slate-400 text-sm">Configure aqui os preços das categorias dinâmicas. Selecione a categoria abaixo:</p>
                                               </div>
+                                              <div className="absolute top-0 right-0 p-4 opacity-10"><Zap className="w-24 h-24"/></div>
+                                          </div>
 
-                                              <Tabs defaultValue={activeCategories[0].id} className="w-full flex flex-col md:flex-row gap-6">
-                                                  <div className="w-full md:w-48 shrink-0">
-                                                      <TabsList className="flex flex-col h-auto bg-transparent space-y-2 p-0 justify-start w-full">
+                                          {activeCategories.length > 0 ? (
+                                              <Tabs defaultValue={activeCategories[0].id} className="w-full flex-1 flex gap-6">
+                                                  <div className="w-1/3 min-w-[140px]">
+                                                      <TabsList className="flex flex-col h-auto bg-transparent space-y-3 p-0 w-full">
                                                           {activeCategories.map(cat => (
                                                               <TabsTrigger 
                                                                   key={cat.id} 
                                                                   value={cat.id} 
-                                                                  className="w-full justify-start px-4 py-3 rounded-xl border border-transparent data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-md data-[state=active]:border-l-4 data-[state=active]:border-l-blue-500 text-slate-500 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white font-bold transition-all"
+                                                                  className="w-full justify-start px-4 py-4 rounded-xl border border-transparent data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-lg data-[state=active]:border-l-4 data-[state=active]:border-l-blue-500 bg-slate-100 dark:bg-slate-900/50 text-slate-500 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white font-bold transition-all"
                                                               >
                                                                   {cat.name}
                                                               </TabsTrigger>
@@ -542,48 +556,51 @@ const AdminDashboard = () => {
                                                   
                                                   <div className="flex-1">
                                                       {activeCategories.map(cat => (
-                                                          <TabsContent key={cat.id} value={cat.id} className="mt-0">
-                                                              <Card className="border-0 shadow-lg bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-[24px]">
+                                                          <TabsContent key={cat.id} value={cat.id} className="mt-0 h-full">
+                                                              <Card className="border-0 shadow-xl bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[32px] overflow-hidden animate-in fade-in zoom-in-95 duration-300 h-full flex flex-col">
                                                                   <CardHeader>
-                                                                      <CardTitle className="text-lg">Valores de {cat.name}</CardTitle>
+                                                                      <CardTitle className="text-xl">Valores de {cat.name}</CardTitle>
+                                                                      <CardDescription>Defina o preço base e por km.</CardDescription>
                                                                   </CardHeader>
-                                                                  <CardContent className="space-y-4">
-                                                                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                                                  <CardContent className="space-y-6 pt-0 flex-1">
+                                                                      <div className="space-y-4">
                                                                           <div className="space-y-2">
-                                                                              <Label>Bandeirada (Base)</Label>
+                                                                              <Label>Valor Base (Bandeirada)</Label>
                                                                               <div className="relative">
                                                                                   <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">R$</span>
-                                                                                  <Input type="number" value={cat.base_fare} onChange={e => updateCategory(cat.id, 'base_fare', e.target.value)} className="pl-10 h-12 rounded-xl" />
+                                                                                  <Input type="number" value={cat.base_fare} onChange={e => updateCategory(cat.id, 'base_fare', e.target.value)} className="pl-10 h-12 rounded-xl bg-white dark:bg-slate-800 font-bold text-lg" />
                                                                               </div>
                                                                           </div>
                                                                           <div className="space-y-2">
                                                                               <Label>Custo por KM</Label>
                                                                               <div className="relative">
                                                                                   <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">R$</span>
-                                                                                  <Input type="number" value={cat.cost_per_km} onChange={e => updateCategory(cat.id, 'cost_per_km', e.target.value)} className="pl-10 h-12 rounded-xl" />
+                                                                                  <Input type="number" value={cat.cost_per_km} onChange={e => updateCategory(cat.id, 'cost_per_km', e.target.value)} className="pl-10 h-12 rounded-xl bg-white dark:bg-slate-800 font-bold text-lg" />
                                                                               </div>
                                                                           </div>
                                                                           <div className="space-y-2">
-                                                                              <Label>Valor Mínimo</Label>
+                                                                              <Label>Valor Mínimo da Corrida</Label>
                                                                               <div className="relative">
                                                                                   <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">R$</span>
-                                                                                  <Input type="number" value={cat.min_fare} onChange={e => updateCategory(cat.id, 'min_fare', e.target.value)} className="pl-10 h-12 rounded-xl" />
+                                                                                  <Input type="number" value={cat.min_fare} onChange={e => updateCategory(cat.id, 'min_fare', e.target.value)} className="pl-10 h-12 rounded-xl bg-white dark:bg-slate-800 font-bold text-lg" />
                                                                               </div>
                                                                           </div>
                                                                       </div>
                                                                   </CardContent>
+                                                                  <CardFooter className="pb-6">
+                                                                      <Button onClick={handleSaveConfig} className="w-full bg-slate-900 text-white font-bold h-12 rounded-xl"><Save className="w-4 h-4 mr-2" /> Salvar Valores</Button>
+                                                                  </CardFooter>
                                                               </Card>
                                                           </TabsContent>
                                                       ))}
                                                   </div>
                                               </Tabs>
-                                          </div>
-                                      )}
-                                      
-                                      <div className="pt-6">
-                                          <Button onClick={handleSaveConfig} className="w-full bg-slate-900 text-white font-bold h-14 rounded-2xl shadow-xl hover:bg-black transition-all hover:scale-[1.01]">
-                                              <Save className="w-5 h-5 mr-2" /> Salvar Alterações nas Categorias
-                                          </Button>
+                                          ) : (
+                                              <div className="flex flex-col items-center justify-center h-64 bg-slate-100 dark:bg-slate-900 rounded-[32px] text-muted-foreground p-6 text-center">
+                                                  <Info className="w-12 h-12 mb-4 opacity-20" />
+                                                  <p>Nenhuma categoria dinâmica ativa no momento.</p>
+                                              </div>
+                                          )}
                                       </div>
                                   </div>
                               </TabsContent>
