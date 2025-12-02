@@ -183,7 +183,7 @@ const Login = () => {
       }`} />
       
       <div className="mb-8 text-center text-white z-10">
-        <h1 className="text-4xl font-bold tracking-tight mb-2">GoldDrive</h1>
+        <h1 className="text-4xl font-bold tracking-tight mb-2">Gold Mobile</h1>
         <p className="opacity-90">Sua plataforma premium de mobilidade</p>
       </div>
 
@@ -321,7 +321,7 @@ const Login = () => {
       </Card>
       
       <div className="mt-8 text-xs text-gray-400 text-center">
-        &copy; 2024 GoldDrive. Todos os direitos reservados.
+        &copy; 2024 Gold Mobile. Todos os direitos reservados.
       </div>
     </div>
   );

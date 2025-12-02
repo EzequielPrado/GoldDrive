@@ -61,7 +61,7 @@ const DriverPending = () => {
           <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-8 flex items-center gap-3">
                <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0" />
                <p className="text-xs text-blue-700 font-medium text-left">
-                   Esse processo garante a segurança de todos os usuários da plataforma GoldDrive.
+                   Esse processo garante a segurança de todos os usuários da plataforma Gold Mobile.
                </p>
           </div>
 

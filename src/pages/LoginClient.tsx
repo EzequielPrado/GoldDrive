@@ -84,7 +84,7 @@ const LoginClient = () => {
 
            <div className="flex-1 flex flex-col justify-center px-8 sm:px-16 max-w-xl mx-auto w-full">
                <div className="mb-10 animate-in slide-in-from-bottom-4 duration-700">
-                   <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">Gold<span className="text-yellow-500">Drive</span></h1>
+                   <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">Gold<span className="text-yellow-500"> Mobile</span></h1>
                    <div className="h-1.5 w-16 bg-yellow-500 rounded-full mb-6" />
                    <h2 className="text-2xl font-bold text-slate-800">{isSignUp ? "Comece sua jornada" : "Bem-vindo de volta"}</h2>
                    <p className="text-gray-500 mt-2">{isSignUp ? "Preencha seus dados para criar uma conta gratuita." : "Faça login para solicitar sua próxima corrida."}</p>
@@ -117,7 +117,7 @@ const LoginClient = () => {
                </div>
            </div>
            
-           <div className="p-6 text-center lg:hidden"><p className="text-xs text-gray-300 font-medium">GoldDrive &copy; 2024</p></div>
+           <div className="p-6 text-center lg:hidden"><p className="text-xs text-gray-300 font-medium">Gold Mobile &copy; 2024</p></div>
        </div>
     </div>
   );

@@ -78,7 +78,7 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
       const { data: ratings } = await supabase.from('rides').select('customer_rating').eq('driver_id', driverId).not('customer_rating', 'is', null);
       const avg = ratings && ratings.length > 0 ? ratings.reduce((a, b) => a + (b.customer_rating || 0), 0) / ratings.length : 5.0;
       return {
-          name: data ? `${data.first_name} ${data.last_name || ''}` : 'Motorista GoldDrive',
+          name: data ? `${data.first_name} ${data.last_name || ''}` : 'Motorista Gold Mobile',
           avatar_url: data?.avatar_url,
           car_model: data?.car_model,
           car_plate: data?.car_plate,
@@ -343,7 +343,7 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
                await supabase.from('profiles').update({ balance: (dProfile?.balance || 0) - platformFee }).eq('id', ride.driver_id);
                
                await supabase.from('transactions').insert({ 
-                   user_id: ride.driver_id, amount: -platformFee, type: 'PLATFORM_FEE', description: 'Taxa GoldDrive (Pago em dinheiro)' 
+                   user_id: ride.driver_id, amount: -platformFee, type: 'PLATFORM_FEE', description: 'Taxa Gold Mobile (Pago em dinheiro)' 
                });
           }
       }

@@ -68,7 +68,7 @@ const LoginAdmin = () => {
                <div className="w-16 h-16 bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-2xl border border-white/10 ring-4 ring-white/5">
                    <Shield className="w-8 h-8 text-yellow-500" />
                </div>
-               <h1 className="text-3xl font-black text-white tracking-tight mb-2">Gold<span className="text-yellow-500">Admin</span></h1>
+               <h1 className="text-3xl font-black text-white tracking-tight mb-2">Gold<span className="text-yellow-500"> Mobile</span></h1>
                <p className="text-slate-400">Credenciais de alta segurança necessárias.</p>
            </div>
 
@@ -79,7 +79,7 @@ const LoginAdmin = () => {
                            <label className="text-xs font-bold uppercase text-slate-500 tracking-wider ml-1">ID Corporativo</label>
                            <div className="relative group">
                                <div className="absolute left-4 top-3.5 text-slate-500 group-focus-within:text-yellow-500 transition-colors"><Shield className="w-5 h-5" /></div>
-                               <Input type="email" placeholder="admin@golddrive.com" className="bg-slate-900/50 border-white/10 pl-12 h-12 rounded-xl text-white placeholder:text-slate-600 focus:border-yellow-500/50 focus:ring-yellow-500/20 transition-all" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" />
+                               <Input type="email" placeholder="admin@goldmobile.com" className="bg-slate-900/50 border-white/10 pl-12 h-12 rounded-xl text-white placeholder:text-slate-600 focus:border-yellow-500/50 focus:ring-yellow-500/20 transition-all" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" />
                            </div>
                        </div>
                        

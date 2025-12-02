@@ -342,7 +342,7 @@ const ClientDashboard = () => {
                              )}
                         </div>
 
-                        <Button className="w-full h-14 text-lg font-bold rounded-2xl bg-black hover:bg-zinc-800" onClick={confirmRide} disabled={!selectedCategoryId || isRequesting || loadingCats}>{isRequesting ? <Loader2 className="animate-spin" /> : "Confirmar GoldDrive"}</Button>
+                        <Button className="w-full h-14 text-lg font-bold rounded-2xl bg-black hover:bg-zinc-800" onClick={confirmRide} disabled={!selectedCategoryId || isRequesting || loadingCats}>{isRequesting ? <Loader2 className="animate-spin" /> : "Confirmar Gold Mobile"}</Button>
                     </div>
                 )}
 

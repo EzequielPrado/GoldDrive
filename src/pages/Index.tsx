@@ -50,7 +50,7 @@ const Index = () => {
       <div className="max-w-5xl w-full space-y-12 z-10 animate-in fade-in duration-700">
         <div className="text-center space-y-6">
           <h1 className="text-6xl md:text-7xl font-black text-white tracking-tighter">
-            Gold<span className="text-yellow-500">Drive</span>
+            Gold<span className="text-yellow-500"> Mobile</span>
           </h1>
           <p className="text-xl md:text-2xl text-gray-400 max-w-2xl mx-auto font-light">
             A excelência da mobilidade urbana.

@@ -301,7 +301,7 @@ const LoginDriver = () => {
            <div className="flex-1 flex flex-col justify-center px-8 sm:px-16 max-w-xl mx-auto w-full pb-10">
                
                <div className="mb-8 animate-in slide-in-from-bottom-4 duration-700">
-                   <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">Gold<span className="text-yellow-500">Driver</span></h1>
+                   <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">Gold<span className="text-yellow-500"> Mobile</span></h1>
                    {!isSignUp ? (
                        <>
                            <h2 className="text-2xl font-bold text-slate-800">Acesse seu painel</h2>
@@ -478,7 +478,7 @@ const LoginDriver = () => {
                )}
            </div>
            
-           <div className="p-6 text-center lg:hidden"><p className="text-xs text-gray-400 font-medium">GoldDrive Driver &copy; 2024</p></div>
+           <div className="p-6 text-center lg:hidden"><p className="text-xs text-gray-400 font-medium">Gold Mobile Driver &copy; 2024</p></div>
        </div>
     </div>
   );
