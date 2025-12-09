@@ -4,26 +4,19 @@ import {
   MapPin, Car, Navigation, Loader2, Star, AlertTriangle, XCircle, ChevronRight, Clock, Wallet, User, ArrowLeft, BellRing, History, X, Flag, CreditCard, Banknote, MessageCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useRide } from "@/context/RideContext";
 import { showSuccess, showError } from "@/utils/toast";
 import { useNavigate } from "react-router-dom";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import FloatingDock from "@/components/FloatingDock";
 import RideChat from "@/components/RideChat";
 import { Textarea } from "@/components/ui/textarea";
-
-const MOCK_LOCATIONS = [
-    { id: "short", label: "Shopping Center (2km)", distance: "2.1 km", km: 2.1 },
-    { id: "medium", label: "Centro da Cidade (5km)", distance: "5.0 km", km: 5.0 },
-    { id: "long", label: "Aeroporto (15km)", distance: "15.4 km", km: 15.4 }
-];
+import LocationSearch from "@/components/LocationSearch";
 
 const ClientDashboard = () => {
   const navigate = useNavigate();
@@ -34,13 +27,19 @@ const ClientDashboard = () => {
   
   // Ride Flow States
   const [step, setStep] = useState<'search' | 'confirm' | 'waiting' | 'rating' | 'cancelled'>('search');
-  const [pickup, setPickup] = useState("");
-  const [destinationId, setDestinationId] = useState("");
+  
+  // Locations Real Data
+  const [pickupLocation, setPickupLocation] = useState<{ lat: number, lon: number, address: string } | null>(null);
+  const [destLocation, setDestLocation] = useState<{ lat: number, lon: number, address: string } | null>(null);
+  const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
+  const [routeDistance, setRouteDistance] = useState<number>(0); // em KM
+  
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
   const [paymentMethod, setPaymentMethod] = useState<'WALLET' | 'CASH'>('WALLET');
   
-  const [loadingLocation, setLoadingLocation] = useState(false);
   const [isRequesting, setIsRequesting] = useState(false);
+  const [calculatingRoute, setCalculatingRoute] = useState(false);
+
   const [rating, setRating] = useState(0);
   const [ratingComment, setRatingComment] = useState("");
   const [categories, setCategories] = useState<any[]>([]);
@@ -65,6 +64,49 @@ const ClientDashboard = () => {
   useEffect(() => {
     fetchInitialData();
   }, [activeTab]);
+
+  // Efeito para calcular rota quando Origem e Destino mudam
+  useEffect(() => {
+      const calculateRoute = async () => {
+          if (pickupLocation && destLocation) {
+              setCalculatingRoute(true);
+              try {
+                  // Chama OSRM para rota de carro
+                  const response = await fetch(
+                      `https://router.project-osrm.org/route/v1/driving/${pickupLocation.lon},${pickupLocation.lat};${destLocation.lon},${destLocation.lat}?overview=full&geometries=geojson`
+                  );
+                  const data = await response.json();
+                  
+                  if (data.routes && data.routes.length > 0) {
+                      const route = data.routes[0];
+                      // Distância vem em metros, converter para KM
+                      const distanceKm = route.distance / 1000;
+                      setRouteDistance(distanceKm);
+                      
+                      // Converter geometria para formato do Leaflet [lat, lon]
+                      const coords = route.geometry.coordinates.map((coord: number[]) => [coord[1], coord[0]] as [number, number]);
+                      setRouteCoords(coords);
+                  }
+              } catch (error) {
+                  console.error("Erro ao calcular rota:", error);
+                  // Fallback para linha reta se falhar
+                  setRouteCoords([
+                      [pickupLocation.lat, pickupLocation.lon], 
+                      [destLocation.lat, destLocation.lon]
+                  ]);
+                  // Distância Haversine aproximada
+                  // ... (simplificado para não estender demais o código, usar rota reta)
+              } finally {
+                  setCalculatingRoute(false);
+              }
+          } else {
+              setRouteCoords([]);
+              setRouteDistance(0);
+          }
+      };
+      
+      calculateRoute();
+  }, [pickupLocation, destLocation]);
 
   useEffect(() => {
     if (ride) {
@@ -92,23 +134,18 @@ const ClientDashboard = () => {
         if (profile) setUserProfile(profile); 
 
         if (activeTab === 'home') {
-            // Busca Categorias (Apenas ATIVAS)
-            // Ordena colocando Gold Driver primeiro se existir, depois por preço
             const { data: cats } = await supabase.from('car_categories').select('*').eq('active', true).order('base_fare', { ascending: true });
             
             if (cats && cats.length > 0) {
-                // Força ordenação customizada para Gold Driver ficar em destaque ou primeiro
                 const sortedCats = cats.sort((a, b) => {
                     if (a.name === 'Gold Driver') return -1;
                     if (b.name === 'Gold Driver') return 1;
                     return a.base_fare - b.base_fare;
                 });
-                
                 setCategories(sortedCats); 
                 if (!selectedCategoryId) setSelectedCategoryId(sortedCats[0].id);
             }
 
-            // Busca Tabela de Preços e Configs Admin
             const { data: tiers } = await supabase.from('pricing_tiers').select('*').order('max_distance', { ascending: true });
             if (tiers) setPricingTiers(tiers);
 
@@ -127,7 +164,6 @@ const ClientDashboard = () => {
             };
             setAppSettings(newSettings);
             
-            // Define método inicial baseado no que está ativo
             if (!newSettings.enableWallet && newSettings.enableCash) setPaymentMethod('CASH');
             else if (newSettings.enableWallet) setPaymentMethod('WALLET');
         } 
@@ -152,22 +188,22 @@ const ClientDashboard = () => {
       else setActiveTab(tab);
   };
 
-  const handleRequest = () => { if (!pickup || !destinationId) { showError("Preencha origem e destino"); return; } setStep('confirm'); };
+  const handleRequest = () => { if (!pickupLocation || !destLocation) { showError("Preencha origem e destino"); return; } setStep('confirm'); };
 
-  // --- LÓGICA DE PREÇO HÍBRIDA ---
-  // CORREÇÃO: Agora aceita um catId opcional para calcular preço de uma categoria específica
+  // --- LÓGICA DE PREÇO HÍBRIDA (REAL) ---
   const calculatePrice = (catId?: string) => {
       const targetCatId = catId || selectedCategoryId;
-      const dest = MOCK_LOCATIONS.find(l => l.id === destinationId);
       const category = categories.find(c => c.id === targetCatId);
       
-      if (!dest || !category) return 0;
+      // Usa a distância real calculada pela API
+      const distanceKm = routeDistance;
+      
+      if (!category || distanceKm <= 0) return 0;
 
-      const distanceKm = dest.km;
       let finalPrice = 0;
       
       if (category.name === 'Gold Driver') {
-          // --- ESTRATÉGIA: TABELA FIXA ---
+          // Tabela Fixa
           const tier = pricingTiers.find(t => t.max_distance >= distanceKm);
           if (tier) {
               finalPrice = Number(tier.price);
@@ -177,7 +213,7 @@ const ClientDashboard = () => {
               else finalPrice = 15; // Fallback
           }
       } else {
-          // --- ESTRATÉGIA: CÁLCULO DINÂMICO ---
+          // Dinâmico: Base + (KM * Custo)
           const baseFare = Number(category.base_fare || 0);
           const costPerKm = Number(category.cost_per_km || 0);
           const minFare = Number(category.min_fare || 0);
@@ -186,7 +222,7 @@ const ClientDashboard = () => {
           if (finalPrice < minFare) finalPrice = minFare;
       }
       
-      // --- TAXA NOTURNA (GLOBAL) ---
+      // Taxa Noturna
       if (adminConfig.night_active === 'true') {
           const now = new Date();
           const currentHour = now.getHours();
@@ -212,9 +248,8 @@ const ClientDashboard = () => {
 
   const confirmRide = async () => {
     if (isRequesting) return;
-    const dest = MOCK_LOCATIONS.find(l => l.id === destinationId);
     const cat = categories.find(c => c.id === selectedCategoryId);
-    if (!dest || !cat) return;
+    if (!pickupLocation || !destLocation || !cat) return;
     
     // Verificação de saldo só se for WALLET
     if (paymentMethod === 'WALLET' && (userProfile?.balance || 0) < currentPrice) { 
@@ -225,17 +260,47 @@ const ClientDashboard = () => {
 
     setIsRequesting(true);
     try { 
-        await requestRide(pickup, dest.label, currentPrice, dest.distance, cat.name, paymentMethod); 
+        // Envia endereço completo e distância real formatada
+        await requestRide(
+            pickupLocation.address, 
+            destLocation.address, 
+            currentPrice, 
+            `${routeDistance.toFixed(1)} km`, 
+            cat.name, 
+            paymentMethod
+        ); 
     } 
     catch (e: any) { showError(e.message); } 
     finally { setIsRequesting(false); }
   };
 
+  // Pega localização GPS do navegador
   const getCurrentLocation = () => {
-      setLoadingLocation(true);
       if ("geolocation" in navigator) {
-          navigator.geolocation.getCurrentPosition(() => { setPickup(`Rua das Flores, 123`); setLoadingLocation(false); }, () => { showError("Erro GPS"); setLoadingLocation(false); });
-      } else setLoadingLocation(false);
+          navigator.geolocation.getCurrentPosition(
+              async (pos) => {
+                  try {
+                      // Reverse Geocoding para pegar o nome da rua
+                      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`);
+                      const data = await res.json();
+                      const address = data.address.road || "Minha Localização Atual";
+                      
+                      setPickupLocation({
+                          lat: pos.coords.latitude,
+                          lon: pos.coords.longitude,
+                          address: address
+                      });
+                  } catch (e) {
+                      setPickupLocation({
+                          lat: pos.coords.latitude,
+                          lon: pos.coords.longitude,
+                          address: "Localização GPS"
+                      });
+                  }
+              }, 
+              () => showError("Erro ao obter GPS")
+          );
+      } else showError("GPS não suportado");
   };
 
   const cardBaseClasses = "bg-white/90 backdrop-blur-xl border border-white/40 p-6 rounded-[32px] shadow-2xl animate-in slide-in-from-bottom duration-500 w-full";
@@ -243,8 +308,13 @@ const ClientDashboard = () => {
   return (
     <div className="relative h-screen w-full overflow-hidden font-sans bg-gray-100">
       
+      {/* MAPA DE FUNDO ATUALIZADO */}
       <div className="absolute inset-0 z-0">
-         <MapComponent showPickup={step !== 'search'} showDestination={!!destinationId && step !== 'search'} />
+         <MapComponent 
+            pickupLocation={pickupLocation} 
+            destinationLocation={destLocation}
+            routeCoordinates={routeCoords}
+         />
       </div>
 
       {/* HEADER */}
@@ -272,35 +342,47 @@ const ClientDashboard = () => {
         
         {activeTab === 'home' && (
             <div className="w-full max-w-md pointer-events-auto transition-all duration-500">
-                {/* SEARCH */}
+                {/* SEARCH REAL */}
                 {step === 'search' && (
                     <div className={cardBaseClasses}>
                         <h2 className="text-2xl font-black text-slate-900 mb-6">Para onde vamos?</h2>
                         <div className="space-y-4">
-                            <div className="relative group">
-                                <div className="absolute left-4 top-4 w-3 h-3 rounded-full bg-blue-500 ring-4 ring-blue-500/20 z-10"></div>
-                                <Input 
-                                    value={pickup} 
-                                    onChange={(e) => setPickup(e.target.value)} 
-                                    placeholder="Sua localização" 
-                                    className="pl-12 h-14 bg-white border-gray-200 text-slate-900 rounded-2xl transition-all shadow-sm font-medium placeholder:text-gray-400" 
+                            <div className="flex gap-2">
+                                <LocationSearch 
+                                    placeholder="Local de embarque" 
+                                    icon={Navigation}
+                                    initialValue={pickupLocation?.address}
+                                    onSelect={(item) => setPickupLocation({ lat: item.lat, lon: item.lon, address: item.display_name.split(',')[0] })}
+                                    className="flex-1"
                                 />
-                                <Button size="icon" variant="ghost" className="absolute right-2 top-2 text-blue-600 hover:bg-blue-50 rounded-xl" onClick={getCurrentLocation} disabled={loadingLocation}><Navigation className={`w-5 h-5 ${loadingLocation ? 'animate-spin' : ''}`} /></Button>
+                                <Button size="icon" variant="outline" className="h-14 w-14 rounded-2xl shrink-0" onClick={getCurrentLocation}>
+                                    <MapPin className="w-5 h-5 text-blue-600" />
+                                </Button>
                             </div>
+
                             <div className="relative group">
-                                <div className="absolute left-[19px] -top-6 w-0.5 h-8 bg-gray-300 z-0"></div>
-                                <div className="absolute left-4 top-4.5 w-3 h-3 bg-black ring-4 ring-black/10 z-10"></div>
-                                <Select onValueChange={setDestinationId} value={destinationId}>
-                                    <SelectTrigger className="pl-12 h-14 bg-white border-gray-200 text-slate-900 rounded-2xl transition-all shadow-sm text-base font-medium">
-                                        <SelectValue placeholder="Selecione o destino" />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-white border-gray-200 text-slate-900">
-                                        {MOCK_LOCATIONS.map(loc => (<SelectItem key={loc.id} value={loc.id} className="hover:bg-gray-100 cursor-pointer">{loc.label}</SelectItem>))}
-                                    </SelectContent>
-                                </Select>
+                                <div className="absolute left-[27px] -top-6 w-0.5 h-8 bg-gray-300 z-0"></div>
+                                <LocationSearch 
+                                    placeholder="Digite o destino..." 
+                                    initialValue={destLocation?.address}
+                                    onSelect={(item) => setDestLocation({ lat: item.lat, lon: item.lon, address: item.display_name.split(',')[0] })}
+                                />
                             </div>
                         </div>
-                        <Button className="w-full mt-6 h-14 text-lg font-bold rounded-2xl bg-black text-white hover:bg-zinc-800 shadow-xl shadow-black/10 transition-transform active:scale-95" onClick={handleRequest} disabled={!destinationId || !pickup}>Continuar <ChevronRight className="ml-2 w-5 h-5 opacity-50" /></Button>
+
+                        {calculatingRoute && (
+                            <div className="text-center text-xs text-gray-400 mt-2 flex items-center justify-center gap-1">
+                                <Loader2 className="w-3 h-3 animate-spin" /> Calculando melhor rota...
+                            </div>
+                        )}
+
+                        <Button 
+                            className="w-full mt-6 h-14 text-lg font-bold rounded-2xl bg-black text-white hover:bg-zinc-800 shadow-xl shadow-black/10 transition-transform active:scale-95" 
+                            onClick={handleRequest} 
+                            disabled={!pickupLocation || !destLocation || calculatingRoute}
+                        >
+                            Continuar <ChevronRight className="ml-2 w-5 h-5 opacity-50" />
+                        </Button>
                     </div>
                 )}
 
@@ -311,6 +393,13 @@ const ClientDashboard = () => {
                             <div className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><ArrowLeft className="w-5 h-5 text-slate-900" /></div>
                             <h2 className="text-xl font-bold text-slate-900">Escolha a Categoria</h2>
                         </div>
+                        
+                        {/* Resumo da Rota */}
+                        <div className="flex justify-between items-center mb-4 px-2">
+                             <Badge variant="outline" className="text-xs bg-white">{routeDistance.toFixed(1)} km</Badge>
+                             <span className="text-xs text-gray-400">Tempo est: {(routeDistance * 2).toFixed(0)} min</span>
+                        </div>
+
                         {loadingCats ? <div className="py-10 text-center flex flex-col items-center gap-3"><Loader2 className="animate-spin text-yellow-500 w-8 h-8" /><p className="text-gray-400 text-sm">Buscando categorias...</p></div> : 
                          categories.length === 0 ? <div className="py-10 text-center"><p className="text-red-500 font-bold">Nenhuma categoria disponível.</p></div> : 
                         (

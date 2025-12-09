@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -16,41 +16,82 @@ const DefaultIcon = L.icon({
 
 L.Marker.prototype.options.icon = DefaultIcon;
 
-// Componente auxiliar para corrigir renderização ao redimensionar
-const MapResizer = () => {
-  const map = useMap();
-  useEffect(() => {
-    // Força o leaflet a recalcular o tamanho do container após montar
-    const timer = setTimeout(() => {
-        map.invalidateSize();
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [map]);
-  return null;
-};
+// Ícone Personalizado para Origem (Verde)
+const PickupIcon = new L.Icon({
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+});
 
-// Componente para atualizar o centro do mapa dinamicamente
-const MapUpdater = ({ center }: { center: [number, number] }) => {
+// Ícone Personalizado para Destino (Vermelho)
+const DestinationIcon = new L.Icon({
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+});
+
+// Componente para controlar o mapa (Zoom e Pan)
+const MapController = ({ 
+    center, 
+    pickup, 
+    destination,
+    routeCoords 
+}: { 
+    center: [number, number], 
+    pickup?: [number, number] | null, 
+    destination?: [number, number] | null,
+    routeCoords?: [number, number][] 
+}) => {
   const map = useMap();
+
   useEffect(() => {
-    map.flyTo(center, 14, {
-        animate: true,
-        duration: 1.5
-    });
-  }, [center, map]);
+    // 1. Prioridade: Se tiver uma rota desenhada, foca nela
+    if (routeCoords && routeCoords.length > 0) {
+        const bounds = L.latLngBounds(routeCoords);
+        map.fitBounds(bounds, { padding: [50, 50] });
+    } 
+    // 2. Se tiver origem e destino, foca nos dois
+    else if (pickup && destination) {
+        const bounds = L.latLngBounds([pickup, destination]);
+        map.fitBounds(bounds, { padding: [50, 50] });
+    }
+    // 3. Se tiver só um ponto (ex: origem selecionada), vai para ele
+    else if (pickup) {
+        map.flyTo(pickup, 16, { animate: true, duration: 1.5 });
+    }
+    // 4. Default
+    else {
+        map.flyTo(center, 13);
+    }
+
+    // Fix render
+    setTimeout(() => map.invalidateSize(), 100);
+  }, [center, pickup, destination, routeCoords, map]);
+
   return null;
 };
 
 interface MapProps {
   className?: string;
-  showPickup?: boolean;
-  showDestination?: boolean;
+  pickupLocation?: { lat: number; lon: number } | null;
+  destinationLocation?: { lat: number; lon: number } | null;
+  routeCoordinates?: [number, number][]; // Array de lat/long para desenhar a linha
 }
 
-const MapComponent = ({ className = "h-full w-full", showPickup = false, showDestination = false }: MapProps) => {
+const MapComponent = ({ 
+    className = "h-full w-full", 
+    pickupLocation, 
+    destinationLocation,
+    routeCoordinates 
+}: MapProps) => {
   const [isMounted, setIsMounted] = useState(false);
-  const centerPosition: [number, number] = [-23.55052, -46.633309]; // São Paulo
-  const destinationPos: [number, number] = [-23.559, -46.640]; 
+  const defaultCenter: [number, number] = [-23.55052, -46.633309]; // SP Default
 
   useEffect(() => {
     setIsMounted(true);
@@ -59,18 +100,22 @@ const MapComponent = ({ className = "h-full w-full", showPickup = false, showDes
   if (!isMounted) {
     return (
         <div className="h-full w-full bg-gray-100 flex flex-col items-center justify-center text-gray-400 gap-2">
-            <div className="w-8 h-8 border-4 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
             <span className="text-sm">Carregando mapa...</span>
         </div>
     );
   }
 
+  // Prepara posições para o Leaflet
+  const pickupPos: [number, number] | null = pickupLocation ? [pickupLocation.lat, pickupLocation.lon] : null;
+  const destPos: [number, number] | null = destinationLocation ? [destinationLocation.lat, destinationLocation.lon] : null;
+  const activeCenter = pickupPos || defaultCenter;
+
   return (
     <div className={`relative z-0 ${className} bg-gray-100`}>
       <MapContainer 
-        center={centerPosition} 
+        center={activeCenter} 
         zoom={13} 
-        scrollWheelZoom={true} 
+        scrollWheelZoom={false} 
         className="h-full w-full isolate"
         zoomControl={false}
       >
@@ -79,24 +124,40 @@ const MapComponent = ({ className = "h-full w-full", showPickup = false, showDes
           url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
         />
         
-        <MapResizer />
-
-        {showPickup && (
-            <Marker position={centerPosition}>
-              <Popup>Sua Localização</Popup>
+        {/* Marcador de Origem */}
+        {pickupPos && (
+            <Marker position={pickupPos} icon={PickupIcon}>
+              <Popup>Local de Embarque</Popup>
             </Marker>
         )}
 
-        {showDestination && (
-             <Marker position={destinationPos}>
+        {/* Marcador de Destino */}
+        {destPos && (
+             <Marker position={destPos} icon={DestinationIcon}>
               <Popup>Destino</Popup>
             </Marker>
         )}
 
-        <MapUpdater center={centerPosition} />
+        {/* Linha da Rota */}
+        {routeCoordinates && routeCoordinates.length > 0 && (
+            <Polyline 
+                positions={routeCoordinates} 
+                color="#000" // Cor da linha (preto estilo Uber)
+                weight={4}
+                opacity={0.7}
+                dashArray="10, 10" // Linha tracejada se quiser, ou solida se remover isso
+            />
+        )}
+
+        <MapController 
+            center={defaultCenter} 
+            pickup={pickupPos} 
+            destination={destPos} 
+            routeCoords={routeCoordinates}
+        />
       </MapContainer>
       
-      {/* Overlay gradiente para melhor leitura de UI sobre o mapa */}
+      {/* Overlay gradiente */}
       <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-white/40 via-transparent to-white/60 z-[400]" />
     </div>
   );
