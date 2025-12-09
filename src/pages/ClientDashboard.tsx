@@ -344,7 +344,7 @@ const ClientDashboard = () => {
     <div className="relative h-screen w-full overflow-hidden font-sans bg-gray-100">
       
       {/* MARCA D'ÁGUA FIXA NO TOPO */}
-      <img src="/logo-gold-mobile.png" alt="Logo" className="fixed top-4 left-1/2 -translate-x-1/2 h-6 opacity-80 z-50 pointer-events-none drop-shadow-md" />
+      <img src="/logo-goldmobile-2.png" alt="Logo" className="fixed top-4 left-1/2 -translate-x-1/2 h-6 opacity-80 z-50 pointer-events-none drop-shadow-md" />
 
       {/* MAPA */}
       <div className="absolute inset-0 z-0">

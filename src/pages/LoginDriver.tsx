@@ -314,7 +314,7 @@ const LoginDriver = () => {
            />
            <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/60 to-transparent" />
            <div className="relative z-10 text-center px-12 flex flex-col items-center">
-                <img src="/logo-gold-mobile.png" alt="Gold Mobile" className="w-64 h-auto mb-8 drop-shadow-2xl" />
+                <img src="/logo-goldmobile-2.png" alt="Gold Mobile" className="w-64 h-auto mb-8 drop-shadow-2xl" />
                 <h2 className="text-5xl font-black text-white mb-6 tracking-tight">Dirija e<br/>Lucre Mais.</h2>
                 <p className="text-gray-400 text-xl font-light leading-relaxed max-w-md mx-auto">
                     A plataforma que valoriza o motorista. Taxas justas, pagamentos rápidos e suporte 24h.
@@ -345,7 +345,7 @@ const LoginDriver = () => {
                
                <div className="mb-8 animate-in slide-in-from-bottom-4 duration-700">
                    <div className="lg:hidden mb-6 flex justify-center">
-                       <img src="/logo-gold-mobile.png" alt="Gold Mobile" className="w-48 h-auto" />
+                       <img src="/logo-goldmobile-2.png" alt="Gold Mobile" className="w-48 h-auto" />
                    </div>
                    {!isSignUp ? (
                        <>

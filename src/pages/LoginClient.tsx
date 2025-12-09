@@ -65,7 +65,7 @@ const LoginClient = () => {
            />
            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
            <div className="relative z-10 text-center px-12 flex flex-col items-center">
-                <img src="/logo-gold-mobile.png" alt="Gold Mobile" className="w-64 h-auto mb-8 drop-shadow-2xl" />
+                <img src="/logo-goldmobile-2.png" alt="Gold Mobile" className="w-64 h-auto mb-8 drop-shadow-2xl" />
                 <h2 className="text-5xl font-black text-white mb-6 tracking-tight">Sua cidade, <br/>suas regras.</h2>
                 <p className="text-gray-400 text-xl font-light leading-relaxed max-w-md mx-auto">
                     Conecte-se aos melhores motoristas da região com a segurança e o conforto que você merece.
@@ -84,7 +84,7 @@ const LoginClient = () => {
            <div className="flex-1 flex flex-col justify-center px-8 sm:px-16 max-w-xl mx-auto w-full">
                <div className="mb-10 animate-in slide-in-from-bottom-4 duration-700">
                    <div className="lg:hidden mb-6 flex justify-center">
-                       <img src="/logo-gold-mobile.png" alt="Gold Mobile" className="w-48 h-auto" />
+                       <img src="/logo-goldmobile-2.png" alt="Gold Mobile" className="w-48 h-auto" />
                    </div>
                    <h2 className="text-2xl font-bold text-slate-800">{isSignUp ? "Comece sua jornada" : "Bem-vindo de volta"}</h2>
                    <p className="text-gray-500 mt-2">{isSignUp ? "Preencha seus dados para criar uma conta gratuita." : "Faça login para solicitar sua próxima corrida."}</p>

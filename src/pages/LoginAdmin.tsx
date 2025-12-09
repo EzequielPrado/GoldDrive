@@ -65,7 +65,7 @@ const LoginAdmin = () => {
 
        <div className="w-full max-w-md relative z-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
            <div className="mb-8 text-center flex flex-col items-center">
-               <img src="/logo-gold-mobile.png" alt="Gold Mobile" className="w-48 h-auto mb-6" />
+               <img src="/logo-goldmobile-2.png" alt="Gold Mobile" className="w-48 h-auto mb-6" />
                <p className="text-slate-400">Credenciais de alta segurança necessárias.</p>
            </div>
 

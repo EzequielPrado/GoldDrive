@@ -49,7 +49,7 @@ const Index = () => {
         {/* Header / Logo */}
         <div className="text-center space-y-4 mt-12 animate-in slide-in-from-top-10 duration-700 flex flex-col items-center">
             <img 
-              src="/logo-gold-mobile.png" 
+              src="/logo-goldmobile-2.png" 
               alt="Gold Mobile" 
               className="w-64 h-auto drop-shadow-2xl"
             />
