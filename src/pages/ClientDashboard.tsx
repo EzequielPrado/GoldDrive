@@ -80,8 +80,8 @@ const ClientDashboard = () => {
                   
                   if (data.routes && data.routes.length > 0) {
                       const route = data.routes[0];
-                      // Distância vem em metros, converter para KM
-                      const distanceKm = route.distance / 1000;
+                      // Distância vem em metros, converter para KM com precisão
+                      const distanceKm = Number((route.distance / 1000).toFixed(2));
                       setRouteDistance(distanceKm);
                       
                       // Converter geometria para formato do Leaflet [lat, lon]
@@ -95,6 +95,7 @@ const ClientDashboard = () => {
                       [pickupLocation.lat, pickupLocation.lon], 
                       [destLocation.lat, destLocation.lon]
                   ]);
+                  // Não zera a distância no erro para permitir inserção manual ou fallback futuro
               } finally {
                   setCalculatingRoute(false);
               }
@@ -145,6 +146,7 @@ const ClientDashboard = () => {
                 if (!selectedCategoryId) setSelectedCategoryId(sortedCats[0].id);
             }
 
+            // Garante ordenação correta da tabela de preços para a busca funcionar (menor para maior distância)
             const { data: tiers } = await supabase.from('pricing_tiers').select('*').order('max_distance', { ascending: true });
             if (tiers) setPricingTiers(tiers);
 
@@ -202,14 +204,16 @@ const ClientDashboard = () => {
       let finalPrice = 0;
       
       if (category.name === 'Gold Driver') {
-          // Tabela Fixa
-          const tier = pricingTiers.find(t => t.max_distance >= distanceKm);
+          // Tabela Fixa: Encontra o primeiro tier onde a distância da rota é MENOR ou IGUAL ao max_distance do tier
+          const tier = pricingTiers.find(t => distanceKm <= Number(t.max_distance));
+          
           if (tier) {
               finalPrice = Number(tier.price);
           } else {
+              // Se a distância for maior que o último tier configurado, pega o último ou um fallback
               const maxTier = pricingTiers[pricingTiers.length - 1];
               if (maxTier) finalPrice = Number(maxTier.price);
-              else finalPrice = 15; // Fallback
+              else finalPrice = 15; // Fallback de segurança
           }
       } else {
           // Dinâmico: Base + (KM * Custo)
@@ -221,7 +225,7 @@ const ClientDashboard = () => {
           if (finalPrice < minFare) finalPrice = minFare;
       }
       
-      // Taxa Noturna
+      // Taxa Noturna (Lógica existente mantida)
       if (adminConfig.night_active === 'true') {
           const now = new Date();
           const currentHour = now.getHours();
@@ -416,10 +420,16 @@ const ClientDashboard = () => {
                             <h2 className="text-xl font-bold text-slate-900">Escolha a Categoria</h2>
                         </div>
                         
-                        {/* Resumo da Rota */}
-                        <div className="flex justify-between items-center mb-4 px-2">
-                             <Badge variant="outline" className="text-xs bg-white">{routeDistance.toFixed(1)} km</Badge>
-                             <span className="text-xs text-gray-400">Tempo est: {(routeDistance * 2).toFixed(0)} min</span>
+                        {/* Resumo da Rota - CORREÇÃO VISUAL AQUI */}
+                        <div className="flex justify-between items-center mb-4 px-2 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                             <div className="flex items-center gap-2">
+                                <MapPin className="w-4 h-4 text-slate-500" />
+                                <Badge variant="secondary" className="text-sm font-bold bg-slate-200 text-slate-900 border-0">{routeDistance.toFixed(1)} km</Badge>
+                             </div>
+                             <div className="flex items-center gap-1 text-slate-500">
+                                <Clock className="w-4 h-4" />
+                                <span className="text-xs font-medium">~{(routeDistance * 2).toFixed(0)} min</span>
+                             </div>
                         </div>
 
                         {loadingCats ? <div className="py-10 text-center flex flex-col items-center gap-3"><Loader2 className="animate-spin text-yellow-500 w-8 h-8" /><p className="text-gray-400 text-sm">Buscando categorias...</p></div> : 
