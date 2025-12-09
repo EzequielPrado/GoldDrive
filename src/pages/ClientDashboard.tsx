@@ -39,6 +39,7 @@ const ClientDashboard = () => {
   
   const [isRequesting, setIsRequesting] = useState(false);
   const [calculatingRoute, setCalculatingRoute] = useState(false);
+  const [gpsLoading, setGpsLoading] = useState(false);
 
   const [rating, setRating] = useState(0);
   const [ratingComment, setRatingComment] = useState("");
@@ -94,8 +95,6 @@ const ClientDashboard = () => {
                       [pickupLocation.lat, pickupLocation.lon], 
                       [destLocation.lat, destLocation.lon]
                   ]);
-                  // Distância Haversine aproximada
-                  // ... (simplificado para não estender demais o código, usar rota reta)
               } finally {
                   setCalculatingRoute(false);
               }
@@ -276,6 +275,7 @@ const ClientDashboard = () => {
 
   // Pega localização GPS do navegador
   const getCurrentLocation = () => {
+      setGpsLoading(true);
       if ("geolocation" in navigator) {
           navigator.geolocation.getCurrentPosition(
               async (pos) => {
@@ -290,17 +290,32 @@ const ClientDashboard = () => {
                           lon: pos.coords.longitude,
                           address: address
                       });
+                      showSuccess("Localização encontrada!");
                   } catch (e) {
                       setPickupLocation({
                           lat: pos.coords.latitude,
                           lon: pos.coords.longitude,
                           address: "Localização GPS"
                       });
+                  } finally {
+                      setGpsLoading(false);
                   }
               }, 
-              () => showError("Erro ao obter GPS")
+              (error) => {
+                  setGpsLoading(false);
+                  console.error("GPS Error:", error);
+                  let msg = "Erro ao obter GPS";
+                  if (error.code === 1) msg = "Permissão de GPS negada. Ative nas configurações do navegador.";
+                  else if (error.code === 2) msg = "Sinal de GPS indisponível.";
+                  else if (error.code === 3) msg = "Tempo limite do GPS esgotado.";
+                  showError(msg);
+              },
+              { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
           );
-      } else showError("GPS não suportado");
+      } else {
+          setGpsLoading(false);
+          showError("GPS não suportado neste navegador");
+      }
   };
 
   const cardBaseClasses = "bg-white/90 backdrop-blur-xl border border-white/40 p-6 rounded-[32px] shadow-2xl animate-in slide-in-from-bottom duration-500 w-full";
@@ -338,14 +353,21 @@ const ClientDashboard = () => {
           )}
       </div>
 
-      <div className="absolute inset-0 z-10 flex flex-col justify-end pb-32 md:pb-10 md:justify-center items-center pointer-events-none p-4">
+      {/* CONTAINER PRINCIPAL DINÂMICO - Centraliza ou vai p/ fundo */}
+      <div 
+        className={`absolute inset-0 z-10 flex flex-col items-center p-4 transition-all duration-700 pointer-events-none ${
+            step === 'search' 
+            ? 'justify-center bg-black/10 backdrop-blur-sm' 
+            : 'justify-end pb-32 md:pb-10 md:justify-center'
+        }`}
+      >
         
         {activeTab === 'home' && (
             <div className="w-full max-w-md pointer-events-auto transition-all duration-500">
                 {/* SEARCH REAL */}
                 {step === 'search' && (
-                    <div className={cardBaseClasses}>
-                        <h2 className="text-2xl font-black text-slate-900 mb-6">Para onde vamos?</h2>
+                    <div className={`${cardBaseClasses} shadow-[0_20px_50px_rgba(0,0,0,0.2)]`}>
+                        <h2 className="text-2xl font-black text-slate-900 mb-6 text-center">Para onde vamos?</h2>
                         <div className="space-y-4">
                             <div className="flex gap-2">
                                 <LocationSearch 
@@ -355,8 +377,8 @@ const ClientDashboard = () => {
                                     onSelect={(item) => setPickupLocation({ lat: item.lat, lon: item.lon, address: item.display_name.split(',')[0] })}
                                     className="flex-1"
                                 />
-                                <Button size="icon" variant="outline" className="h-14 w-14 rounded-2xl shrink-0" onClick={getCurrentLocation}>
-                                    <MapPin className="w-5 h-5 text-blue-600" />
+                                <Button size="icon" variant="outline" className="h-14 w-14 rounded-2xl shrink-0 border-gray-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-colors" onClick={getCurrentLocation} disabled={gpsLoading}>
+                                    {gpsLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <MapPin className="w-5 h-5" />}
                                 </Button>
                             </div>
 
@@ -371,7 +393,7 @@ const ClientDashboard = () => {
                         </div>
 
                         {calculatingRoute && (
-                            <div className="text-center text-xs text-gray-400 mt-2 flex items-center justify-center gap-1">
+                            <div className="text-center text-xs text-gray-400 mt-4 flex items-center justify-center gap-1 animate-pulse">
                                 <Loader2 className="w-3 h-3 animate-spin" /> Calculando melhor rota...
                             </div>
                         )}

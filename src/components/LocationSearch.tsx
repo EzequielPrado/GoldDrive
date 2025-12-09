@@ -39,7 +39,6 @@ const LocationSearch = ({ placeholder, icon: Icon = MapPin, onSelect, initialVal
       if (query.length > 2 && isOpen) {
         setLoading(true);
         try {
-          // Usa Nominatim (OpenStreetMap) para geocoding gratuito
           const response = await fetch(
             `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=5&countrycodes=br`
           );
@@ -53,13 +52,12 @@ const LocationSearch = ({ placeholder, icon: Icon = MapPin, onSelect, initialVal
       } else if (query.length <= 2) {
         setResults([]);
       }
-    }, 500); // Aguarda 500ms após parar de digitar
+    }, 500);
 
     return () => clearTimeout(timer);
   }, [query, isOpen]);
 
   const handleSelect = (item: any) => {
-    // Formata o endereço para ficar mais limpo
     const street = item.address.road || item.address.pedestrian || "";
     const number = item.address.house_number || "";
     const city = item.address.city || item.address.town || item.address.municipality || "";
@@ -94,7 +92,7 @@ const LocationSearch = ({ placeholder, icon: Icon = MapPin, onSelect, initialVal
         }}
         onFocus={() => setIsOpen(true)}
         placeholder={placeholder}
-        className="pl-12 pr-10 h-14 bg-white border-gray-200 text-slate-900 rounded-2xl transition-all shadow-sm font-medium placeholder:text-gray-400"
+        className="pl-12 pr-10 h-14 bg-white border-gray-200 text-slate-900 rounded-2xl transition-all shadow-sm font-medium placeholder:text-gray-400 relative z-20 focus:z-30"
       />
 
       {query && (
@@ -102,7 +100,7 @@ const LocationSearch = ({ placeholder, icon: Icon = MapPin, onSelect, initialVal
             size="icon" 
             variant="ghost" 
             onClick={handleClear}
-            className="absolute right-2 top-2 hover:bg-transparent text-gray-400 hover:text-gray-600 h-10 w-10"
+            className="absolute right-2 top-2 z-30 hover:bg-transparent text-gray-400 hover:text-gray-600 h-10 w-10"
           >
               <X className="w-4 h-4" />
           </Button>
@@ -110,7 +108,7 @@ const LocationSearch = ({ placeholder, icon: Icon = MapPin, onSelect, initialVal
 
       {/* Lista de Resultados */}
       {isOpen && (results.length > 0 || loading) && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-[100] animate-in fade-in zoom-in-95 duration-200">
+        <div className="absolute top-12 left-0 right-0 mt-3 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-[9999] pointer-events-auto animate-in fade-in zoom-in-95 duration-200">
           {loading && (
             <div className="p-4 flex items-center justify-center text-gray-400 gap-2">
               <Loader2 className="w-4 h-4 animate-spin" /> Buscando...
@@ -121,7 +119,8 @@ const LocationSearch = ({ placeholder, icon: Icon = MapPin, onSelect, initialVal
             <button
               key={index}
               onClick={() => handleSelect(item)}
-              className="w-full text-left p-4 hover:bg-gray-50 border-b border-gray-50 last:border-0 transition-colors flex items-start gap-3"
+              className="w-full text-left p-4 hover:bg-gray-100 border-b border-gray-50 last:border-0 transition-colors flex items-start gap-3 cursor-pointer relative z-[10000]"
+              type="button"
             >
               <div className="bg-gray-100 p-2 rounded-full shrink-0 mt-0.5">
                   <MapPin className="w-4 h-4 text-gray-500" />
