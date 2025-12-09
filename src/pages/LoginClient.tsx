@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { showError, showSuccess } from "@/utils/toast";
-import { ArrowLeft, Loader2, ArrowRight, MapPin, User, Lock, Mail } from "lucide-react";
+import { ArrowLeft, Loader2, ArrowRight, MapPin, User, Lock, Mail, Eye, EyeOff } from "lucide-react";
 
 const LoginClient = () => {
   const navigate = useNavigate();
@@ -13,6 +13,7 @@ const LoginClient = () => {
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [name, setName] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   // Verificação em segundo plano (Não bloqueia a tela)
   useEffect(() => {
@@ -94,16 +95,29 @@ const LoginClient = () => {
                    {isSignUp && (
                        <div className="relative group">
                            <User className="absolute left-4 top-4 w-5 h-5 text-gray-400 group-focus-within:text-yellow-600 transition-colors" />
-                           <Input placeholder="Nome Completo" className="h-14 pl-12 bg-gray-50 border-gray-200 text-base rounded-2xl focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all" value={name} onChange={e => setName(e.target.value)} />
+                           <Input placeholder="Nome Completo" className="h-14 pl-12 bg-gray-50 border-gray-200 text-base rounded-2xl focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all text-slate-900" value={name} onChange={e => setName(e.target.value)} />
                        </div>
                    )}
                    <div className="relative group">
                        <Mail className="absolute left-4 top-4 w-5 h-5 text-gray-400 group-focus-within:text-yellow-600 transition-colors" />
-                       <Input type="email" placeholder="Endereço de Email" className="h-14 pl-12 bg-gray-50 border-gray-200 text-base rounded-2xl focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all" value={email} onChange={e => setEmail(e.target.value)} />
+                       <Input type="email" placeholder="Endereço de Email" className="h-14 pl-12 bg-gray-50 border-gray-200 text-base rounded-2xl focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all text-slate-900" value={email} onChange={e => setEmail(e.target.value)} />
                    </div>
                    <div className="relative group">
                        <Lock className="absolute left-4 top-4 w-5 h-5 text-gray-400 group-focus-within:text-yellow-600 transition-colors" />
-                       <Input type="password" placeholder="Sua Senha" className="h-14 pl-12 bg-gray-50 border-gray-200 text-base rounded-2xl focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all" value={password} onChange={e => setPassword(e.target.value)} />
+                       <Input 
+                           type={showPassword ? "text" : "password"} 
+                           placeholder="Sua Senha" 
+                           className="h-14 pl-12 pr-12 bg-gray-50 border-gray-200 text-base rounded-2xl focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all text-slate-900" 
+                           value={password} 
+                           onChange={e => setPassword(e.target.value)} 
+                       />
+                       <button 
+                           type="button" 
+                           onClick={() => setShowPassword(!showPassword)}
+                           className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 focus:outline-none"
+                       >
+                           {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                       </button>
                    </div>
                    {!isSignUp && <div className="flex justify-end"><span className="text-sm font-semibold text-gray-400 hover:text-yellow-600 cursor-pointer transition-colors">Esqueceu a senha?</span></div>}
                    <Button className="w-full h-14 text-lg font-bold rounded-2xl bg-slate-900 hover:bg-black text-white shadow-xl shadow-slate-200 transition-all hover:scale-[1.02] active:scale-[0.98]" disabled={loading}>

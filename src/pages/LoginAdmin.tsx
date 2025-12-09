@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { showError } from "@/utils/toast";
-import { Shield, Loader2, Lock, ArrowLeft, KeyRound } from "lucide-react";
+import { Shield, Loader2, ArrowLeft, KeyRound, Eye, EyeOff } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 const LoginAdmin = () => {
@@ -12,6 +12,7 @@ const LoginAdmin = () => {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     const checkExistingSession = async () => {
@@ -86,8 +87,21 @@ const LoginAdmin = () => {
                            <label className="text-xs font-bold uppercase text-slate-500 tracking-wider ml-1">Chave de Acesso</label>
                            <div className="relative group">
                                <div className="absolute left-4 top-3.5 text-slate-500 group-focus-within:text-yellow-500 transition-colors"><KeyRound className="w-5 h-5" /></div>
-                               <Input type="password" placeholder="••••••••••••" className="bg-slate-900/50 border-white/10 pl-12 h-12 rounded-xl text-white placeholder:text-slate-600 focus:border-yellow-500/50 focus:ring-yellow-500/20 transition-all" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" />
-                               <Lock className="absolute right-4 top-3.5 w-4 h-4 text-slate-600" />
+                               <Input 
+                                   type={showPassword ? "text" : "password"} 
+                                   placeholder="••••••••••••" 
+                                   className="bg-slate-900/50 border-white/10 pl-12 pr-12 h-12 rounded-xl text-white placeholder:text-slate-600 focus:border-yellow-500/50 focus:ring-yellow-500/20 transition-all" 
+                                   value={password} 
+                                   onChange={e => setPassword(e.target.value)} 
+                                   autoComplete="current-password" 
+                               />
+                               <button 
+                                   type="button" 
+                                   onClick={() => setShowPassword(!showPassword)}
+                                   className="absolute right-4 top-3.5 text-slate-400 hover:text-white focus:outline-none"
+                               >
+                                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                               </button>
                            </div>
                        </div>
 

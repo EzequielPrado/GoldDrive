@@ -366,7 +366,7 @@ const LoginDriver = () => {
                        <form onSubmit={handleLogin} className="space-y-5">
                            <div className="relative group">
                                <Mail className="absolute left-4 top-4 w-5 h-5 text-gray-400 group-focus-within:text-yellow-600 transition-colors" />
-                               <Input type="email" placeholder="Email cadastrado" className="h-14 pl-12 bg-gray-50 border-gray-200 text-base rounded-2xl focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all" value={form.email} onChange={e => handleChange('email', e.target.value)} />
+                               <Input type="email" placeholder="Email cadastrado" className="h-14 pl-12 bg-gray-50 border-gray-200 text-base rounded-2xl focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all text-slate-900" value={form.email} onChange={e => handleChange('email', e.target.value)} />
                            </div>
                            
                            <div className="relative group">
@@ -374,7 +374,7 @@ const LoginDriver = () => {
                                <Input 
                                   type={showPassword ? "text" : "password"} 
                                   placeholder="Sua senha" 
-                                  className="h-14 pl-12 pr-12 bg-gray-50 border-gray-200 text-base rounded-2xl focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all" 
+                                  className="h-14 pl-12 pr-12 bg-gray-50 border-gray-200 text-base rounded-2xl focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all text-slate-900" 
                                   value={form.password} 
                                   onChange={e => handleChange('password', e.target.value)} 
                                />
@@ -414,28 +414,28 @@ const LoginDriver = () => {
                                </div>
                                
                                <div className="grid grid-cols-2 gap-4">
-                                   <Input placeholder="Nome" className="h-14 bg-gray-50 border-gray-200 rounded-2xl" value={form.firstName} onChange={e => handleChange('firstName', e.target.value)} />
-                                   <Input placeholder="Sobrenome" className="h-14 bg-gray-50 border-gray-200 rounded-2xl" value={form.lastName} onChange={e => handleChange('lastName', e.target.value)} />
+                                   <Input placeholder="Nome" className="h-14 bg-gray-50 border-gray-200 rounded-2xl text-slate-900" value={form.firstName} onChange={e => handleChange('firstName', e.target.value)} />
+                                   <Input placeholder="Sobrenome" className="h-14 bg-gray-50 border-gray-200 rounded-2xl text-slate-900" value={form.lastName} onChange={e => handleChange('lastName', e.target.value)} />
                                </div>
                                
                                <div className="relative">
                                     <CreditCard className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
-                                    <Input placeholder="CPF (000.000.000-00)" className="h-14 pl-12 bg-gray-50 border-gray-200 rounded-2xl font-mono text-sm" value={form.cpf} onChange={e => handleChange('cpf', e.target.value)} maxLength={14} />
+                                    <Input placeholder="CPF (000.000.000-00)" className="h-14 pl-12 bg-gray-50 border-gray-200 rounded-2xl font-mono text-sm text-slate-900" value={form.cpf} onChange={e => handleChange('cpf', e.target.value)} maxLength={14} />
                                </div>
 
                                <div className="relative">
                                     <Phone className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
-                                    <Input placeholder="WhatsApp (00) 00000-0000" className="h-14 pl-12 bg-gray-50 border-gray-200 rounded-2xl" value={form.phone} onChange={e => handleChange('phone', e.target.value)} maxLength={15} />
+                                    <Input placeholder="WhatsApp (00) 00000-0000" className="h-14 pl-12 bg-gray-50 border-gray-200 rounded-2xl text-slate-900" value={form.phone} onChange={e => handleChange('phone', e.target.value)} maxLength={15} />
                                </div>
 
-                               <Input type="email" placeholder="Email para login" className="h-14 bg-gray-50 border-gray-200 rounded-2xl" value={form.email} onChange={e => handleChange('email', e.target.value)} />
+                               <Input type="email" placeholder="Email para login" className="h-14 bg-gray-50 border-gray-200 rounded-2xl text-slate-900" value={form.email} onChange={e => handleChange('email', e.target.value)} />
                                
                                <div className="relative">
                                   <Lock className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
                                   <Input 
                                     type={showPassword ? "text" : "password"} 
                                     placeholder="Crie uma senha forte" 
-                                    className="h-14 pl-12 pr-12 bg-gray-50 border-gray-200 rounded-2xl" 
+                                    className="h-14 pl-12 pr-12 bg-gray-50 border-gray-200 rounded-2xl text-slate-900" 
                                     value={form.password} 
                                     onChange={e => handleChange('password', e.target.value)} 
                                   />
@@ -453,7 +453,7 @@ const LoginDriver = () => {
                                   <Input 
                                     type={showConfirmPassword ? "text" : "password"} 
                                     placeholder="Confirme sua senha" 
-                                    className="h-14 pl-12 pr-12 bg-gray-50 border-gray-200 rounded-2xl" 
+                                    className="h-14 pl-12 pr-12 bg-gray-50 border-gray-200 rounded-2xl text-slate-900" 
                                     value={form.confirmPassword} 
                                     onChange={e => handleChange('confirmPassword', e.target.value)} 
                                   />
@@ -506,12 +506,12 @@ const LoginDriver = () => {
                                    <h3 className="font-bold text-lg text-slate-800">Seu Veículo</h3>
                                </div>
                                
-                               <Input placeholder="Modelo (ex: Honda Civic)" className="h-14 bg-gray-50 border-gray-200 rounded-2xl" value={form.carModel} onChange={e => handleChange('carModel', e.target.value)} />
-                               <Input placeholder="Placa (ex: ABC-1234)" className="h-14 bg-gray-50 border-gray-200 rounded-2xl uppercase font-mono" value={form.carPlate} onChange={e => handleChange('carPlate', e.target.value.toUpperCase())} maxLength={7} />
+                               <Input placeholder="Modelo (ex: Honda Civic)" className="h-14 bg-gray-50 border-gray-200 rounded-2xl text-slate-900" value={form.carModel} onChange={e => handleChange('carModel', e.target.value)} />
+                               <Input placeholder="Placa (ex: ABC-1234)" className="h-14 bg-gray-50 border-gray-200 rounded-2xl uppercase font-mono text-slate-900" value={form.carPlate} onChange={e => handleChange('carPlate', e.target.value.toUpperCase())} maxLength={7} />
                                
                                <div className="grid grid-cols-2 gap-4">
-                                   <Input type="number" placeholder="Ano (ex: 2020)" className="h-14 bg-gray-50 border-gray-200 rounded-2xl" value={form.carYear} onChange={e => handleChange('carYear', e.target.value)} />
-                                   <Input placeholder="Cor (ex: Prata)" className="h-14 bg-gray-50 border-gray-200 rounded-2xl" value={form.carColor} onChange={e => handleChange('carColor', e.target.value)} />
+                                   <Input type="number" placeholder="Ano (ex: 2020)" className="h-14 bg-gray-50 border-gray-200 rounded-2xl text-slate-900" value={form.carYear} onChange={e => handleChange('carYear', e.target.value)} />
+                                   <Input placeholder="Cor (ex: Prata)" className="h-14 bg-gray-50 border-gray-200 rounded-2xl text-slate-900" value={form.carColor} onChange={e => handleChange('carColor', e.target.value)} />
                                </div>
 
                                <Button onClick={handleSignUp} disabled={loading} className="w-full h-14 bg-yellow-500 hover:bg-yellow-400 text-black font-black rounded-2xl mt-6 shadow-xl shadow-yellow-500/20 text-lg">
