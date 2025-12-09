@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ArrowLeft, Camera, Loader2, Shield, LogOut, Edit2, Save, X, Smartphone, MapPin, Calendar, Star } from "lucide-react";
+import { ArrowLeft, Camera, Loader2, Edit2, Save, X, Smartphone, MapPin, Calendar, Star, History, LogOut, Car, Mail, Phone } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -19,10 +20,10 @@ const Profile = () => {
   const [showPWA, setShowPWA] = useState(false);
   
   const [profile, setProfile] = useState<any>({
-    id: "", first_name: "", last_name: "", email: "", phone: "", bio: "", avatar_url: "", role: "", created_at: "", car_model: "", car_plate: ""
+    id: "", first_name: "", last_name: "", email: "", phone: "", bio: "", avatar_url: "", role: "", created_at: "", car_model: "", car_plate: "", car_color: "", total_rides: 0, rating: 5.0
   });
 
-  // Backup para cancelar edição
+  // Backup para cancelar edição e reverter dados
   const [originalProfile, setOriginalProfile] = useState<any>(null);
 
   useEffect(() => { getProfile(); }, []);
@@ -36,7 +37,22 @@ const Profile = () => {
       }
       const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
       if (error) throw error;
-      const finalData = { ...data, email: user.email || "" };
+      
+      // Calcular rating se for motorista
+      let avgRating = 5.0;
+      if (data.role === 'driver') {
+          const { data: rides } = await supabase.from('rides').select('customer_rating').eq('driver_id', user.id).not('customer_rating', 'is', null);
+          if (rides && rides.length > 0) {
+              avgRating = rides.reduce((a, b) => a + b.customer_rating, 0) / rides.length;
+          }
+      }
+
+      const finalData = { 
+          ...data, 
+          email: user.email || "",
+          rating: avgRating 
+      };
+      
       setProfile(finalData);
       setOriginalProfile(finalData);
     } catch (error: any) { 
@@ -53,7 +69,10 @@ const Profile = () => {
           first_name: profile.first_name, 
           last_name: profile.last_name, 
           phone: profile.phone, 
-          bio: profile.bio, 
+          bio: profile.bio,
+          car_model: profile.car_model, // Caso motorista edite
+          car_plate: profile.car_plate,
+          car_color: profile.car_color,
           updated_at: new Date().toISOString()
       }).eq('id', profile.id);
       
@@ -70,6 +89,7 @@ const Profile = () => {
   };
 
   const handleCancel = () => {
+      // Reverte para os dados originais
       setProfile(originalProfile);
       setIsEditing(false);
   };
@@ -92,7 +112,6 @@ const Profile = () => {
 
       const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
       
-      // Salva URL no banco imediatamente
       await supabase.from('profiles').update({ avatar_url: data.publicUrl }).eq('id', profile.id);
       
       setProfile({ ...profile, avatar_url: data.publicUrl });
@@ -111,31 +130,38 @@ const Profile = () => {
     navigate('/');
   };
 
+  const goToHistory = () => {
+      if (profile.role === 'driver') navigate('/driver?tab=history');
+      else navigate('/client?tab=history');
+  };
+
   if (loading) return <div className="h-screen flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin w-10 h-10 text-yellow-500" /></div>;
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans pb-20 relative overflow-x-hidden">
+    <div className="min-h-screen bg-slate-50 font-sans pb-20 relative overflow-x-hidden">
       <PWAInstallPrompt openForce={showPWA} onCloseForce={() => setShowPWA(false)} />
 
-      {/* Header Cover Style */}
-      <div className="h-48 bg-slate-900 w-full relative overflow-hidden">
-         <div className="absolute inset-0 bg-gradient-to-r from-slate-900 to-slate-800" />
-         <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]" />
+      {/* Header com Capa Estilo Rede Social */}
+      <div className="h-64 bg-slate-900 w-full relative">
+         <div className="absolute inset-0 bg-gradient-to-br from-slate-900 to-black" />
+         {/* Padrão decorativo */}
+         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_1px_1px,#ffffff_1px,transparent_0)] bg-[length:20px_20px]" />
          
          <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-10">
-             <Button variant="secondary" size="icon" className="rounded-full bg-white/10 hover:bg-white/20 text-white border-0 backdrop-blur-md" onClick={() => navigate(-1)}>
+             <Button variant="secondary" size="icon" className="rounded-full bg-white/10 hover:bg-white/20 text-white border-0 backdrop-blur-md h-10 w-10" onClick={() => navigate(-1)}>
                 <ArrowLeft className="w-5 h-5" />
              </Button>
+             
              {!isEditing ? (
-                 <Button onClick={() => setIsEditing(true)} className="rounded-full bg-white/10 hover:bg-white/20 text-white border-0 backdrop-blur-md gap-2">
-                     <Edit2 className="w-4 h-4" /> Editar
+                 <Button onClick={() => setIsEditing(true)} className="rounded-full bg-white/10 hover:bg-white/20 text-white border-0 backdrop-blur-md gap-2 h-10 px-4 font-semibold">
+                     <Edit2 className="w-4 h-4" /> Editar Perfil
                  </Button>
              ) : (
                  <div className="flex gap-2">
-                     <Button onClick={handleCancel} className="rounded-full bg-red-500/80 hover:bg-red-600 text-white border-0 backdrop-blur-md" size="icon">
-                         <X className="w-4 h-4" />
+                     <Button onClick={handleCancel} className="rounded-full bg-red-500/80 hover:bg-red-600 text-white border-0 backdrop-blur-md h-10 w-10 p-0" size="icon">
+                         <X className="w-5 h-5" />
                      </Button>
-                     <Button onClick={handleUpdate} disabled={saving} className="rounded-full bg-green-500 hover:bg-green-600 text-white border-0 backdrop-blur-md gap-2">
+                     <Button onClick={handleUpdate} disabled={saving} className="rounded-full bg-green-500 hover:bg-green-600 text-white border-0 backdrop-blur-md gap-2 h-10 px-4 font-bold">
                          {saving ? <Loader2 className="animate-spin w-4 h-4" /> : <><Save className="w-4 h-4" /> Salvar</>}
                      </Button>
                  </div>
@@ -143,122 +169,171 @@ const Profile = () => {
          </div>
       </div>
 
-      <div className="px-4 -mt-16 relative z-10 max-w-xl mx-auto pb-10">
+      <div className="px-4 -mt-24 relative z-10 max-w-xl mx-auto pb-10">
         {/* Card Principal */}
-        <div className="bg-white rounded-[32px] shadow-xl p-6 pt-0 animate-in slide-in-from-bottom duration-500 border border-gray-100">
+        <div className="bg-white rounded-[40px] shadow-2xl overflow-hidden">
             
-            {/* Avatar Section */}
-            <div className="flex justify-between items-end -mt-12 mb-4 px-2">
-                <div className="relative group">
-                    <Avatar className="w-28 h-28 border-4 border-white shadow-lg ring-4 ring-gray-50 bg-white">
+            {/* Seção do Avatar e Infos Principais */}
+            <div className="pt-0 pb-6 px-6 text-center border-b border-gray-100">
+                <div className="relative inline-block -mt-16 mb-4">
+                    <Avatar className="w-32 h-32 border-[6px] border-white shadow-xl bg-white">
                         <AvatarImage src={profile.avatar_url} className="object-cover" />
-                        <AvatarFallback className="text-3xl bg-yellow-500 text-black font-black">{profile.first_name[0]}</AvatarFallback>
+                        <AvatarFallback className="text-4xl bg-yellow-500 text-black font-black">{profile.first_name[0]}</AvatarFallback>
                     </Avatar>
-                    <Label htmlFor="avatar-upload" className="absolute bottom-0 right-0 bg-slate-900 text-white p-2.5 rounded-full shadow-lg border-2 border-white cursor-pointer hover:bg-yellow-500 hover:text-black transition-all hover:scale-110">
-                        {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-                    </Label>
-                    <Input id="avatar-upload" type="file" accept="image/*" className="hidden" onChange={handleUpload} disabled={uploading} />
+                    {isEditing && (
+                        <>
+                            <Label htmlFor="avatar-upload" className="absolute bottom-1 right-1 bg-blue-600 text-white p-2.5 rounded-full shadow-lg border-4 border-white cursor-pointer hover:bg-blue-700 transition-all active:scale-95">
+                                {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+                            </Label>
+                            <Input id="avatar-upload" type="file" accept="image/*" className="hidden" onChange={handleUpload} disabled={uploading} />
+                        </>
+                    )}
                 </div>
-                
-                {profile.role === 'driver' && (
-                    <div className="bg-yellow-50 p-2 rounded-xl border border-yellow-100 text-center mb-1">
-                        <p className="text-[10px] font-bold text-yellow-700 uppercase">Avaliação</p>
-                        <div className="flex items-center gap-1 font-black text-slate-900">
-                            <Star className="w-4 h-4 fill-yellow-500 text-yellow-500" /> 5.0
-                        </div>
-                    </div>
-                )}
-            </div>
 
-            <div className="mb-6 px-2">
-                <h1 className="text-3xl font-black text-slate-900 leading-tight">{profile.first_name} {profile.last_name}</h1>
-                <div className="flex items-center gap-2 mt-2">
-                    <Badge variant="secondary" className="bg-slate-100 text-slate-600 hover:bg-slate-200">
-                        {profile.role === 'driver' ? 'Motorista Parceiro' : 'Passageiro Gold'}
+                <h1 className="text-3xl font-black text-slate-900 leading-tight mb-1">{profile.first_name} {profile.last_name}</h1>
+                <div className="flex items-center justify-center gap-2 mb-4">
+                    <Badge className={`px-3 py-1 text-xs font-bold uppercase tracking-wider ${profile.role === 'driver' ? 'bg-yellow-500 text-black hover:bg-yellow-600' : 'bg-slate-900 text-white hover:bg-slate-800'}`}>
+                        {profile.role === 'driver' ? 'Motorista Parceiro' : 'Passageiro VIP'}
                     </Badge>
-                    <span className="text-xs text-gray-400 flex items-center gap-1">
-                        <Calendar className="w-3 h-3" /> Desde {new Date(profile.created_at).getFullYear()}
-                    </span>
+                    {profile.role === 'driver' && (
+                        <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-md">
+                            <Star className="w-3 h-3 fill-yellow-500 text-yellow-500" />
+                            <span className="text-xs font-bold text-slate-900">{profile.rating?.toFixed(1) || '5.0'}</span>
+                        </div>
+                    )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 max-w-xs mx-auto">
+                    <div className="bg-gray-50 p-3 rounded-2xl">
+                        <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Desde</p>
+                        <p className="font-bold text-slate-900 flex items-center justify-center gap-1"><Calendar className="w-3 h-3 text-slate-400"/> {new Date(profile.created_at).getFullYear()}</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-2xl cursor-pointer hover:bg-gray-100 transition-colors" onClick={goToHistory}>
+                        <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Viagens</p>
+                        <p className="font-bold text-slate-900 flex items-center justify-center gap-1"><History className="w-3 h-3 text-slate-400"/> {profile.total_rides || 0}</p>
+                    </div>
                 </div>
             </div>
 
-            {/* Inputs de Edição */}
-            <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+            {/* Conteúdo / Formulário */}
+            <div className="p-6 space-y-6">
+                
+                {/* Inputs Pessoais */}
+                <div className="space-y-4">
+                    <div className="flex items-center gap-2 mb-2">
+                        <div className="w-1 h-6 bg-yellow-500 rounded-full"/>
+                        <h3 className="font-bold text-lg text-slate-900">Dados Pessoais</h3>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-bold text-gray-400 uppercase ml-1">Nome</Label>
+                            <Input 
+                                value={profile.first_name} 
+                                onChange={(e) => setProfile({...profile, first_name: e.target.value})} 
+                                disabled={!isEditing}
+                                className={`h-12 rounded-xl transition-all ${isEditing ? 'bg-white border-blue-500 ring-1 ring-blue-500 shadow-sm' : 'bg-gray-50 border-transparent text-slate-600'}`} 
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-bold text-gray-400 uppercase ml-1">Sobrenome</Label>
+                            <Input 
+                                value={profile.last_name} 
+                                onChange={(e) => setProfile({...profile, last_name: e.target.value})} 
+                                disabled={!isEditing}
+                                className={`h-12 rounded-xl transition-all ${isEditing ? 'bg-white border-blue-500 ring-1 ring-blue-500 shadow-sm' : 'bg-gray-50 border-transparent text-slate-600'}`} 
+                            />
+                        </div>
+                    </div>
+
                     <div className="space-y-1.5">
-                        <Label className="text-xs font-bold text-gray-400 uppercase ml-1">Nome</Label>
+                        <Label className="text-xs font-bold text-gray-400 uppercase ml-1 flex items-center gap-1"><Phone className="w-3 h-3"/> Telefone / WhatsApp</Label>
                         <Input 
-                            value={profile.first_name} 
-                            onChange={(e) => setProfile({...profile, first_name: e.target.value})} 
+                            value={profile.phone} 
+                            onChange={(e) => setProfile({...profile, phone: e.target.value})} 
                             disabled={!isEditing}
-                            className={`h-12 rounded-2xl ${isEditing ? 'bg-white border-yellow-500 ring-1 ring-yellow-500' : 'bg-gray-50 border-transparent text-slate-600'}`} 
+                            className={`h-12 rounded-xl transition-all ${isEditing ? 'bg-white border-blue-500 ring-1 ring-blue-500 shadow-sm' : 'bg-gray-50 border-transparent text-slate-600'}`} 
                         />
                     </div>
+
                     <div className="space-y-1.5">
-                        <Label className="text-xs font-bold text-gray-400 uppercase ml-1">Sobrenome</Label>
+                        <Label className="text-xs font-bold text-gray-400 uppercase ml-1 flex items-center gap-1"><Mail className="w-3 h-3"/> Email</Label>
                         <Input 
-                            value={profile.last_name} 
-                            onChange={(e) => setProfile({...profile, last_name: e.target.value})} 
-                            disabled={!isEditing}
-                            className={`h-12 rounded-2xl ${isEditing ? 'bg-white border-yellow-500 ring-1 ring-yellow-500' : 'bg-gray-50 border-transparent text-slate-600'}`} 
+                            value={profile.email} 
+                            disabled
+                            className="h-12 bg-gray-100 border-transparent text-gray-400 rounded-xl cursor-not-allowed font-medium" 
                         />
                     </div>
                 </div>
 
-                <div className="space-y-1.5">
-                    <Label className="text-xs font-bold text-gray-400 uppercase ml-1">Telefone / WhatsApp</Label>
-                    <Input 
-                        value={profile.phone} 
-                        onChange={(e) => setProfile({...profile, phone: e.target.value})} 
-                        disabled={!isEditing}
-                        className={`h-12 rounded-2xl ${isEditing ? 'bg-white border-yellow-500 ring-1 ring-yellow-500' : 'bg-gray-50 border-transparent text-slate-600'}`} 
-                    />
-                </div>
-
-                <div className="space-y-1.5">
-                    <Label className="text-xs font-bold text-gray-400 uppercase ml-1">Email (Login)</Label>
-                    <Input 
-                        value={profile.email} 
-                        disabled
-                        className="h-12 bg-gray-100 border-transparent text-gray-400 rounded-2xl cursor-not-allowed" 
-                    />
-                </div>
-
+                {/* Seção Veículo (Só para motorista) */}
                 {profile.role === 'driver' && (
-                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 mt-2">
-                        <h3 className="font-bold text-slate-900 mb-3 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-500" /> Dados do Veículo</h3>
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                                <p className="text-gray-400 text-xs uppercase">Modelo</p>
-                                <p className="font-bold text-slate-800">{profile.car_model}</p>
+                    <div className="space-y-4 pt-4 border-t border-gray-100">
+                        <div className="flex items-center gap-2 mb-2">
+                            <div className="w-1 h-6 bg-slate-900 rounded-full"/>
+                            <h3 className="font-bold text-lg text-slate-900">Veículo</h3>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-bold text-gray-400 uppercase ml-1">Modelo</Label>
+                                <Input 
+                                    value={profile.car_model} 
+                                    onChange={(e) => setProfile({...profile, car_model: e.target.value})} 
+                                    disabled={!isEditing}
+                                    className={`h-12 rounded-xl transition-all ${isEditing ? 'bg-white border-blue-500 ring-1 ring-blue-500' : 'bg-gray-50 border-transparent text-slate-600 font-medium'}`}
+                                />
                             </div>
-                            <div>
-                                <p className="text-gray-400 text-xs uppercase">Placa</p>
-                                <p className="font-mono font-bold text-slate-800">{profile.car_plate}</p>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-bold text-gray-400 uppercase ml-1">Cor</Label>
+                                <Input 
+                                    value={profile.car_color} 
+                                    onChange={(e) => setProfile({...profile, car_color: e.target.value})} 
+                                    disabled={!isEditing}
+                                    className={`h-12 rounded-xl transition-all ${isEditing ? 'bg-white border-blue-500 ring-1 ring-blue-500' : 'bg-gray-50 border-transparent text-slate-600 font-medium'}`}
+                                />
                             </div>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-bold text-gray-400 uppercase ml-1">Placa</Label>
+                            <Input 
+                                value={profile.car_plate} 
+                                onChange={(e) => setProfile({...profile, car_plate: e.target.value})} 
+                                disabled={!isEditing}
+                                className={`h-12 rounded-xl uppercase font-mono tracking-wider transition-all ${isEditing ? 'bg-white border-blue-500 ring-1 ring-blue-500' : 'bg-gray-50 border-transparent text-slate-600 font-bold'}`}
+                            />
                         </div>
                     </div>
                 )}
-            </div>
 
-            {/* Ações Extras */}
-            <div className="mt-8 space-y-3">
-                <Button 
-                    onClick={() => setShowPWA(true)} 
-                    className="w-full h-14 rounded-2xl bg-yellow-500 hover:bg-yellow-400 text-black font-bold shadow-lg shadow-yellow-500/20"
-                >
-                    <Smartphone className="mr-2 w-5 h-5" /> Instalar App
-                </Button>
+                {/* Botões de Ação */}
+                <div className="pt-6 space-y-3">
+                    <Button 
+                        onClick={goToHistory} 
+                        className="w-full h-14 rounded-2xl bg-white border-2 border-gray-100 hover:bg-gray-50 text-slate-900 font-bold shadow-sm"
+                    >
+                        <History className="mr-2 w-5 h-5 text-slate-400" /> Ver Minhas Corridas
+                    </Button>
 
-                <Button 
-                    onClick={handleLogout} 
-                    variant="outline"
-                    className="w-full h-14 rounded-2xl border-red-100 text-red-600 hover:bg-red-50 hover:text-red-700 font-bold"
-                >
-                    <LogOut className="mr-2 w-5 h-5" /> Sair da Conta
-                </Button>
+                    <Button 
+                        onClick={() => setShowPWA(true)} 
+                        className="w-full h-14 rounded-2xl bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 text-black font-black shadow-lg shadow-yellow-500/20"
+                    >
+                        <Smartphone className="mr-2 w-5 h-5" /> BAIXAR APLICATIVO
+                    </Button>
+
+                    <Button 
+                        onClick={handleLogout} 
+                        variant="ghost"
+                        className="w-full h-12 rounded-2xl text-red-500 hover:bg-red-50 hover:text-red-700 font-bold mt-4"
+                    >
+                        <LogOut className="mr-2 w-4 h-4" /> Sair da Conta
+                    </Button>
+                </div>
             </div>
         </div>
+        
+        <p className="text-center text-xs text-gray-400 mt-8 font-medium">Gold Mobile v1.0.0</p>
       </div>
     </div>
   );

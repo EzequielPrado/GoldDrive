@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
 import MapComponent from "@/components/MapComponent";
 import { 
-  MapPin, Car, Navigation, Loader2, Star, AlertTriangle, XCircle, ChevronRight, Clock, Wallet, User, ArrowLeft, BellRing, History, X, Flag, CreditCard, Banknote, MessageCircle, CheckCircle2
+  MapPin, Car, Navigation, Loader2, Star, AlertTriangle, XCircle, ChevronRight, Clock, Wallet, User, ArrowLeft, BellRing, History, X, Flag, CreditCard, Banknote, MessageCircle, CheckCircle2, Calendar
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRide } from "@/context/RideContext";
 import { showSuccess, showError } from "@/utils/toast";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -20,6 +20,7 @@ import LocationSearch from "@/components/LocationSearch";
 
 const ClientDashboard = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { ride, requestRide, cancelRide, rateRide, clearRide, currentUserId } = useRide();
   
   // Tabs Navigation
@@ -58,7 +59,7 @@ const ClientDashboard = () => {
   const [showCancelAlert, setShowCancelAlert] = useState(false);
   const [showArrivalPopup, setShowArrivalPopup] = useState(false);
   const [showStartPopup, setShowStartPopup] = useState(false);
-  const [showAcceptedPopup, setShowAcceptedPopup] = useState(false); // NOVO
+  const [showAcceptedPopup, setShowAcceptedPopup] = useState(false);
   const [showChat, setShowChat] = useState(false);
   
   // Dados de Preço Dinâmico e Configs
@@ -69,6 +70,14 @@ const ClientDashboard = () => {
   // Data
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<any>(null);
+
+  // Inicializa tab com base na URL
+  useEffect(() => {
+      const tabParam = searchParams.get('tab');
+      if (tabParam && ['home', 'history', 'wallet', 'profile'].includes(tabParam)) {
+          setActiveTab(tabParam);
+      }
+  }, [searchParams]);
 
   useEffect(() => {
     fetchInitialData();
@@ -121,17 +130,13 @@ const ClientDashboard = () => {
       calculateRoute();
   }, [pickupLocation, destLocation]);
 
-  // Monitoramento de Estado da Corrida (Popups)
   useEffect(() => {
     if (ride) {
       if (ride.status === 'CANCELLED') setStep('cancelled');
       else if (ride.status === 'COMPLETED') setStep('rating');
       else if (['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(ride.status)) setStep('waiting');
 
-      // POPUPS DE STATUS
       if (ride.status === 'ACCEPTED') {
-          // Só mostra se ainda não mostrou para esta corrida
-          // Usamos sessionStorage para persistir durante a sessão se o usuário der refresh
           const shownKey = `accepted_shown_${ride.id}`;
           if (!sessionStorage.getItem(shownKey)) {
               setShowAcceptedPopup(true);
@@ -195,7 +200,7 @@ const ClientDashboard = () => {
         
         if (activeTab === 'history') {
             const { data: history } = await supabase.from('rides')
-                .select(`*, driver:profiles!public_rides_driver_id_fkey(first_name, last_name, car_model, car_plate)`)
+                .select(`*, driver:profiles!public_rides_driver_id_fkey(first_name, last_name, car_model, car_plate, car_color)`)
                 .eq('customer_id', user.id)
                 .order('created_at', { ascending: false });
             setHistoryItems(history || []);
@@ -286,7 +291,6 @@ const ClientDashboard = () => {
     finally { setIsRequesting(false); }
   };
 
-  // Pega localização GPS do navegador (Acionado pelo Modal)
   const getCurrentLocation = (silent = false) => {
       setGpsLoading(true);
       if ("geolocation" in navigator) {
@@ -367,7 +371,12 @@ const ClientDashboard = () => {
                                     icon={Navigation}
                                     initialValue={pickupLocation?.address}
                                     onSelect={(item) => {
-                                        if (item) { setPickupLocation({ lat: item.lat, lon: item.lon, address: item.display_name.split(',')[0] }); setFormErrors(prev => ({ ...prev, pickup: false })); } else { setPickupLocation(null); }
+                                        if(item) {
+                                            setPickupLocation({ lat: item.lat, lon: item.lon, address: item.display_name.split(',')[0] });
+                                            setFormErrors(prev => ({ ...prev, pickup: false }));
+                                        } else {
+                                            setPickupLocation(null);
+                                        }
                                     }}
                                     className="flex-1"
                                     error={formErrors.pickup}
@@ -382,7 +391,12 @@ const ClientDashboard = () => {
                                     placeholder="Digite o destino..." 
                                     initialValue={destLocation?.address}
                                     onSelect={(item) => {
-                                        if (item) { setDestLocation({ lat: item.lat, lon: item.lon, address: item.display_name.split(',')[0] }); setFormErrors(prev => ({ ...prev, dest: false })); } else { setDestLocation(null); }
+                                        if(item) {
+                                            setDestLocation({ lat: item.lat, lon: item.lon, address: item.display_name.split(',')[0] });
+                                            setFormErrors(prev => ({ ...prev, dest: false }));
+                                        } else {
+                                            setDestLocation(null);
+                                        }
                                     }}
                                     error={formErrors.dest}
                                 />
@@ -415,7 +429,7 @@ const ClientDashboard = () => {
                                 </div>
                                 <div className="grid grid-cols-2 gap-4"><div className="bg-blue-50 p-3 rounded-2xl text-center"><p className="text-xs text-blue-600 font-bold uppercase mb-1">Status</p><p className="font-black text-blue-900">{ride.status === 'ARRIVED' ? 'Chegou!' : ride.status === 'IN_PROGRESS' ? 'Em Viagem' : 'A Caminho'}</p></div><div className="bg-gray-50 p-3 rounded-2xl text-center"><p className="text-xs text-gray-500 font-bold uppercase mb-1">Chegada</p><p className="font-black text-gray-900">{ride.status === 'ACCEPTED' ? '2 min' : '--'}</p></div></div>
                                 <div className="bg-gray-100 hover:bg-gray-200 p-3 rounded-2xl flex items-center gap-3 cursor-pointer transition-colors" onClick={() => setShowChat(true)}><div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-slate-900 shadow-sm"><MessageCircle className="w-5 h-5" /></div><div className="flex-1 text-left"><p className="text-xs font-bold text-gray-500 uppercase">Mensagem para motorista</p><p className="text-sm font-medium text-slate-900">Enviar mensagem...</p></div></div>
-                                {ride?.status !== 'IN_PROGRESS' && (<div className="pt-2"><Button variant="outline" className="border-red-200 text-red-600 hover:bg-red-50 font-bold w-full rounded-xl" onClick={() => setShowCancelAlert(true)}>Cancelar Corrida</Button></div>)}
+                                {ride?.status !== 'IN_PROGRESS' && (<div className="pt-2"><Button variant="outline" className="border-red-200 bg-white text-red-600 hover:bg-red-50 hover:text-red-700 font-bold w-full rounded-xl h-12 shadow-sm" onClick={() => setShowCancelAlert(true)}>Cancelar Corrida</Button></div>)}
                             </div>
                          ) : (
                             <div className="py-8"><div className="w-24 h-24 bg-yellow-50 rounded-full mx-auto flex items-center justify-center mb-6 relative"><div className="absolute inset-0 border-4 border-yellow-500 rounded-full animate-ping opacity-20"></div><Loader2 className="w-10 h-10 text-yellow-600 animate-spin" /></div><h3 className="text-2xl font-black text-slate-900 mb-2">Buscando Motorista...</h3><p className="text-gray-500 mb-8">Estamos encontrando o parceiro ideal para você.</p><Button variant="secondary" className="w-full rounded-2xl h-12 font-bold" onClick={() => setShowCancelAlert(true)}>Cancelar</Button></div>
@@ -452,7 +466,45 @@ const ClientDashboard = () => {
 
       <Dialog open={showBalanceAlert} onOpenChange={setShowBalanceAlert}><DialogContent className="sm:max-w-md bg-white rounded-3xl border-0"><DialogHeader><DialogTitle className="text-red-600 flex items-center gap-2"><Wallet /> Saldo Insuficiente</DialogTitle></DialogHeader><div className="text-center py-6"><p className="text-gray-500 mb-1">Faltam</p><h2 className="text-5xl font-black text-slate-900">R$ {missingAmount.toFixed(2)}</h2></div><DialogFooter><Button className="w-full rounded-xl h-12 font-bold bg-black text-white" onClick={() => navigate('/wallet')}>Recarregar Agora</Button></DialogFooter></DialogContent></Dialog>
       <AlertDialog open={showCancelAlert} onOpenChange={setShowCancelAlert}><AlertDialogContent className="rounded-3xl bg-white border-0"><AlertDialogHeader><AlertDialogTitle className="flex items-center gap-2 text-red-600"><AlertTriangle /> Cancelar Corrida?</AlertDialogTitle><AlertDialogDescription>Deseja realmente cancelar? Uma taxa pode ser cobrada.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel className="rounded-xl h-12">Voltar</AlertDialogCancel><AlertDialogAction onClick={() => { cancelRide(ride!.id); setShowCancelAlert(false); }} className="bg-red-600 hover:bg-red-700 rounded-xl h-12 font-bold text-white">Sim, Cancelar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
-      <Dialog open={!!selectedHistoryItem} onOpenChange={(o) => !o && setSelectedHistoryItem(null)}><DialogContent className="sm:max-w-md bg-white rounded-3xl border-0"><DialogHeader><DialogTitle>Detalhes da Viagem</DialogTitle></DialogHeader><div className="space-y-4 pt-2"><div className="space-y-2"><div className="flex items-start gap-3"><div className="w-2 h-2 mt-2 bg-slate-900 rounded-full"/><div><p className="text-xs text-gray-400 uppercase font-bold">Origem</p><p className="font-medium text-slate-900">{selectedHistoryItem?.pickup_address}</p></div></div><div className="h-4 border-l-2 border-dashed border-gray-200 ml-1"></div><div className="flex items-start gap-3"><div className="w-2 h-2 mt-2 bg-yellow-500 rounded-full"/><div><p className="text-xs text-gray-400 uppercase font-bold">Destino</p><p className="font-medium text-slate-900">{selectedHistoryItem?.destination_address}</p></div></div></div>{selectedHistoryItem?.driver && (<div className="bg-gray-50 p-4 rounded-2xl flex items-center gap-3"><Avatar><AvatarFallback>{selectedHistoryItem.driver.first_name?.[0]}</AvatarFallback></Avatar><div><p className="font-bold text-slate-900">{selectedHistoryItem.driver.first_name} {selectedHistoryItem.driver.last_name}</p><p className="text-xs text-gray-500">{selectedHistoryItem.driver.car_model} • {selectedHistoryItem.driver.car_plate}</p></div></div>)}<div className="flex justify-between items-center pt-2 border-t border-gray-100"><div className="text-left"><p className="text-xs text-gray-500 font-bold uppercase">Data/Hora</p><p className="text-sm font-medium text-slate-900">{selectedHistoryItem ? new Date(selectedHistoryItem.created_at).toLocaleString('pt-BR') : '--'}</p></div><div className="text-right"><p className="text-xs text-gray-500 font-bold uppercase">Total Pago</p><span className="font-black text-2xl text-slate-900">R$ {Number(selectedHistoryItem?.price).toFixed(2)}</span></div></div></div></DialogContent></Dialog>
+      
+      {/* MODAL DETALHES DA CORRIDA (REDESENHADO) */}
+      <Dialog open={!!selectedHistoryItem} onOpenChange={(o) => !o && setSelectedHistoryItem(null)}>
+          <DialogContent className="sm:max-w-md bg-white rounded-3xl border-0 p-0 overflow-hidden">
+              <div className="bg-slate-900 p-6 text-white text-center">
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Detalhes da Viagem</p>
+                  <h2 className="text-3xl font-black">R$ {Number(selectedHistoryItem?.price).toFixed(2)}</h2>
+                  <p className="text-slate-400 text-sm mt-1">{selectedHistoryItem ? new Date(selectedHistoryItem.created_at).toLocaleDateString() + ' • ' + new Date(selectedHistoryItem.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</p>
+              </div>
+              <div className="p-6 space-y-6">
+                  {/* Rota */}
+                  <div className="space-y-4">
+                       <div className="flex gap-4">
+                           <div className="flex flex-col items-center pt-1"><div className="w-3 h-3 bg-slate-900 rounded-full" /><div className="w-0.5 flex-1 bg-gray-200 my-1 min-h-[30px]" /><div className="w-3 h-3 bg-green-500 rounded-full" /></div>
+                           <div className="space-y-6 flex-1">
+                               <div><p className="text-xs font-bold text-gray-400 uppercase">Origem</p><p className="font-medium text-slate-900 leading-tight">{selectedHistoryItem?.pickup_address}</p></div>
+                               <div><p className="text-xs font-bold text-gray-400 uppercase">Destino</p><p className="font-medium text-slate-900 leading-tight">{selectedHistoryItem?.destination_address}</p></div>
+                           </div>
+                       </div>
+                  </div>
+
+                  {/* Motorista */}
+                  {selectedHistoryItem?.driver && (
+                      <div className="bg-gray-50 p-4 rounded-2xl flex items-center gap-4 border border-gray-100">
+                          <Avatar className="h-12 w-12 border-2 border-white shadow-sm"><AvatarImage src={selectedHistoryItem.driver.avatar_url} /><AvatarFallback className="bg-slate-200 text-slate-600 font-bold">{selectedHistoryItem.driver.first_name?.[0]}</AvatarFallback></Avatar>
+                          <div>
+                              <p className="font-bold text-slate-900">{selectedHistoryItem.driver.first_name} {selectedHistoryItem.driver.last_name}</p>
+                              <p className="text-xs text-gray-500">{selectedHistoryItem.driver.car_model} • {selectedHistoryItem.driver.car_color} • <span className="font-mono font-bold">{selectedHistoryItem.driver.car_plate}</span></p>
+                          </div>
+                      </div>
+                  )}
+                  
+                  <div className="pt-2">
+                      <Button className="w-full h-12 bg-gray-100 hover:bg-gray-200 text-slate-900 font-bold rounded-xl" onClick={() => setSelectedHistoryItem(null)}>Fechar Detalhes</Button>
+                  </div>
+              </div>
+          </DialogContent>
+      </Dialog>
+
       {showChat && ride && ['ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(ride.status) && currentUserId && (<RideChat rideId={ride.id} currentUserId={currentUserId} role="client" otherUserName={ride.driver_details?.name || 'Motorista'} otherUserAvatar={ride.driver_details?.avatar_url} onClose={() => setShowChat(false)} />)}
       <div className="relative z-[100]"><FloatingDock activeTab={activeTab} onTabChange={handleTabChange} role="client" /></div>
     </div>
