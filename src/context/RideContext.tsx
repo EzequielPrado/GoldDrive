@@ -271,15 +271,22 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
       }
       if (!currentUserId) return;
 
-      const { data: checkRide } = await supabase.from('rides').select('status').eq('id', rideId).single();
-      if (checkRide.status !== 'SEARCHING') {
-          showError("Esta corrida já foi aceita.");
+      // ATOMICIDADE: Só atualiza se o status AINDA for 'SEARCHING'
+      // Isso impede que dois motoristas aceitem a mesma corrida
+      const { data, error } = await supabase
+        .from('rides')
+        .update({ status: 'ACCEPTED', driver_id: currentUserId })
+        .eq('id', rideId)
+        .eq('status', 'SEARCHING') // TRAVA DE SEGURANÇA CRÍTICA
+        .select()
+        .maybeSingle();
+
+      if (error || !data) {
+          showError("Esta corrida já foi aceita por outro motorista.");
+          // Remove da lista local imediatamente
           setAvailableRides(prev => prev.filter(r => r.id !== rideId));
           return;
       }
-
-      const { error, data } = await supabase.from('rides').update({ status: 'ACCEPTED', driver_id: currentUserId }).eq('id', rideId).select().single();
-      if (error) throw error;
       
       let fullData = { ...data } as RideData;
       fullData.client_details = await fetchClientFullInfo(data.customer_id);
