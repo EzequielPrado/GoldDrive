@@ -134,13 +134,6 @@ const LoginClient = () => {
                    <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-black via-zinc-800 to-yellow-500" />
 
                    <div className="mb-8 text-center">
-                       {/* Texto da Marca (Visível apenas Desktop) */}
-                       <div className="hidden lg:flex justify-center mb-6">
-                           <h1 className="text-4xl font-black text-slate-900 tracking-tighter">
-                               GOLD <span className="text-yellow-500">MOBILE</span>
-                           </h1>
-                       </div>
-
                        <h2 className="text-3xl font-black text-slate-900">{isSignUp ? "Criar Conta" : "Login Passageiro"}</h2>
                        <p className="text-gray-500 mt-2 text-sm">{isSignUp ? "Siga as etapas para começar." : "Entre para solicitar sua corrida."}</p>
                    </div>
