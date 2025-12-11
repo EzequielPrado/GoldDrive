@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { showError, showSuccess } from "@/utils/toast";
-import { ArrowLeft, Loader2, ArrowRight, Car, Camera, ShieldCheck, Mail, Lock, Phone, CreditCard, ChevronLeft, Eye, EyeOff, KeyRound, Ban, User, FileText } from "lucide-react";
+import { ArrowLeft, Loader2, Car, Camera, Mail, Lock, Phone, CreditCard, ChevronLeft, Eye, EyeOff, KeyRound, Ban, User, FileText } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 
@@ -140,21 +140,24 @@ const LoginDriver = () => {
 
        {/* Lado Direito - Form */}
        <div className="w-full lg:w-1/2 flex flex-col bg-zinc-950 relative overflow-y-auto">
-           {/* Header Mobile - Com Z-Index e Posição Corrigidos */}
-           <div className="p-6 flex items-center w-full z-50 relative lg:absolute lg:top-0 lg:left-0 lg:z-20">
+           {/* Header Mobile - Fixado no topo e com z-index alto */}
+           <div className="p-6 flex items-center justify-between w-full fixed top-0 left-0 right-0 z-50 bg-transparent lg:absolute">
                <Button 
                     variant="ghost" 
                     onClick={handleBack} 
-                    className="bg-white/10 hover:bg-white/20 text-white rounded-full w-12 h-12 p-0 shrink-0 cursor-pointer z-50"
+                    className="bg-white/10 hover:bg-white/20 text-white rounded-full w-12 h-12 p-0 shrink-0 cursor-pointer shadow-lg backdrop-blur-sm"
                 >
                    {isSignUp && step > 1 ? <ChevronLeft className="w-6 h-6" /> : <ArrowLeft className="w-6 h-6" />}
                </Button>
                
                {/* Logo Mobile Header */}
-               <img src="/logo-goldmobile-2.png" alt="Gold" className="h-8 ml-4 lg:hidden" />
+               <img src="/logo-goldmobile-2.png" alt="Gold" className="h-8 lg:hidden drop-shadow-md" />
+               
+               {/* Espaçador para equilibrar no mobile */}
+               <div className="w-12 lg:hidden"></div>
            </div>
 
-           <div className="flex-1 flex flex-col justify-center px-6 sm:px-12 md:px-24 py-10 relative z-10">
+           <div className="flex-1 flex flex-col justify-center px-6 sm:px-12 md:px-24 py-24 relative z-10">
                <div className="bg-white rounded-[40px] p-8 shadow-2xl animate-in slide-in-from-bottom-8 duration-700 relative overflow-hidden">
                    <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-yellow-500 via-zinc-800 to-black" />
                    
@@ -242,7 +245,6 @@ const LoginDriver = () => {
                            {step === 3 && (
                                <div className="space-y-4 animate-in fade-in slide-in-from-right duration-300">
                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                       {/* ADICIONANDO text-slate-900 EXPLICITAMENTE */}
                                        <Input placeholder="Modelo (ex: Civic)" className="h-14 bg-gray-50 border-gray-200 rounded-2xl text-slate-900" value={form.carModel} onChange={e => handleChange('carModel', e.target.value)} />
                                        <Input placeholder="Placa" className="h-14 bg-gray-50 border-gray-200 rounded-2xl uppercase text-slate-900" value={form.carPlate} onChange={e => handleChange('carPlate', e.target.value.toUpperCase())} maxLength={7} />
                                    </div>
