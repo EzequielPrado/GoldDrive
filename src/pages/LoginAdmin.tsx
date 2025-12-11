@@ -16,24 +16,29 @@ const LoginAdmin = () => {
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
-    const checkExistingSession = async () => {
-        try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session) {
-                 const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
-                 if (data?.role === 'admin') {
-                     // Usuário já é admin, redirecionar direto
-                     navigate('/admin', { replace: true });
-                     return;
-                 }
+    // Adiciona delay de 5 segundos para a verificação inicial
+    const timeout = setTimeout(() => {
+        const checkExistingSession = async () => {
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session) {
+                    const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
+                    if (data?.role === 'admin') {
+                        // Usuário já é admin, redirecionar direto
+                        navigate('/admin', { replace: true });
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.error("Erro check session admin:", e);
+            } finally {
+                setCheckingSession(false);
             }
-        } catch (e) {
-            console.error("Erro check session admin:", e);
-        } finally {
-            setCheckingSession(false);
-        }
-    };
-    checkExistingSession();
+        };
+        checkExistingSession();
+    }, 5000); // 5000ms = 5 segundos
+
+    return () => clearTimeout(timeout);
   }, [navigate]);
 
   const handleAuth = async (e: React.FormEvent) => {

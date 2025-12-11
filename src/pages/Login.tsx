@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { showError, showSuccess } from "@/utils/toast";
-import { ArrowLeft, Mail, Lock, User, KeyRound, Car, MapPin, Shield, Loader2 } from "lucide-react";
+import { ArrowLeft, Mail, Lock, User, KeyRound, Car, Shield, Loader2, Eye, EyeOff } from "lucide-react";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -23,6 +23,10 @@ const Login = () => {
   // Mode States
   const [isSignUp, setIsSignUp] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
+
+  // Visibility States
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Cores dinâmicas baseadas no perfil
   const getThemeColor = () => {
@@ -46,6 +50,8 @@ const Login = () => {
     setPassword("");
     setConfirmPassword("");
     setFullName("");
+    setShowPassword(false);
+    setShowConfirmPassword(false);
   };
 
   const toggleMode = () => {
@@ -81,7 +87,6 @@ const Login = () => {
     
     try {
         if (isSignUp) {
-            // Validações
             if (!email || !password || !fullName) throw new Error("Preencha todos os campos.");
             if (password !== confirmPassword) throw new Error("As senhas não coincidem.");
             if (password.length < 6) throw new Error("Senha muito curta (mínimo 6 caracteres).");
@@ -106,7 +111,6 @@ const Login = () => {
             showSuccess("Conta criada! Verifique seu email.");
             setIsSignUp(false);
         } else {
-            // Login
             const { data, error } = await supabase.auth.signInWithPassword({
                 email,
                 password
@@ -115,7 +119,6 @@ const Login = () => {
             if (error) throw error;
             if (!data.user) throw new Error("Erro ao autenticar");
 
-            // Buscar role correta no banco
             const { data: profile } = await supabase
                 .from('profiles')
                 .select('role')
@@ -124,7 +127,6 @@ const Login = () => {
             
             const role = profile?.role || 'client';
             
-            // Redirecionar baseado na role real
             if (role === 'admin') navigate('/admin');
             else if (role === 'driver') navigate('/driver');
             else navigate('/client');
@@ -160,6 +162,7 @@ const Login = () => {
                       <Input 
                           type="email" 
                           placeholder="ex: joao@email.com" 
+                          className="text-black"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           disabled={loading}
@@ -177,7 +180,6 @@ const Login = () => {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4 relative overflow-hidden">
-      {/* Background Decorativo */}
       <div className={`absolute top-0 left-0 right-0 h-1/2 transition-colors duration-500 ease-in-out -z-10 ${
           activeTab === 'driver' ? 'bg-yellow-500' : activeTab === 'admin' ? 'bg-slate-900' : 'bg-black'
       }`} />
@@ -228,7 +230,7 @@ const Login = () => {
                             <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                             <Input 
                                 placeholder="Seu nome" 
-                                className="pl-9 bg-gray-50 focus:bg-white transition-colors"
+                                className="pl-9 bg-gray-50 focus:bg-white transition-colors text-black"
                                 value={fullName}
                                 onChange={(e) => setFullName(e.target.value)}
                             />
@@ -243,7 +245,7 @@ const Login = () => {
                     <Input 
                         type="email" 
                         placeholder="seu@email.com" 
-                        className="pl-9 bg-gray-50 focus:bg-white transition-colors"
+                        className="pl-9 bg-gray-50 focus:bg-white transition-colors text-black"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                     />
@@ -265,12 +267,15 @@ const Login = () => {
                   <div className="relative">
                     <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input 
-                        type="password" 
+                        type={showPassword ? "text" : "password"} 
                         placeholder="••••••••"
-                        className="pl-9 bg-gray-50 focus:bg-white transition-colors"
+                        className="pl-9 pr-10 bg-gray-50 focus:bg-white transition-colors text-black"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                     />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-gray-400 hover:text-black focus:outline-none">
+                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
                   </div>
                 </div>
 
@@ -280,12 +285,15 @@ const Login = () => {
                         <div className="relative">
                             <KeyRound className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                             <Input 
-                                type="password" 
+                                type={showConfirmPassword ? "text" : "password"} 
                                 placeholder="••••••••"
-                                className="pl-9 bg-gray-50 focus:bg-white transition-colors"
+                                className="pl-9 pr-10 bg-gray-50 focus:bg-white transition-colors text-black"
                                 value={confirmPassword}
                                 onChange={(e) => setConfirmPassword(e.target.value)}
                             />
+                             <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-3 text-gray-400 hover:text-black focus:outline-none">
+                                {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                            </button>
                         </div>
                     </div>
                 )}

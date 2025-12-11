@@ -129,7 +129,7 @@ const LoginClient = () => {
 
        {/* Direita - Formulário */}
        <div className="w-full lg:w-1/2 flex flex-col relative overflow-y-auto bg-zinc-950">
-           {/* Header Mobile - Com Z-index e botão corrigidos */}
+           {/* Header Mobile */}
            <div className="p-6 flex items-center w-full z-50 relative lg:absolute lg:top-0 lg:left-0 lg:z-20">
                <Button 
                     variant="ghost" 
@@ -138,15 +138,11 @@ const LoginClient = () => {
                 >
                    {isSignUp && step === 2 ? <ChevronLeft className="w-6 h-6" /> : <ArrowLeft className="w-6 h-6" />}
                </Button>
-               
-               {/* Logo Mobile Header */}
                <img src="/logo-goldmobile-2.png" alt="Gold Mobile" className="h-8 ml-4 lg:hidden" />
            </div>
 
            <div className="flex-1 flex flex-col justify-center px-6 sm:px-12 md:px-24 py-10 relative z-10">
-               {/* Container Branco */}
                <div className="bg-white rounded-[40px] p-8 shadow-2xl animate-in slide-in-from-bottom-8 duration-700 relative overflow-hidden">
-                   {/* Barra Decorativa Superior */}
                    <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-black via-zinc-800 to-yellow-500" />
 
                    <div className="mb-8 text-center">
@@ -162,7 +158,13 @@ const LoginClient = () => {
                                     <label className="text-xs font-bold text-slate-500 uppercase ml-3">Email</label>
                                     <div className="relative group">
                                         <Mail className="absolute left-4 top-4 w-5 h-5 text-gray-400 group-focus-within:text-black transition-colors" />
-                                        <Input type="email" placeholder="seu@email.com" className="h-14 pl-12 bg-gray-50 border-gray-200 rounded-2xl focus:border-black focus:ring-0 text-slate-900 font-medium" value={email} onChange={e => setEmail(e.target.value)} />
+                                        <Input 
+                                            type="email" 
+                                            placeholder="seu@email.com" 
+                                            className="h-14 pl-12 bg-gray-50 border-gray-200 rounded-2xl focus:border-black focus:ring-0 text-black font-medium" 
+                                            value={email} 
+                                            onChange={e => setEmail(e.target.value)} 
+                                        />
                                     </div>
                                 </div>
                                 <div className="space-y-1">
@@ -175,7 +177,7 @@ const LoginClient = () => {
                                         <Input 
                                             type={showPassword ? "text" : "password"} 
                                             placeholder="••••••••" 
-                                            className="h-14 pl-12 pr-12 bg-gray-50 border-gray-200 rounded-2xl focus:border-black focus:ring-0 text-slate-900 font-medium" 
+                                            className="h-14 pl-12 pr-12 bg-gray-50 border-gray-200 rounded-2xl focus:border-black focus:ring-0 text-black font-medium" 
                                             value={password} 
                                             onChange={e => setPassword(e.target.value)} 
                                         />
@@ -189,7 +191,6 @@ const LoginClient = () => {
                                 </Button>
                             </form>
 
-                            {/* DESTAQUE DE CADASTRO */}
                             <div className="mt-8 bg-yellow-50 border border-yellow-200 rounded-3xl p-6 text-center space-y-3">
                                 <p className="text-slate-800 font-bold text-sm">
                                     Ainda não tem conta? <br/>
@@ -205,12 +206,8 @@ const LoginClient = () => {
                    {/* SIGNUP FLOW */}
                    {isSignUp && (
                        <div className="animate-in slide-in-from-right fade-in duration-300">
-                           
-                           {/* Stepper Visual */}
                            <div className="flex items-center justify-between px-8 mb-8 relative">
-                               {/* Linha de fundo */}
                                <div className="absolute left-0 right-0 top-1/2 h-1 bg-gray-100 -z-10 mx-12"></div>
-                               {/* Progresso Ativo */}
                                <div className={`absolute left-0 top-1/2 h-1 bg-yellow-500 -z-10 mx-12 transition-all duration-500 ${step === 2 ? 'right-0' : 'right-1/2'}`}></div>
 
                                <div className="flex flex-col items-center gap-1">
@@ -234,7 +231,7 @@ const LoginClient = () => {
                                         <label className="text-xs font-bold text-slate-500 uppercase ml-3">Nome Completo</label>
                                         <div className="relative group">
                                             <User className="absolute left-4 top-4 w-5 h-5 text-gray-400 group-focus-within:text-black transition-colors" />
-                                            <Input placeholder="Seu nome" className="h-14 pl-12 bg-gray-50 border-gray-200 rounded-2xl focus:border-black focus:ring-0 text-slate-900 font-medium" value={name} onChange={e => setName(e.target.value)} />
+                                            <Input placeholder="Seu nome" className="h-14 pl-12 bg-gray-50 border-gray-200 rounded-2xl focus:border-black focus:ring-0 text-black font-medium" value={name} onChange={e => setName(e.target.value)} />
                                         </div>
                                    </div>
 
@@ -242,7 +239,7 @@ const LoginClient = () => {
                                         <label className="text-xs font-bold text-slate-500 uppercase ml-3">Email</label>
                                         <div className="relative group">
                                             <Mail className="absolute left-4 top-4 w-5 h-5 text-gray-400 group-focus-within:text-black transition-colors" />
-                                            <Input type="email" placeholder="seu@email.com" className="h-14 pl-12 bg-gray-50 border-gray-200 rounded-2xl focus:border-black focus:ring-0 text-slate-900 font-medium" value={email} onChange={e => setEmail(e.target.value)} />
+                                            <Input type="email" placeholder="seu@email.com" className="h-14 pl-12 bg-gray-50 border-gray-200 rounded-2xl focus:border-black focus:ring-0 text-black font-medium" value={email} onChange={e => setEmail(e.target.value)} />
                                         </div>
                                    </div>
 
@@ -251,7 +248,7 @@ const LoginClient = () => {
                                             <label className="text-xs font-bold text-slate-500 uppercase ml-3">Senha</label>
                                             <div className="relative group">
                                                 <Lock className="absolute left-4 top-4 w-5 h-5 text-gray-400 group-focus-within:text-black transition-colors" />
-                                                <Input type={showPassword ? "text" : "password"} placeholder="******" className="h-14 pl-12 pr-10 bg-gray-50 border-gray-200 rounded-2xl focus:border-black focus:ring-0 text-slate-900 font-medium" value={password} onChange={e => setPassword(e.target.value)} />
+                                                <Input type={showPassword ? "text" : "password"} placeholder="******" className="h-14 pl-12 pr-10 bg-gray-50 border-gray-200 rounded-2xl focus:border-black focus:ring-0 text-black font-medium" value={password} onChange={e => setPassword(e.target.value)} />
                                                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-4 text-gray-400 hover:text-black"><Eye className="w-5 h-5" /></button>
                                             </div>
                                        </div>
@@ -259,7 +256,7 @@ const LoginClient = () => {
                                             <label className="text-xs font-bold text-slate-500 uppercase ml-3">Confirmar</label>
                                             <div className="relative group">
                                                 <KeyRound className="absolute left-4 top-4 w-5 h-5 text-gray-400 group-focus-within:text-black transition-colors" />
-                                                <Input type={showConfirmPassword ? "text" : "password"} placeholder="******" className="h-14 pl-12 pr-10 bg-gray-50 border-gray-200 rounded-2xl focus:border-black focus:ring-0 text-slate-900 font-medium" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
+                                                <Input type={showConfirmPassword ? "text" : "password"} placeholder="******" className="h-14 pl-12 pr-10 bg-gray-50 border-gray-200 rounded-2xl focus:border-black focus:ring-0 text-black font-medium" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
                                                 <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-4 text-gray-400 hover:text-black"><Eye className="w-5 h-5" /></button>
                                             </div>
                                        </div>

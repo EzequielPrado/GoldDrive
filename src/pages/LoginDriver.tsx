@@ -171,11 +171,12 @@ const LoginDriver = () => {
                            <form onSubmit={handleLogin} className="space-y-5">
                                <div className="relative group">
                                    <Mail className="absolute left-4 top-4 w-5 h-5 text-gray-400 group-focus-within:text-yellow-600 transition-colors" />
-                                   <Input type="email" placeholder="Email cadastrado" className="h-14 pl-12 bg-gray-50 border-gray-200 text-base rounded-2xl focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all text-slate-900" value={form.email} onChange={e => handleChange('email', e.target.value)} />
+                                   <Input type="email" placeholder="Email cadastrado" className="h-14 pl-12 bg-gray-50 border-gray-200 text-base rounded-2xl focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all text-black" value={form.email} onChange={e => handleChange('email', e.target.value)} />
                                </div>
                                <div className="relative group">
                                    <Lock className="absolute left-4 top-4 w-5 h-5 text-gray-400 group-focus-within:text-yellow-600 transition-colors" />
-                                   <Input type={showPassword ? "text" : "password"} placeholder="Sua senha" className="h-14 pl-12 pr-12 bg-gray-50 border-gray-200 text-base rounded-2xl focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all text-slate-900" value={form.password} onChange={e => handleChange('password', e.target.value)} /><button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"><Eye className="w-5 h-5" /></button>
+                                   <Input type={showPassword ? "text" : "password"} placeholder="Sua senha" className="h-14 pl-12 pr-12 bg-gray-50 border-gray-200 text-base rounded-2xl focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all text-black" value={form.password} onChange={e => handleChange('password', e.target.value)} />
+                                   <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"><Eye className="w-5 h-5" /></button>
                                </div>
                                <Button className="w-full h-14 text-lg font-bold rounded-2xl bg-slate-900 hover:bg-black text-white shadow-xl mt-4" disabled={loading}>{loading ? <Loader2 className="animate-spin" /> : "Acessar Painel"}</Button>
                            </form>
@@ -215,17 +216,17 @@ const LoginDriver = () => {
                            {step === 1 && (
                                <div className="space-y-4 animate-in fade-in slide-in-from-right duration-300">
                                    <div className="grid grid-cols-2 gap-4">
-                                       <Input placeholder="Nome" className="h-14 bg-gray-50 border-gray-200 rounded-2xl text-slate-900" value={form.firstName} onChange={e => handleChange('firstName', e.target.value)} />
-                                       <Input placeholder="Sobrenome" className="h-14 bg-gray-50 border-gray-200 rounded-2xl text-slate-900" value={form.lastName} onChange={e => handleChange('lastName', e.target.value)} />
+                                       <Input placeholder="Nome" className="h-14 bg-gray-50 border-gray-200 rounded-2xl text-black" value={form.firstName} onChange={e => handleChange('firstName', e.target.value)} />
+                                       <Input placeholder="Sobrenome" className="h-14 bg-gray-50 border-gray-200 rounded-2xl text-black" value={form.lastName} onChange={e => handleChange('lastName', e.target.value)} />
                                    </div>
                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                       <div className="relative group"><CreditCard className="absolute left-4 top-4 w-5 h-5 text-gray-400"/><Input placeholder="CPF" className="h-14 pl-12 bg-gray-50 border-gray-200 rounded-2xl font-mono text-slate-900" value={form.cpf} onChange={e => handleChange('cpf', e.target.value)} /></div>
-                                       <div className="relative group"><Phone className="absolute left-4 top-4 w-5 h-5 text-gray-400"/><Input placeholder="WhatsApp" className="h-14 pl-12 bg-gray-50 border-gray-200 rounded-2xl text-slate-900" value={form.phone} onChange={e => handleChange('phone', e.target.value)} /></div>
+                                       <div className="relative group"><CreditCard className="absolute left-4 top-4 w-5 h-5 text-gray-400"/><Input placeholder="CPF" className="h-14 pl-12 bg-gray-50 border-gray-200 rounded-2xl font-mono text-black" value={form.cpf} onChange={e => handleChange('cpf', e.target.value)} /></div>
+                                       <div className="relative group"><Phone className="absolute left-4 top-4 w-5 h-5 text-gray-400"/><Input placeholder="WhatsApp" className="h-14 pl-12 bg-gray-50 border-gray-200 rounded-2xl text-black" value={form.phone} onChange={e => handleChange('phone', e.target.value)} /></div>
                                    </div>
-                                   <div className="space-y-1"><div className="relative"><Mail className="absolute left-4 top-4 w-5 h-5 text-gray-400"/><Input placeholder="Email" className="h-14 pl-12 bg-gray-50 border-gray-200 rounded-2xl text-slate-900" value={form.email} onChange={e => handleChange('email', e.target.value)} /></div></div>
+                                   <div className="space-y-1"><div className="relative"><Mail className="absolute left-4 top-4 w-5 h-5 text-gray-400"/><Input placeholder="Email" className="h-14 pl-12 bg-gray-50 border-gray-200 rounded-2xl text-black" value={form.email} onChange={e => handleChange('email', e.target.value)} /></div></div>
                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                       <div className="relative"><Lock className="absolute left-4 top-4 w-5 h-5 text-gray-400"/><Input type={showPassword ? "text" : "password"} placeholder="Senha" className="h-14 pl-12 pr-10 bg-gray-50 border-gray-200 rounded-2xl text-slate-900" value={form.password} onChange={e => handleChange('password', e.target.value)} /><button onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-4 text-gray-400"><Eye className="w-5 h-5"/></button></div>
-                                       <div className="relative"><KeyRound className="absolute left-4 top-4 w-5 h-5 text-gray-400"/><Input type={showConfirmPassword ? "text" : "password"} placeholder="Confirmar" className="h-14 pl-12 pr-10 bg-gray-50 border-gray-200 rounded-2xl text-slate-900" value={form.confirmPassword} onChange={e => handleChange('confirmPassword', e.target.value)} /><button onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-4 text-gray-400"><Eye className="w-5 h-5"/></button></div>
+                                       <div className="relative"><Lock className="absolute left-4 top-4 w-5 h-5 text-gray-400"/><Input type={showPassword ? "text" : "password"} placeholder="Senha" className="h-14 pl-12 pr-10 bg-gray-50 border-gray-200 rounded-2xl text-black" value={form.password} onChange={e => handleChange('password', e.target.value)} /><button onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-4 text-gray-400"><Eye className="w-5 h-5"/></button></div>
+                                       <div className="relative"><KeyRound className="absolute left-4 top-4 w-5 h-5 text-gray-400"/><Input type={showConfirmPassword ? "text" : "password"} placeholder="Confirmar" className="h-14 pl-12 pr-10 bg-gray-50 border-gray-200 rounded-2xl text-black" value={form.confirmPassword} onChange={e => handleChange('confirmPassword', e.target.value)} /><button onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-4 text-gray-400"><Eye className="w-5 h-5"/></button></div>
                                    </div>
                                    <Button onClick={() => validateStep1() && setStep(2)} className="w-full h-14 bg-black text-white hover:bg-zinc-800 rounded-2xl mt-4">Continuar</Button>
                                </div>
@@ -245,12 +246,12 @@ const LoginDriver = () => {
                            {step === 3 && (
                                <div className="space-y-4 animate-in fade-in slide-in-from-right duration-300">
                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                       <Input placeholder="Modelo (ex: Civic)" className="h-14 bg-gray-50 border-gray-200 rounded-2xl text-slate-900" value={form.carModel} onChange={e => handleChange('carModel', e.target.value)} />
-                                       <Input placeholder="Placa" className="h-14 bg-gray-50 border-gray-200 rounded-2xl uppercase text-slate-900" value={form.carPlate} onChange={e => handleChange('carPlate', e.target.value.toUpperCase())} maxLength={7} />
+                                       <Input placeholder="Modelo (ex: Civic)" className="h-14 bg-gray-50 border-gray-200 rounded-2xl text-black" value={form.carModel} onChange={e => handleChange('carModel', e.target.value)} />
+                                       <Input placeholder="Placa" className="h-14 bg-gray-50 border-gray-200 rounded-2xl uppercase text-black" value={form.carPlate} onChange={e => handleChange('carPlate', e.target.value.toUpperCase())} maxLength={7} />
                                    </div>
                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                       <Input type="number" placeholder="Ano" className="h-14 bg-gray-50 border-gray-200 rounded-2xl text-slate-900" value={form.carYear} onChange={e => handleChange('carYear', e.target.value)} />
-                                       <Input placeholder="Cor" className="h-14 bg-gray-50 border-gray-200 rounded-2xl text-slate-900" value={form.carColor} onChange={e => handleChange('carColor', e.target.value)} />
+                                       <Input type="number" placeholder="Ano" className="h-14 bg-gray-50 border-gray-200 rounded-2xl text-black" value={form.carYear} onChange={e => handleChange('carYear', e.target.value)} />
+                                       <Input placeholder="Cor" className="h-14 bg-gray-50 border-gray-200 rounded-2xl text-black" value={form.carColor} onChange={e => handleChange('carColor', e.target.value)} />
                                    </div>
                                    <Button onClick={handleSignUp} disabled={loading} className="w-full h-14 bg-yellow-500 hover:bg-yellow-400 text-black font-black rounded-2xl mt-6 shadow-xl">{loading ? <Loader2 className="animate-spin"/> : "FINALIZAR CADASTRO"}</Button>
                                </div>
