@@ -83,8 +83,11 @@ const LoginDriver = () => {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
       if (error) throw error;
-      const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
+      // Otimização: Seleciona apenas campos necessários para decisão de roteamento
+      const { data: profile } = await supabase.from('profiles').select('role, driver_status, is_blocked').eq('id', data.user.id).single();
+      
       if (profile?.is_blocked) { await supabase.auth.signOut(); setIsBlockedModalOpen(true); return; }
+      
       navigate(profile?.role === 'driver' ? (profile.driver_status === 'PENDING' ? '/driver-pending' : '/driver') : '/client');
     } catch (e: any) { showError(e.message); } finally { setLoading(false); }
   };
@@ -226,12 +229,12 @@ const LoginDriver = () => {
                            {step === 3 && (
                                <div className="space-y-4 animate-in fade-in slide-in-from-right duration-300">
                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                       <Input placeholder="Modelo (ex: Civic)" className="h-14 bg-gray-50 border-gray-200 rounded-2xl" value={form.carModel} onChange={e => handleChange('carModel', e.target.value)} />
-                                       <Input placeholder="Placa" className="h-14 bg-gray-50 border-gray-200 rounded-2xl uppercase" value={form.carPlate} onChange={e => handleChange('carPlate', e.target.value.toUpperCase())} maxLength={7} />
+                                       <Input placeholder="Modelo (ex: Civic)" className="h-14 bg-gray-50 border-gray-200 rounded-2xl text-slate-900" value={form.carModel} onChange={e => handleChange('carModel', e.target.value)} />
+                                       <Input placeholder="Placa" className="h-14 bg-gray-50 border-gray-200 rounded-2xl uppercase text-slate-900" value={form.carPlate} onChange={e => handleChange('carPlate', e.target.value.toUpperCase())} maxLength={7} />
                                    </div>
                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                       <Input type="number" placeholder="Ano" className="h-14 bg-gray-50 border-gray-200 rounded-2xl" value={form.carYear} onChange={e => handleChange('carYear', e.target.value)} />
-                                       <Input placeholder="Cor" className="h-14 bg-gray-50 border-gray-200 rounded-2xl" value={form.carColor} onChange={e => handleChange('carColor', e.target.value)} />
+                                       <Input type="number" placeholder="Ano" className="h-14 bg-gray-50 border-gray-200 rounded-2xl text-slate-900" value={form.carYear} onChange={e => handleChange('carYear', e.target.value)} />
+                                       <Input placeholder="Cor" className="h-14 bg-gray-50 border-gray-200 rounded-2xl text-slate-900" value={form.carColor} onChange={e => handleChange('carColor', e.target.value)} />
                                    </div>
                                    <Button onClick={handleSignUp} disabled={loading} className="w-full h-14 bg-yellow-500 hover:bg-yellow-400 text-black font-black rounded-2xl mt-6 shadow-xl">{loading ? <Loader2 className="animate-spin"/> : "FINALIZAR CADASTRO"}</Button>
                                </div>

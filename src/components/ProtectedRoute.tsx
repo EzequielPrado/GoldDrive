@@ -63,12 +63,12 @@ const ProtectedRoute = ({ children, allowedRoles }: Props) => {
 
     verifyAccess();
 
-    // Timeout reduzido para 5 segundos conforme solicitado
+    // Timeout aumentado para 15 segundos para evitar falsos positivos no painel admin
     const timeout = setTimeout(() => {
         if (mounted && status === 'loading') {
             setStatus('unauthorized');
         }
-    }, 5000);
+    }, 15000);
 
     return () => {
       mounted = false;
