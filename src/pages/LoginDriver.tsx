@@ -129,12 +129,13 @@ const LoginDriver = () => {
        {/* Lado Direito - Form */}
        <div className="w-full lg:w-1/2 flex flex-col bg-zinc-950 relative overflow-y-auto">
            {/* Header Mobile */}
-           <div className="p-6 flex justify-between items-center lg:absolute lg:top-0 lg:left-0 lg:z-20 lg:w-full">
-               <Button variant="ghost" onClick={() => isSignUp && step > 1 ? setStep(s => s - 1) : isSignUp ? setIsSignUp(false) : navigate('/')} className="hover:bg-zinc-800 text-white rounded-full w-12 h-12 p-0">
+           <div className="p-6 flex items-center lg:absolute lg:top-0 lg:left-0 lg:z-20 lg:w-full">
+               <Button variant="ghost" onClick={() => isSignUp && step > 1 ? setStep(s => s - 1) : isSignUp ? setIsSignUp(false) : navigate('/')} className="hover:bg-zinc-800 text-white rounded-full w-12 h-12 p-0 shrink-0">
                    {isSignUp && step > 1 ? <ChevronLeft className="w-6 h-6" /> : <ArrowLeft className="w-6 h-6" />}
                </Button>
-               {/* Logo removida do header mobile */}
-               <div className="w-12 lg:hidden" />
+               
+               {/* Logo Mobile Header (Fora do Card) */}
+               <img src="/logo-goldmobile-2.png" alt="Gold" className="h-8 ml-4 lg:hidden" />
            </div>
 
            <div className="flex-1 flex flex-col justify-center px-6 sm:px-12 md:px-24 py-10">
@@ -142,13 +143,6 @@ const LoginDriver = () => {
                    <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-yellow-500 via-zinc-800 to-black" />
                    
                    <div className="mb-8 text-center">
-                       {/* LOGO EM TEXTO */}
-                       <div className="flex justify-center mb-6">
-                           <h1 className="text-4xl font-black text-slate-900 tracking-tighter">
-                               GOLD <span className="text-yellow-500">MOBILE</span>
-                           </h1>
-                       </div>
-
                        <h2 className="text-3xl font-black text-slate-900">{isSignUp ? "Cadastro Motorista" : "Login Motorista"}</h2>
                        <p className="text-gray-500 mt-2 text-sm">{isSignUp ? "Junte-se à elite do transporte." : "Bem-vindo de volta, parceiro."}</p>
                    </div>
