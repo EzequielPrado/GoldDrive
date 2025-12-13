@@ -33,6 +33,14 @@ const Profile = () => {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
       if (error) throw error;
       
+      // Contagem real de viagens finalizadas
+      const queryField = data.role === 'driver' ? 'driver_id' : 'customer_id';
+      const { count } = await supabase
+        .from('rides')
+        .select('*', { count: 'exact', head: true })
+        .eq(queryField, user.id)
+        .eq('status', 'COMPLETED');
+
       let avgRating = 5.0;
       if (data.role === 'driver') {
           const { data: rides } = await supabase.from('rides').select('customer_rating').eq('driver_id', user.id).not('customer_rating', 'is', null);
@@ -44,6 +52,7 @@ const Profile = () => {
       setProfile({ 
           ...data, 
           email: user.email || "",
+          total_rides: count || 0, // Usando a contagem real
           rating: avgRating 
       });
     } catch (error: any) { 
