@@ -48,34 +48,40 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
 
       const queryField = role === 'driver' ? 'driver_id' : 'customer_id';
       
-      // BUSCA AMPLIADA: Inclui CANCELLED e COMPLETED
       const { data } = await supabase
         .from('rides')
         .select(`*, driver_details:profiles!public_rides_driver_id_fkey(*), client_details:profiles!public_rides_customer_id_fkey(*)`)
         .eq(queryField, userId)
-        .order('created_at', { ascending: false }) // Pega a última
+        .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
       if (data) {
-          // Lógica de "Expiração": Se a corrida foi finalizada ou cancelada há muito tempo, ignoramos
-          // Se for ativa (SEARCHING, ACCEPTED...), mostramos sempre.
+          // Lógica de "Expiração" e "Já Avaliado"
           const isFinished = ['CANCELLED', 'COMPLETED'].includes(data.status);
           
           if (isFinished) {
-              // Verifica se foi atualizada nos últimos 30 minutos
-              const updatedAt = new Date(data.created_at).getTime(); // Usando created_at como base simplificada ou poderia ser um campo updated_at
+              // Se já avaliei, não mostro mais a corrida como ativa
+              // Se sou motorista, vejo se customer_rating (nota que dei pro cliente) existe
+              // Se sou cliente, vejo se driver_rating (nota que dei pro motorista) existe
+              const hasRated = role === 'driver' ? !!data.customer_rating : !!data.driver_rating;
+              
+              if (hasRated) {
+                  setRide(null); // Remove do estado ativo
+                  return;
+              }
+
+              // Se não avaliei, mostro por até 1 hora
+              const updatedAt = new Date(data.created_at).getTime();
               const now = new Date().getTime();
               const diffMinutes = (now - updatedAt) / 1000 / 60;
               
-              // Se foi há menos de 1 hora, mostramos o estado final para o usuário ver o recibo/aviso
               if (diffMinutes < 60) {
                   setRide(data);
               } else {
-                  setRide(null); // Corrida velha, limpa estado
+                  setRide(null);
               }
           } else {
-              // Corrida ativa
               setRide(data);
           }
       } else {
@@ -141,19 +147,20 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, []);
 
-  // Polling de Segurança (Passageiro e Motorista Ativo)
+  // Polling Universal
   useEffect(() => {
       let interval: NodeJS.Timeout;
       
-      const shouldPoll = currentUserId && ride; // Se tem corrida (mesmo cancelada/finalizada recente), atualiza status
+      const shouldPoll = currentUserId && (
+          (userRole === 'client' && ride) ||
+          (userRole === 'client' && !ride) || 
+          (userRole === 'driver' && ride)
+      );
 
       if (shouldPoll) {
           interval = setInterval(() => {
               if (currentUserId) fetchActiveRide(currentUserId);
           }, 2000);
-      } else if (currentUserId && userRole === 'client' && !ride) {
-          // Passageiro na home também deve checar se uma corrida "velha" sumiu ou se algo mudou
-          // interval = setInterval(() => fetchActiveRide(currentUserId), 5000);
       }
 
       return () => {
@@ -236,8 +243,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
             console.warn("RPC cancel failed, trying direct update", error);
             await supabase.from('rides').update({ status: 'CANCELLED' }).eq('id', rideId);
         }
-        // NÃO setamos null aqui imediatamente. Deixamos o fetchActiveRide pegar o status CANCELLED do banco
-        // para que a UI possa mostrar a tela de cancelamento.
         await fetchActiveRide(currentUserId!); 
         toast({ title: "Cancelado", description: reason || "Corrida cancelada." });
     } catch (e: any) { toast({ title: "Erro", description: "Erro ao cancelar." }); }
@@ -290,7 +295,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       try {
           const { error } = await supabase.from('rides').update({ status: 'COMPLETED' }).eq('id', rideId);
           if (error) throw error;
-          await fetchActiveRide(currentUserId!); // Atualiza para pegar status COMPLETED
+          await fetchActiveRide(currentUserId!); 
           toast({ title: "Finalizada", description: "Corrida concluída com sucesso." });
       } catch (e: any) { toast({ title: "Erro", description: e.message }); }
   };
@@ -300,7 +305,9 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           const updateData = isDriver ? { customer_rating: rating } : { driver_rating: rating, review_comment: comment };
           const { error } = await supabase.from('rides').update(updateData).eq('id', rideId);
           if (error) throw error;
-          // Não limpamos a ride aqui imediatamente, deixamos a UI decidir quando chamar clearRide
+          // Após avaliar, o fetchActiveRide vai detectar a nota e limpar a ride
+          await fetchActiveRide(currentUserId!);
+          toast({ title: "Obrigado", description: "Avaliação enviada." });
       } catch (e: any) { toast({ title: "Erro", description: e.message }); }
   };
 

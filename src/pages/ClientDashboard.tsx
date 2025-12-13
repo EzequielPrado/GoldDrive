@@ -130,12 +130,14 @@ const ClientDashboard = () => {
       calculateRoute();
   }, [pickupLocation, destLocation]);
 
+  // --- CORREÇÃO DO LOOP DE POPUPS ---
   useEffect(() => {
     if (ride) {
       if (ride.status === 'CANCELLED') setStep('cancelled');
       else if (ride.status === 'COMPLETED') setStep('rating');
       else if (['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(ride.status)) setStep('waiting');
 
+      // Popup de ACEITA
       if (ride.status === 'ACCEPTED') {
           const shownKey = `accepted_shown_${ride.id}`;
           if (!sessionStorage.getItem(shownKey)) {
@@ -144,8 +146,28 @@ const ClientDashboard = () => {
           }
       }
       
-      if (ride.status === 'ARRIVED') setShowArrivalPopup(true); else setShowArrivalPopup(false);
-      if (ride.status === 'IN_PROGRESS') setShowStartPopup(true); else setShowStartPopup(false);
+      // Popup de CHEGOU (Corrigido para abrir só uma vez)
+      if (ride.status === 'ARRIVED') {
+          const shownKey = `arrived_shown_${ride.id}`;
+          if (!sessionStorage.getItem(shownKey)) {
+              setShowArrivalPopup(true);
+              sessionStorage.setItem(shownKey, 'true');
+          }
+      } else {
+          // Se mudou de status, garante que fecha
+          setShowArrivalPopup(false);
+      }
+
+      // Popup de INICIADA (Corrigido para abrir só uma vez)
+      if (ride.status === 'IN_PROGRESS') {
+          const shownKey = `started_shown_${ride.id}`;
+          if (!sessionStorage.getItem(shownKey)) {
+              setShowStartPopup(true);
+              sessionStorage.setItem(shownKey, 'true');
+          }
+      } else {
+          setShowStartPopup(false);
+      }
 
     } else {
       if (step !== 'search') setStep('search');
@@ -153,7 +175,7 @@ const ClientDashboard = () => {
       setShowStartPopup(false);
       setShowAcceptedPopup(false);
     }
-  }, [ride]);
+  }, [ride?.status, ride?.id]); // Dependências ajustadas para evitar re-renders excessivos
 
   const fetchInitialData = async () => {
     try {
@@ -482,14 +504,14 @@ const ClientDashboard = () => {
 
       <Dialog open={showLocationDialog} onOpenChange={setShowLocationDialog}><DialogContent className="sm:max-w-sm bg-white rounded-3xl border-0 text-center p-8"><div className="w-20 h-20 bg-blue-100 rounded-full mx-auto flex items-center justify-center mb-6"><MapPin className="w-10 h-10 text-blue-600" /></div><DialogHeader><DialogTitle className="text-2xl font-black text-slate-900 text-center">Ativar Localização?</DialogTitle><DialogDescription className="text-center pt-2">Precisamos saber onde você está para encontrar motoristas próximos e calcular o preço da corrida.</DialogDescription></DialogHeader><div className="flex flex-col gap-3 mt-6"><Button onClick={handlePermissionAllow} className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-base shadow-lg shadow-blue-500/20">Ativar GPS Agora</Button><Button variant="ghost" onClick={() => setShowLocationDialog(false)} className="w-full h-12 rounded-xl text-gray-500">Vou digitar o endereço</Button></div></DialogContent></Dialog>
       <Dialog open={showArrivalPopup} onOpenChange={setShowArrivalPopup}><DialogContent className="sm:max-w-md bg-white border-0 shadow-2xl rounded-[40px] p-0 overflow-hidden"><div className="bg-yellow-400 h-32 relative flex items-center justify-center"><div className="absolute inset-0 bg-black/5 pattern-dots" /><div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-lg animate-bounce"><BellRing className="w-10 h-10 text-black fill-black" /></div></div><div className="px-8 pb-8 pt-4 text-center"><h2 className="text-3xl font-black text-slate-900 mb-2">Motorista Chegou!</h2><p className="text-gray-500 mb-6 text-lg">Seu motorista está aguardando no local de embarque.</p><div className="bg-gray-50 p-4 rounded-3xl flex items-center gap-4 mb-6 text-left border border-gray-100"><Avatar className="w-14 h-14 border-2 border-white shadow-sm"><AvatarImage src={ride?.driver_details?.avatar_url} /><AvatarFallback>M</AvatarFallback></Avatar><div><p className="font-bold text-lg text-slate-900">{ride?.driver_details?.name}</p><p className="text-sm text-gray-500">{ride?.driver_details?.car_model} • {ride?.driver_details?.car_plate}</p></div></div><Button className="w-full h-14 rounded-2xl text-lg font-bold bg-black text-white hover:bg-zinc-800" onClick={() => setShowArrivalPopup(false)}>Estou indo!</Button></div></DialogContent></Dialog>
-      <Dialog open={showStartPopup} onOpenChange={setShowStartPopup}><DialogContent className="sm:max-w-md bg-white border-0 shadow-2xl rounded-[40px] p-8 text-center"><div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-in zoom-in"><Flag className="w-10 h-10" /></div><h2 className="text-2xl font-black text-slate-900 mb-2">Corrida Iniciada</h2><p className="text-gray-500">Aproveite sua viagem com conforto e segurança.</p></DialogContent></Dialog>
+      <Dialog open={showStartPopup} onOpenChange={setShowStartPopup}><DialogContent className="sm:max-w-md bg-white border-0 shadow-2xl rounded-[40px] p-8 text-center"><div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-in zoom-in"><Flag className="w-10 h-10" /></div><h2 className="text-2xl font-black text-slate-900 mb-2">Corrida Iniciada</h2><p className="text-gray-500">Aproveite sua viagem com conforto e segurança.</p><Button className="w-full h-14 rounded-2xl text-lg font-bold bg-black text-white hover:bg-zinc-800 mt-6" onClick={() => setShowStartPopup(false)}>Ok, obrigado</Button></DialogContent></Dialog>
       
       {/* NOVO: POPUP DE CORRIDA ACEITA */}
       <Dialog open={showAcceptedPopup} onOpenChange={setShowAcceptedPopup}><DialogContent className="sm:max-w-md bg-white border-0 shadow-2xl rounded-[40px] p-8 text-center"><div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-in zoom-in"><CheckCircle2 className="w-12 h-12" /></div><h2 className="text-2xl font-black text-slate-900 mb-2">Motorista Encontrado!</h2><p className="text-gray-500 mb-6">{ride?.driver_details?.name} está a caminho do seu local.</p><Button className="w-full h-14 rounded-2xl text-lg font-bold bg-green-600 text-white hover:bg-green-700" onClick={() => setShowAcceptedPopup(false)}>Acompanhar</Button></DialogContent></Dialog>
 
       <Dialog open={showBalanceAlert} onOpenChange={setShowBalanceAlert}><DialogContent className="sm:max-w-md bg-white rounded-3xl border-0"><DialogHeader><DialogTitle className="text-red-600 flex items-center gap-2"><Wallet /> Saldo Insuficiente</DialogTitle></DialogHeader><div className="text-center py-6"><p className="text-gray-500 mb-1">Faltam</p><h2 className="text-5xl font-black text-slate-900">R$ {missingAmount.toFixed(2)}</h2></div><DialogFooter><Button className="w-full rounded-xl h-12 font-bold bg-black text-white" onClick={() => navigate('/wallet')}>Recarregar Agora</Button></DialogFooter></DialogContent></Dialog>
       <AlertDialog open={showCancelAlert} onOpenChange={setShowCancelAlert}><AlertDialogContent className="rounded-3xl bg-white border-0"><AlertDialogHeader><AlertDialogTitle className="flex items-center gap-2 text-red-600"><AlertTriangle /> Cancelar Corrida?</AlertDialogTitle><AlertDialogDescription>Deseja realmente cancelar? Uma taxa pode ser cobrada.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel className="rounded-xl h-12">Voltar</AlertDialogCancel><AlertDialogAction onClick={() => { cancelRide(ride!.id); setShowCancelAlert(false); }} className="bg-red-600 hover:bg-red-700 rounded-xl h-12 font-bold text-white">Sim, Cancelar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
-      <Dialog open={!!selectedHistoryItem} onOpenChange={(o) => !o && setSelectedHistoryItem(null)}><DialogContent className="sm:max-w-md bg-white rounded-3xl border-0"><DialogHeader><DialogTitle>Detalhes da Viagem</DialogTitle></DialogHeader><div className="space-y-4 pt-2"><div className="space-y-2"><div className="flex items-start gap-3"><div className="w-2 h-2 mt-2 bg-slate-900 rounded-full"/><div><p className="text-xs text-gray-400 uppercase font-bold">Origem</p><p className="font-medium text-slate-900">{selectedHistoryItem?.pickup_address}</p></div></div><div className="h-4 border-l-2 border-dashed border-gray-200 ml-1"></div><div className="flex items-start gap-3"><div className="w-2 h-2 mt-2 bg-yellow-500 rounded-full"/><div><p className="text-xs text-gray-400 uppercase font-bold">Destino</p><p className="font-medium text-slate-900">{selectedHistoryItem?.destination_address}</p></div></div></div>{selectedHistoryItem?.driver && (<div className="bg-gray-50 p-4 rounded-2xl flex items-center gap-3"><Avatar><AvatarFallback>{selectedHistoryItem.driver.first_name?.[0]}</AvatarFallback></Avatar><div><p className="font-bold text-slate-900">{selectedHistoryItem.driver.first_name} {selectedHistoryItem.driver.last_name}</p><p className="text-xs text-gray-500">{selectedHistoryItem.driver.car_model} • {selectedHistoryItem.driver.car_plate}</p></div></div>)}<div className="flex justify-between items-center pt-2 border-t border-gray-100"><div className="text-left"><p className="text-xs text-gray-500 font-bold uppercase">Data/Hora</p><p className="text-sm font-medium text-slate-900">{selectedHistoryItem ? new Date(selectedHistoryItem.created_at).toLocaleString('pt-BR') : '--'}</p></div><div className="text-right"><p className="text-xs text-gray-500 font-bold uppercase">Total Pago</p><span className="font-black text-2xl text-slate-900">R$ {Number(selectedHistoryItem?.price).toFixed(2)}</span></div></div></div></DialogContent></Dialog>
+      <Dialog open={!!selectedHistoryItem} onOpenChange={(o) => !o && setSelectedHistoryItem(null)}><DialogContent className="sm:max-w-md bg-white rounded-3xl border-0"><DialogHeader><DialogTitle>Detalhes da Viagem</DialogTitle></DialogHeader><div className="space-y-4 pt-2"><div className="space-y-2"><div className="flex items-start gap-3"><div className="w-2 h-2 mt-2 bg-slate-900 rounded-full"/><div><p className="text-xs text-gray-400 uppercase font-bold">Origem</p><p className="font-medium text-slate-900">{selectedHistoryItem?.pickup_address}</p></div></div><div className="h-4 border-l-2 border-dashed border-gray-200 ml-1"></div><div className="flex items-start gap-3"><div className="w-2 h-2 mt-2 bg-yellow-500 rounded-full"/><div><p className="text-xs text-gray-400 uppercase font-bold">Destino</p><p className="font-medium text-slate-900">{selectedHistoryItem?.destination_address}</p></div></div></div>{selectedHistoryItem?.driver && (<div className="bg-gray-50 p-4 rounded-2xl flex items-center gap-3"><Avatar><AvatarFallback>{selectedHistoryItem.driver.first_name?.[0]}</AvatarFallback></Avatar><div><p className="font-bold text-slate-900">{selectedHistoryItem.driver.first_name} {selectedHistoryItem.driver.last_name}</p><p className="text-xs text-gray-500">{selectedHistoryItem.driver.car_model} • {selectedHistoryItem.driver.car_plate}</p></div></div>)}<div className="flex justify-between items-center pt-2 border-t border-gray-100"><div className="text-left"><p className="text-xs text-gray-500 font-bold uppercase">Data/Hora</p><p className="text-sm font-medium text-slate-900">{selectedHistoryItem ? new Date(selectedHistoryItem.created_at).toLocaleDateString() : '--'}</p></div><div className="text-right"><p className="text-xs text-gray-500 font-bold uppercase">Total Pago</p><span className="font-black text-2xl text-slate-900">R$ {Number(selectedHistoryItem?.price).toFixed(2)}</span></div></div></div></DialogContent></Dialog>
       {showChat && ride && ['ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(ride.status) && currentUserId && (<RideChat rideId={ride.id} currentUserId={currentUserId} role="client" otherUserName={ride.driver_details?.name || 'Motorista'} otherUserAvatar={ride.driver_details?.avatar_url} onClose={() => setShowChat(false)} />)}
       <div className="relative z-[100]"><FloatingDock activeTab={activeTab} onTabChange={handleTabChange} role="client" /></div>
     </div>
