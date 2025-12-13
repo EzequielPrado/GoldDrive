@@ -333,37 +333,25 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
       showSuccess("Corrida finalizada!");
   };
 
-  const cancelRide = async (rideId: string, reason: string = "Cancelado") => {
-      const targetId = rideId || ride?.id;
-      if (!targetId) return;
+  const cancelRide = async (rideId: string, reason?: string) => {
+      if (!rideId) return;
 
-      const { data: currentRide } = await supabase.from('rides').select('*').eq('id', targetId).single();
-      if (!currentRide) return;
+      try {
+          const { data, error } = await supabase.rpc('cancel_ride_as_user', {
+              ride_id_to_cancel: rideId
+          });
 
-      await supabase.from('rides').update({ status: 'CANCELLED' }).eq('id', targetId);
-      
-      const fee = 5.00;
-      const compensation = 2.50;
-      const isLateCancel = (currentRide.status === 'ACCEPTED' || currentRide.status === 'ARRIVED');
+          if (error) {
+              throw error;
+          }
+          
+          showSuccess(data || "Corrida cancelada com sucesso.");
+          setRide(null);
 
-      if (currentRide.payment_method === 'WALLET') {
-          const refundAmount = isLateCancel ? Number(currentRide.price) - fee : Number(currentRide.price);
-          const { data: p } = await supabase.from('profiles').select('balance').eq('id', currentRide.customer_id).single();
-          await supabase.from('profiles').update({ balance: (p?.balance || 0) + refundAmount }).eq('id', currentRide.customer_id);
-          await supabase.from('transactions').insert({ user_id: currentRide.customer_id, amount: refundAmount, type: isLateCancel ? 'REFUND_PARTIAL' : 'REFUND_FULL', description: `Estorno #${targetId.slice(0,4)}` });
-      } else if (isLateCancel) {
-          const { data: p } = await supabase.from('profiles').select('balance').eq('id', currentRide.customer_id).single();
-          await supabase.from('profiles').update({ balance: (p?.balance || 0) - fee }).eq('id', currentRide.customer_id);
-          await supabase.from('transactions').insert({ user_id: currentRide.customer_id, amount: -fee, type: 'CANCELLATION_FEE', description: `Taxa Cancelamento #${targetId.slice(0,4)}` });
+      } catch (e: any) {
+          console.error("Error cancelling ride:", e);
+          showError(e.details || e.message || "Não foi possível cancelar a corrida.");
       }
-
-      if (isLateCancel && currentRide.driver_id) {
-           const { data: d } = await supabase.from('profiles').select('balance').eq('id', currentRide.driver_id).single();
-           await supabase.from('profiles').update({ balance: (d?.balance || 0) + compensation }).eq('id', currentRide.driver_id);
-           await supabase.from('transactions').insert({ user_id: currentRide.driver_id, amount: compensation, type: 'COMPENSATION', description: `Compensação #${targetId.slice(0,4)}` });
-      }
-      
-      showSuccess(isLateCancel ? "Cancelado com taxa aplicada." : "Cancelado sem custo.");
   };
 
   const rateRide = async (rideId: string, rating: number, isDriver: boolean, comment?: string) => {
