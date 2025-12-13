@@ -273,9 +273,22 @@ const ClientDashboard = () => {
   const isSinglePaymentMethod = (appSettings.enableCash && !appSettings.enableWallet) || (!appSettings.enableCash && appSettings.enableWallet);
 
   const confirmRide = async () => {
-    if (isRequesting) return;
+    if (isRequesting) { 
+        showError("Sua solicitação anterior ainda está em andamento."); 
+        return; 
+    }
+    const hasPickup = !!pickupLocation;
+    const hasDest = !!destLocation;
+    setFormErrors({ pickup: !hasPickup, dest: !hasDest });
+    if (!hasPickup || !hasDest) { 
+        showError("Por favor, selecione os endereços de embarque e destino na lista."); 
+        return; 
+    } 
     const cat = categories.find(c => c.id === selectedCategoryId);
-    if (!pickupLocation || !destLocation || !cat) return;
+    if (!cat) {
+        showError("Por favor, selecione uma categoria de carro.");
+        return;
+    }
     
     if (paymentMethod === 'WALLET' && (userProfile?.balance || 0) < currentPrice) { 
         setMissingAmount(currentPrice - (userProfile?.balance || 0)); 
@@ -287,8 +300,12 @@ const ClientDashboard = () => {
     try { 
         await requestRide(pickupLocation.address, destLocation.address, currentPrice, `${routeDistance.toFixed(1)} km`, cat.name, paymentMethod); 
     } 
-    catch (e: any) { showError(e.message); } 
-    finally { setIsRequesting(false); }
+    catch (e: any) { 
+        showError(e.message); 
+    } 
+    finally { 
+        setIsRequesting(false); 
+    }
   };
 
   const getCurrentLocation = (silent = false) => {
@@ -299,7 +316,7 @@ const ClientDashboard = () => {
                   try {
                       const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`);
                       const data = await res.json();
-                      const address = data.address.road || "Minha Localização Atual";
+                      const address = data.display_name || "Minha Localização Atual"; // Usar display_name completo
                       
                       setPickupLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude, address: address });
                       setFormErrors(prev => ({ ...prev, pickup: false }));
@@ -372,10 +389,10 @@ const ClientDashboard = () => {
                                 <LocationSearch 
                                     placeholder="Local de embarque" 
                                     icon={Navigation}
-                                    initialValue={pickupLocation?.address}
+                                    initialValue={pickupLocation?.address.split(',')[0]}
                                     onSelect={(item) => {
                                         if(item) {
-                                            setPickupLocation({ lat: item.lat, lon: item.lon, address: item.display_name.split(',')[0] });
+                                            setPickupLocation({ lat: item.lat, lon: item.lon, address: item.display_name });
                                             setFormErrors(prev => ({ ...prev, pickup: false }));
                                         } else {
                                             setPickupLocation(null);
@@ -392,10 +409,10 @@ const ClientDashboard = () => {
                                 <div className="absolute left-[27px] -top-6 w-0.5 h-8 bg-gray-300 z-0"></div>
                                 <LocationSearch 
                                     placeholder="Digite o destino..." 
-                                    initialValue={destLocation?.address}
+                                    initialValue={destLocation?.address.split(',')[0]}
                                     onSelect={(item) => {
                                         if(item) {
-                                            setDestLocation({ lat: item.lat, lon: item.lon, address: item.display_name.split(',')[0] });
+                                            setDestLocation({ lat: item.lat, lon: item.lon, address: item.display_name });
                                             setFormErrors(prev => ({ ...prev, dest: false }));
                                         } else {
                                             setDestLocation(null);
@@ -451,7 +468,7 @@ const ClientDashboard = () => {
         )}
         
         {activeTab === 'history' && (
-            <div className={`w-full max-w-md pointer-events-auto h-[60vh] flex flex-col ${cardBaseClasses}`}>
+            <div className={`w-full max-w-md h-[60vh] flex flex-col ${cardBaseClasses}`}>
                 <h2 className="text-2xl font-black text-slate-900 mb-4 flex items-center gap-2"><History className="w-6 h-6" /> Suas Viagens</h2>
                 <ScrollArea className="flex-1 -mr-4 pr-4 custom-scrollbar">
                     {historyItems.length === 0 ? <p className="text-center text-gray-400 py-10">Nenhuma viagem realizada.</p> : historyItems.map(item => (<div key={item.id} onClick={() => setSelectedHistoryItem(item)} className="mb-3 p-4 bg-white/50 border border-white/60 rounded-2xl hover:bg-white hover:scale-[1.02] transition-all cursor-pointer shadow-sm"><div className="flex justify-between mb-1"><span className="font-bold text-sm text-slate-900">{new Date(item.created_at).toLocaleDateString()}</span><Badge variant="outline" className={`h-5 text-[10px] ${item.status === 'COMPLETED' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{item.status}</Badge></div><div className="flex items-center gap-3"><div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center shrink-0"><MapPin className="w-5 h-5 text-gray-500" /></div><div className="flex-1 min-w-0"><p className="font-medium truncate text-sm text-slate-900">{item.destination_address}</p><p className="text-xs text-gray-500">{new Date(item.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} • R$ {Number(item.price).toFixed(2)}</p></div></div></div>))}

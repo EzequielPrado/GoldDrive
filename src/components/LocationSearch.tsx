@@ -34,7 +34,7 @@ const LocationSearch = ({
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("change", handleClickOutside); // Corrigido para 'mousedown'
   }, []);
 
   useEffect(() => {
@@ -66,18 +66,19 @@ const LocationSearch = ({
   }, [query, isOpen]);
 
   const handleSelect = (item: any) => {
+    // Usar o display_name completo para a seleção, mas exibir uma versão mais curta no input
     const street = item.address.road || item.address.pedestrian || "";
     const number = item.address.house_number || "";
     const city = item.address.city || item.address.town || item.address.municipality || "";
     
-    const formattedAddress = street ? `${street}${number ? `, ${number}` : ''} - ${city}` : item.display_name.split(',')[0];
+    const formattedAddressForInput = street ? `${street}${number ? `, ${number}` : ''} - ${city}` : item.display_name.split(',')[0];
 
-    setQuery(formattedAddress);
+    setQuery(formattedAddressForInput); // Exibe a versão formatada no input
     setIsOpen(false);
     onSelect({
       lat: parseFloat(item.lat),
       lon: parseFloat(item.lon),
-      display_name: formattedAddress
+      display_name: item.display_name // Passa o display_name completo para o onSelect
     });
   };
 
