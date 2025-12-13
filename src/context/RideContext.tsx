@@ -137,7 +137,7 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
       if (!uid || !role) return;
       const queryField = role === 'client' ? 'customer_id' : 'driver_id';
       
-      const { data, error } = await supabase.from('rides')
+      const { data } = await supabase.from('rides')
         .select('*')
         .eq(queryField, uid)
         .in('status', ['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED'])
@@ -145,27 +145,11 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
         .limit(1)
         .maybeSingle();
       
-      if (error) {
-          console.error("Error fetching current ride:", error);
-          setRide(null);
-          return;
-      }
-
       if (data) {
-          let shouldSetRide = false;
-          if (['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(data.status)) {
-              shouldSetRide = true; // Active ride
-          } else if (data.status === 'COMPLETED') {
-              // Check if rating is still pending for the current user's role
-              if (role === 'client' && data.driver_rating === null) { // Client needs to rate driver
-                  shouldSetRide = true;
-              } else if (role === 'driver' && data.customer_rating === null) { // Driver needs to rate customer
-                  shouldSetRide = true;
-              }
-              // If both ratings are present, or the relevant one is present, it's not an active ride anymore.
-          }
-
-          if (shouldSetRide) {
+          const isActive = ['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(data.status);
+          const isPendingRating = data.status === 'COMPLETED' && (role === 'client' ? data.driver_rating === null : data.customer_rating === null);
+          
+          if (isActive || isPendingRating) {
               let rideData = { ...data } as RideData;
               if (data.driver_id) rideData.driver_details = await fetchDriverFullInfo(data.driver_id);
               if (data.customer_id) rideData.client_details = await fetchClientFullInfo(data.customer_id);
@@ -173,8 +157,6 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
           } else {
               setRide(null);
           }
-      } else {
-          setRide(null);
       }
   };
 
@@ -188,11 +170,16 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'rides' },
         async (payload) => {
-          const rideId = payload.new.id || payload.old.id;
+          // Type assertion para garantir que 'id' existe
+          const newRidePayload = payload.new as RideData | null;
+          const oldRidePayload = payload.old as RideData | null;
+          const rideId = newRidePayload?.id || oldRidePayload?.id;
+
+          if (!rideId) return; // Garante que rideId não é undefined
 
           // 1. Motorista: Novas corridas aparecem
-          if (userRole === 'driver' && payload.eventType === 'INSERT' && payload.new.status === 'SEARCHING') {
-            const newRide = payload.new as RideData;
+          if (userRole === 'driver' && payload.eventType === 'INSERT' && newRidePayload?.status === 'SEARCHING') {
+            const newRide = newRidePayload as RideData;
             if (!newRide.rejected_by?.includes(userId)) {
               newRide.client_details = await fetchClientFullInfo(newRide.customer_id);
               setAvailableRides(prev => [newRide, ...prev.filter(r => r.id !== newRide.id)]);
@@ -200,13 +187,13 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
           }
 
           // 2. Motorista: Corrida aceita por outro, some da lista
-          if (userRole === 'driver' && payload.eventType === 'UPDATE' && payload.new.status === 'ACCEPTED') {
+          if (userRole === 'driver' && payload.eventType === 'UPDATE' && newRidePayload?.status === 'ACCEPTED') {
             setAvailableRides(prev => prev.filter(r => r.id !== rideId));
           }
 
           // 3. Ambos: Atualização da corrida atual
           if (ride && ride.id === rideId) {
-            const updatedRide = payload.new as RideData;
+            const updatedRide = newRidePayload as RideData;
             let fullData = { ...updatedRide } as RideData;
             if (updatedRide.driver_id) fullData.driver_details = await fetchDriverFullInfo(updatedRide.driver_id);
             if (updatedRide.customer_id) fullData.client_details = await fetchClientFullInfo(updatedRide.customer_id);
