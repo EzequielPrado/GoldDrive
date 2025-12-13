@@ -4,9 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import MapComponent from "@/components/MapComponent";
 import { useRide, RideData } from "@/context/RideContext";
@@ -32,7 +30,6 @@ const DriverDashboard = () => {
   const [showChat, setShowChat] = useState(false);
   
   // Modals Control
-  const [showCarForm, setShowCarForm] = useState(false);
   const [showCancelAlert, setShowCancelAlert] = useState(false);
   const [showFinishScreen, setShowFinishScreen] = useState(false);
   const [finishedRideData, setFinishedRideData] = useState<any>(null);
@@ -42,7 +39,6 @@ const DriverDashboard = () => {
   const [rating, setRating] = useState(0);
 
   // Forms & Data
-  const [carData, setCarData] = useState({ model: '', plate: '', year: '', color: '' });
   const [history, setHistory] = useState<any[]>([]);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<any>(null);
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -119,8 +115,6 @@ const DriverDashboard = () => {
               setIsOnline(data.is_online);
           }
           
-          if (!data.car_model || !data.car_plate) { setShowCarForm(true); setIsOnline(false); }
-
           if (activeTab === 'history') {
                const { data: rides } = await supabase.from('rides')
                 .select(`*, customer:profiles!public_rides_customer_id_fkey(first_name, last_name, avatar_url, phone)`)
@@ -133,12 +127,6 @@ const DriverDashboard = () => {
                setTransactions(trans || []);
           }
       }
-  };
-
-  const handleSaveCar = async () => {
-      if(!carData.model || !carData.plate || !carData.year) { showError("Preencha todos os campos"); return; }
-      const { error } = await supabase.from('profiles').update({ car_model: carData.model, car_plate: carData.plate, car_year: carData.year, car_color: carData.color }).eq('id', driverProfile.id);
-      if(error) showError(error.message); else { showSuccess("Veículo cadastrado!"); setShowCarForm(false); checkProfile(); }
   };
 
   useEffect(() => {
@@ -169,8 +157,7 @@ const DriverDashboard = () => {
 
   const handleFinish = async () => {
       if(ride) {
-          // CORREÇÃO: Usa o valor total (price) em vez de 0.8
-          setFinishedRideData({ ...ride, earned: Number(ride.price) });
+          setFinishedRideData({ ...ride, earned: Number(ride.driver_earnings) });
           await finishRide(ride.id);
           setShowFinishScreen(true);
       }
@@ -186,7 +173,6 @@ const DriverDashboard = () => {
   };
 
   const toggleOnline = async (val: boolean) => { 
-      if (val && (!driverProfile?.car_model)) { setShowCarForm(true); return; } 
       setIsOnline(val);
       if (driverProfile?.id) {
           await supabase.from('profiles').update({ is_online: val, last_active: new Date().toISOString() }).eq('id', driverProfile.id);
@@ -222,7 +208,7 @@ const DriverDashboard = () => {
       <img src="/logo-goldmobile-2.png" alt="Logo" className="fixed top-4 left-1/2 -translate-x-1/2 h-6 opacity-80 z-50 pointer-events-none drop-shadow-md" />
 
       <div className="absolute inset-0 z-0">
-          <MapComponent className="h-full w-full" showPickup={isOnTrip} />
+          <MapComponent className="h-full w-full" />
       </div>
 
       <div className="absolute top-0 left-0 right-0 p-6 z-20 flex justify-between items-start pointer-events-none mt-4">
@@ -284,9 +270,8 @@ const DriverDashboard = () => {
                         </div>
 
                         <div className="text-center mb-6">
-                            <p className="text-slate-400 text-xs uppercase font-bold mb-1">Valor da Corrida</p>
-                            {/* CORREÇÃO: Mostrando valor TOTAL */}
-                            <h2 className="text-5xl font-black tracking-tighter text-white">R$ {incomingRide.price.toFixed(2)}</h2>
+                            <p className="text-slate-400 text-xs uppercase font-bold mb-1">Ganhos Estimados</p>
+                            <h2 className="text-5xl font-black tracking-tighter text-green-400">R$ {incomingRide.driver_earnings?.toFixed(2)}</h2>
                             <div className="flex justify-center gap-3 mt-4"><Badge variant="outline" className="border-white/20 text-slate-300">{incomingRide.distance}</Badge><Badge variant="outline" className="border-white/20 text-slate-300">{incomingRide.category}</Badge></div>
                         </div>
 
@@ -295,7 +280,6 @@ const DriverDashboard = () => {
                              <div className="flex items-start gap-3"><div className="w-2 h-2 mt-2 bg-green-500 rounded-full"/><div><p className="text-xs text-slate-400 font-bold uppercase">Destino</p><p className="font-medium text-sm leading-tight">{incomingRide.destination_address}</p></div></div>
                         </div>
 
-                        {/* CORREÇÃO: Contraste do Botão Aceitar */}
                         <div className="grid grid-cols-2 gap-4">
                             <Button variant="ghost" className="h-14 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold" onClick={handleReject}>Recusar</Button>
                             <Button className="h-14 rounded-xl bg-green-500 hover:bg-green-400 text-black font-black animate-pulse shadow-lg shadow-green-500/20" onClick={handleAccept}>ACEITAR</Button>
@@ -311,8 +295,7 @@ const DriverDashboard = () => {
                                 <h3 className="text-2xl font-bold text-slate-900">{ride?.client_details?.name}</h3>
                                 {ride?.client_details?.phone && <p className="text-sm text-gray-500 flex items-center gap-1"><Phone className="w-3 h-3" /> {ride.client_details.phone}</p>}
                             </div>
-                            {/* CORREÇÃO: Valor Total */}
-                            <div className="text-right"><h3 className="text-3xl font-black text-slate-900">R$ {Number(ride?.price).toFixed(2)}</h3><p className="text-gray-400 text-xs uppercase font-bold tracking-wider">Valor</p></div>
+                            <div className="text-right"><h3 className="text-3xl font-black text-green-600">R$ {ride?.driver_earnings?.toFixed(2)}</h3><p className="text-gray-400 text-xs uppercase font-bold tracking-wider">Ganhos</p></div>
                         </div>
 
                         <div className="flex flex-col gap-3">
@@ -338,7 +321,7 @@ const DriverDashboard = () => {
             </div>
          )}
 
-         {/* --- VIEW: HISTÓRICO (Com Valor Total) --- */}
+         {/* --- VIEW: HISTÓRICO --- */}
          {activeTab === 'history' && (
             <div className={`w-full max-w-md h-[65vh] ${cardBaseClasses} flex flex-col pointer-events-auto`}>
                  <h2 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-2">
@@ -355,7 +338,7 @@ const DriverDashboard = () => {
                                         <p className="text-xs text-gray-500">{formatDate(item.created_at).day} • {formatDate(item.created_at).time}</p>
                                     </div>
                                 </div>
-                                <span className="font-black text-green-700">R$ {Number(item.price).toFixed(2)}</span>
+                                <span className="font-black text-green-700">R$ {Number(item.driver_earnings).toFixed(2)}</span>
                              </div>
                              <p className="text-xs text-gray-500 truncate mt-1">{item.destination_address}</p>
                          </div>
@@ -364,7 +347,7 @@ const DriverDashboard = () => {
             </div>
          )}
 
-         {/* ... (Wallet Tab mantida) ... */}
+         {/* --- VIEW: CARTEIRA --- */}
          {activeTab === 'wallet' && (
              <div className="w-full max-w-md pointer-events-auto animate-in slide-in-from-bottom">
                  <Card className="bg-black text-white border-0 shadow-2xl rounded-[32px] mb-4 overflow-hidden relative">
@@ -399,11 +382,6 @@ const DriverDashboard = () => {
 
       </div>
 
-      {/* ... (Dialogs de Carro e Cancel mantidos) ... */}
-      <Dialog open={showCarForm} onOpenChange={(open) => !open && (!driverProfile?.car_model ? setShowCarForm(true) : setShowCarForm(false))}>
-          <DialogContent className="sm:max-w-md bg-white rounded-3xl border-0"><DialogHeader><DialogTitle>Cadastro do Veículo</DialogTitle><DialogDescription>Dados obrigatórios para rodar.</DialogDescription></DialogHeader><div className="grid gap-4 py-4"><div className="grid gap-2"><Label>Modelo</Label><Input value={carData.model} onChange={e => setCarData({...carData, model: e.target.value})} className="rounded-xl" /></div><div className="grid gap-2"><Label>Placa</Label><Input value={carData.plate} onChange={e => setCarData({...carData, plate: e.target.value.toUpperCase()})} className="rounded-xl" /></div><div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Ano</Label><Input value={carData.year} type="number" onChange={e => setCarData({...carData, year: e.target.value})} className="rounded-xl" /></div><div className="grid gap-2"><Label>Cor</Label><Input value={carData.color} onChange={e => setCarData({...carData, color: e.target.value})} className="rounded-xl" /></div></div></div><DialogFooter><Button onClick={handleSaveCar} className="w-full bg-black rounded-xl h-12 font-bold">Salvar Veículo</Button></DialogFooter></DialogContent>
-      </Dialog>
-
       <AlertDialog open={showCancelAlert} onOpenChange={setShowCancelAlert}>
           <AlertDialogContent className="rounded-3xl bg-white border-0"><AlertDialogHeader><AlertDialogTitle className="flex items-center gap-2 text-red-600"><AlertTriangle /> Cancelar Corrida?</AlertDialogTitle><AlertDialogDescription>Esta ação prejudica sua taxa de aceitação.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel className="rounded-xl h-12">Voltar</AlertDialogCancel><AlertDialogAction onClick={confirmCancel} className="bg-red-600 hover:bg-red-700 rounded-xl h-12 font-bold text-white">Confirmar</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
@@ -412,8 +390,8 @@ const DriverDashboard = () => {
       <Dialog open={showHistoryDetail} onOpenChange={setShowHistoryDetail}>
           <DialogContent className="sm:max-w-md bg-white rounded-3xl border-0 p-0 overflow-hidden">
               <div className="bg-slate-900 p-6 text-white text-center">
-                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Detalhes da Viagem</p>
-                  <h2 className="text-3xl font-black">R$ {Number(selectedHistoryItem?.price).toFixed(2)}</h2>
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Ganhos da Viagem</p>
+                  <h2 className="text-3xl font-black">R$ {Number(selectedHistoryItem?.driver_earnings).toFixed(2)}</h2>
                   <p className="text-slate-400 text-sm mt-1">{selectedHistoryItem ? new Date(selectedHistoryItem.created_at).toLocaleDateString() + ' • ' + new Date(selectedHistoryItem.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</p>
               </div>
               <div className="p-6 space-y-6">
@@ -437,9 +415,11 @@ const DriverDashboard = () => {
                        </div>
                   </div>
 
-                  {/* Valores (Atualizado) */}
-                  <div className="bg-slate-900 text-white p-6 rounded-2xl flex items-center justify-between">
-                       <div><p className="text-gray-400 text-xs font-bold uppercase">Valor Total</p><h3 className="text-3xl font-black">R$ {Number(selectedHistoryItem?.price).toFixed(2)}</h3></div>
+                  {/* Valores */}
+                  <div className="bg-slate-900 text-white p-6 rounded-2xl space-y-3">
+                       <div className="flex justify-between items-center"><span className="text-gray-400 text-sm">Valor Total</span><span className="font-bold text-lg">R$ {Number(selectedHistoryItem?.price).toFixed(2)}</span></div>
+                       <div className="flex justify-between items-center"><span className="text-gray-400 text-sm">Taxa App</span><span className="font-bold text-lg text-red-400">- R$ {Number(selectedHistoryItem?.platform_fee).toFixed(2)}</span></div>
+                       <div className="flex justify-between items-center border-t border-white/10 pt-3 mt-3"><span className="text-white font-bold">Seu Ganho</span><span className="font-black text-2xl text-green-400">R$ {Number(selectedHistoryItem?.driver_earnings).toFixed(2)}</span></div>
                   </div>
                   
                   {/* Infos Extras */}
@@ -466,7 +446,7 @@ const DriverDashboard = () => {
 
               <div className="w-full max-w-sm bg-gradient-to-b from-green-50 to-white rounded-3xl p-8 mb-8 border border-green-100 shadow-xl">
                   <div className="text-center border-b border-dashed border-green-200 pb-6 mb-6">
-                      <p className="text-sm font-bold text-green-700 uppercase tracking-widest mb-2">Valor da Corrida</p>
+                      <p className="text-sm font-bold text-green-700 uppercase tracking-widest mb-2">Seu Ganho</p>
                       <h2 className="text-6xl font-black text-slate-900 tracking-tighter">R$ {finishedRideData.earned.toFixed(2)}</h2>
                   </div>
               </div>
