@@ -48,21 +48,36 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
 
       const queryField = role === 'driver' ? 'driver_id' : 'customer_id';
       
+      // BUSCA AMPLIADA: Inclui CANCELLED e COMPLETED
       const { data } = await supabase
         .from('rides')
         .select(`*, driver_details:profiles!public_rides_driver_id_fkey(*), client_details:profiles!public_rides_customer_id_fkey(*)`)
         .eq(queryField, userId)
-        .in('status', ['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'])
+        .order('created_at', { ascending: false }) // Pega a última
+        .limit(1)
         .maybeSingle();
 
       if (data) {
-          // Só atualiza se houver mudança de status ou se não tivermos dados ainda
-          setRide(prev => {
-              if (!prev || prev.status !== data.status || prev.id !== data.id) {
-                  return data;
+          // Lógica de "Expiração": Se a corrida foi finalizada ou cancelada há muito tempo, ignoramos
+          // Se for ativa (SEARCHING, ACCEPTED...), mostramos sempre.
+          const isFinished = ['CANCELLED', 'COMPLETED'].includes(data.status);
+          
+          if (isFinished) {
+              // Verifica se foi atualizada nos últimos 30 minutos
+              const updatedAt = new Date(data.created_at).getTime(); // Usando created_at como base simplificada ou poderia ser um campo updated_at
+              const now = new Date().getTime();
+              const diffMinutes = (now - updatedAt) / 1000 / 60;
+              
+              // Se foi há menos de 1 hora, mostramos o estado final para o usuário ver o recibo/aviso
+              if (diffMinutes < 60) {
+                  setRide(data);
+              } else {
+                  setRide(null); // Corrida velha, limpa estado
               }
-              return prev; 
-          });
+          } else {
+              // Corrida ativa
+              setRide(data);
+          }
       } else {
           setRide(null);
       }
@@ -99,7 +114,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       }
   };
 
-  // 1. Inicialização
+  // Inicialização
   useEffect(() => {
     const init = async () => {
         const { data: { session } } = await supabase.auth.getSession();
@@ -126,47 +141,37 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, []);
 
-  // 2. POLLING UNIVERSAL DE SEGURANÇA (A CORREÇÃO PRINCIPAL)
-  // Verifica o status da corrida a cada 3 segundos se houver uma corrida ativa ou buscando
+  // Polling de Segurança (Passageiro e Motorista Ativo)
   useEffect(() => {
       let interval: NodeJS.Timeout;
       
-      const shouldPoll = currentUserId && (
-          // Se sou cliente e estou buscando ou em corrida
-          (userRole === 'client' && ride) ||
-          // Se sou cliente e estou na tela de busca (para pegar o aceite rápido)
-          (userRole === 'client' && !ride) || 
-          // Se sou motorista e estou em corrida
-          (userRole === 'driver' && ride)
-      );
+      const shouldPoll = currentUserId && ride; // Se tem corrida (mesmo cancelada/finalizada recente), atualiza status
 
       if (shouldPoll) {
-          // Intervalo curto (2s) para sensação de tempo real
           interval = setInterval(() => {
               if (currentUserId) fetchActiveRide(currentUserId);
           }, 2000);
+      } else if (currentUserId && userRole === 'client' && !ride) {
+          // Passageiro na home também deve checar se uma corrida "velha" sumiu ou se algo mudou
+          // interval = setInterval(() => fetchActiveRide(currentUserId), 5000);
       }
 
       return () => {
           if (interval) clearInterval(interval);
       };
-  }, [currentUserId, userRole, ride?.status]); // Re-executa se o status mudar
+  }, [currentUserId, userRole, ride?.status, ride?.id]);
 
-  // 3. Polling separado para lista de disponíveis (Motorista)
+  // Polling Lista Motorista
   useEffect(() => {
       let interval: NodeJS.Timeout;
-      
       if (currentUserId && userRole === 'driver' && !ride) {
           fetchAvailableRides();
           interval = setInterval(fetchAvailableRides, 3000);
       }
-
-      return () => {
-          if (interval) clearInterval(interval);
-      };
+      return () => { if (interval) clearInterval(interval); };
   }, [currentUserId, userRole, ride]);
 
-  // 4. Realtime Channel (Mantido como "camada rápida")
+  // Realtime Channel
   useEffect(() => {
     if (!currentUserId) return;
 
@@ -231,7 +236,9 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
             console.warn("RPC cancel failed, trying direct update", error);
             await supabase.from('rides').update({ status: 'CANCELLED' }).eq('id', rideId);
         }
-        setRide(null);
+        // NÃO setamos null aqui imediatamente. Deixamos o fetchActiveRide pegar o status CANCELLED do banco
+        // para que a UI possa mostrar a tela de cancelamento.
+        await fetchActiveRide(currentUserId!); 
         toast({ title: "Cancelado", description: reason || "Corrida cancelada." });
     } catch (e: any) { toast({ title: "Erro", description: "Erro ao cancelar." }); }
   };
@@ -256,17 +263,9 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const rejectRide = async (rideId: string) => {
-      if (!rejectedIdsRef.current.includes(rideId)) {
-          rejectedIdsRef.current.push(rideId);
-      }
+      if (!rejectedIdsRef.current.includes(rideId)) rejectedIdsRef.current.push(rideId);
       setAvailableRides(prev => prev.filter(r => r.id !== rideId));
-
-      try {
-          const { error } = await supabase.rpc('reject_ride', { ride_id_param: rideId });
-          if (error) console.error("Erro ao salvar rejeição no banco:", error);
-      } catch (err) {
-          console.error("Erro ao chamar reject_ride:", err);
-      }
+      try { await supabase.rpc('reject_ride', { ride_id_param: rideId }); } catch (err) { console.error(err); }
   };
 
   const confirmArrival = async (rideId: string) => {
@@ -291,7 +290,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       try {
           const { error } = await supabase.from('rides').update({ status: 'COMPLETED' }).eq('id', rideId);
           if (error) throw error;
-          setRide(prev => prev ? ({...prev, status: 'COMPLETED'}) : null);
+          await fetchActiveRide(currentUserId!); // Atualiza para pegar status COMPLETED
           toast({ title: "Finalizada", description: "Corrida concluída com sucesso." });
       } catch (e: any) { toast({ title: "Erro", description: e.message }); }
   };
@@ -301,7 +300,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           const updateData = isDriver ? { customer_rating: rating } : { driver_rating: rating, review_comment: comment };
           const { error } = await supabase.from('rides').update(updateData).eq('id', rideId);
           if (error) throw error;
-          setRide(null);
+          // Não limpamos a ride aqui imediatamente, deixamos a UI decidir quando chamar clearRide
       } catch (e: any) { toast({ title: "Erro", description: e.message }); }
   };
 
@@ -310,19 +309,10 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       try {
           const { data: profile } = await supabase.from('profiles').select('balance').eq('id', currentUserId).single();
           const newBalance = (profile?.balance || 0) + amount;
-          
           await supabase.from('profiles').update({ balance: newBalance }).eq('id', currentUserId);
-          await supabase.from('transactions').insert({
-              user_id: currentUserId,
-              amount: amount,
-              type: 'DEPOSIT',
-              description: 'Depósito via PIX'
-          });
+          await supabase.from('transactions').insert({ user_id: currentUserId, amount: amount, type: 'DEPOSIT', description: 'Depósito via PIX' });
           toast({ title: "Sucesso", description: `R$ ${amount} adicionados!` });
-      } catch(e: any) {
-          toast({ title: "Erro", description: e.message });
-          throw e;
-      }
+      } catch(e: any) { toast({ title: "Erro", description: e.message }); throw e; }
   }
 
   const clearRide = () => setRide(null);

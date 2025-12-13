@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Wallet, MapPin, Navigation, Shield, DollarSign, Star, Menu, History, CheckCircle, Car, Calendar, ArrowRight, AlertTriangle, ChevronRight, TrendingUp, MessageCircle, Phone } from "lucide-react";
+import { Wallet, MapPin, Navigation, Shield, DollarSign, Star, Menu, History, CheckCircle, Car, Calendar, ArrowRight, AlertTriangle, ChevronRight, TrendingUp, MessageCircle, Phone, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -19,7 +19,7 @@ import RideChat from "@/components/RideChat";
 const DriverDashboard = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { ride, availableRides, acceptRide, rejectRide, confirmArrival, finishRide, startRide, cancelRide, rateRide, currentUserId } = useRide();
+  const { ride, availableRides, acceptRide, rejectRide, confirmArrival, finishRide, startRide, cancelRide, rateRide, clearRide, currentUserId } = useRide();
   
   // Tabs & State
   const [activeTab, setActiveTab] = useState('home');
@@ -158,6 +158,7 @@ const DriverDashboard = () => {
       if (ride) {
           await cancelRide(ride.id, "Cancelado pelo motorista");
           setShowCancelAlert(false);
+          // O contexto atualizará para CANCELLED, e a interface abaixo irá lidar com isso
       }
   };
 
@@ -176,6 +177,7 @@ const DriverDashboard = () => {
           setShowFinishScreen(false);
           setRating(0);
           setFinishedRideData(null);
+          clearRide(); // Limpa a corrida finalizada
       }
   };
 
@@ -245,7 +247,23 @@ const DriverDashboard = () => {
          {/* --- VIEW: HOME --- */}
          {activeTab === 'home' && (
             <div className="w-full max-w-md pointer-events-auto transition-all duration-500">
-                {!isOnline && (
+                
+                {/* TELA DE CANCELAMENTO (NOVO) */}
+                {ride?.status === 'CANCELLED' && (
+                    <div className={`${cardBaseClasses} text-center`}>
+                        <div className="w-20 h-20 bg-red-100 rounded-full mx-auto flex items-center justify-center mb-6">
+                            <XCircle className="w-10 h-10 text-red-600" />
+                        </div>
+                        <h2 className="text-2xl font-black text-slate-900 mb-2">Corrida Cancelada</h2>
+                        <p className="text-gray-500 mb-8">O passageiro cancelou a solicitação ou você cancelou.</p>
+                        <Button className="w-full h-14 text-lg font-bold bg-black text-white rounded-2xl hover:bg-zinc-800" onClick={clearRide}>
+                            Voltar para o Mapa
+                        </Button>
+                    </div>
+                )}
+
+                {/* TELA ONLINE / OFFLINE (Só exibe se não tiver corrida ativa nem cancelada) */}
+                {!ride && !isOnline && (
                     <div className="bg-white/90 backdrop-blur-xl border border-white/40 p-8 rounded-[32px] shadow-2xl text-center animate-in zoom-in-95">
                         <div className="w-24 h-24 bg-slate-100 rounded-full mx-auto flex items-center justify-center mb-6 relative">
                             <Car className="w-10 h-10 text-slate-400" />
@@ -256,14 +274,15 @@ const DriverDashboard = () => {
                     </div>
                 )}
 
-                {isOnline && !incomingRide && !isOnTrip && (
+                {!ride && isOnline && !incomingRide && (
                     <div className="bg-black/60 backdrop-blur-xl border border-white/10 px-6 py-4 rounded-full shadow-2xl flex items-center justify-center gap-3 animate-in fade-in">
                         <div className="relative"><div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" /><div className="absolute inset-0 w-3 h-3 bg-green-500 rounded-full animate-ping opacity-75" /></div>
                         <p className="text-white font-bold">Procurando passageiros...</p>
                     </div>
                 )}
 
-                {incomingRide && (
+                {/* TELA DE CHAMADA RECEBIDA */}
+                {!ride && incomingRide && (
                     <div className="bg-slate-900/95 backdrop-blur-xl border border-white/10 p-6 rounded-[32px] shadow-2xl animate-in slide-in-from-bottom text-white">
                         <div className="flex justify-between items-center mb-4">
                             <Badge className="bg-green-500 text-black font-bold hover:bg-green-400 px-3 py-1">NOVA CORRIDA</Badge>
@@ -304,6 +323,7 @@ const DriverDashboard = () => {
                     </div>
                 )}
 
+                {/* TELA DE CORRIDA ATIVA */}
                 {isOnTrip && !showFinishScreen && (
                      <div className={cardBaseClasses}>
                         <div className="flex justify-between items-center mb-6">
