@@ -212,6 +212,9 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
   const clearRide = () => setRide(null);
 
   const requestRide = async (pickup: string, destination: string, price: number, distance: string, category: string, paymentMethod: 'WALLET' | 'CASH') => {
+    console.log("--- Request Ride Called ---");
+    console.log("Args:", { pickup, destination, price, distance, category, paymentMethod });
+
     if (!userId) throw new Error("Usuário não identificado.");
 
     if (paymentMethod === 'WALLET') {
@@ -241,6 +244,7 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
     }).select().single();
 
     if (error) {
+        console.error("Supabase insert error in requestRide:", error); // Log Supabase error
         if (paymentMethod === 'WALLET') {
              const { data: p } = await supabase.from('profiles').select('balance').eq('id', userId).single();
              await supabase.from('profiles').update({ balance: (p?.balance || 0) + price }).eq('id', userId);
@@ -248,6 +252,7 @@ export const RideProvider = ({ children }: { children: ReactNode }) => {
         throw new Error("Erro ao solicitar: " + error.message);
     }
     // Não precisa setar o ride aqui, o realtime vai pegar
+    console.log("--- Request Ride Successful ---");
   };
 
   const acceptRide = async (rideId: string) => {

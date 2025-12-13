@@ -273,6 +273,14 @@ const ClientDashboard = () => {
   const isSinglePaymentMethod = (appSettings.enableCash && !appSettings.enableWallet) || (!appSettings.enableCash && appSettings.enableWallet);
 
   const confirmRide = async () => {
+    console.log("--- Confirm Ride Initiated ---");
+    console.log("isRequesting:", isRequesting);
+    console.log("pickupLocation:", pickupLocation);
+    console.log("destLocation:", destLocation);
+    console.log("selectedCategoryId:", selectedCategoryId);
+    console.log("currentPrice:", currentPrice);
+    console.log("paymentMethod:", paymentMethod);
+
     if (isRequesting) { 
         showError("Sua solicitação anterior ainda está em andamento."); 
         return; 
@@ -301,10 +309,12 @@ const ClientDashboard = () => {
         await requestRide(pickupLocation.address, destLocation.address, currentPrice, `${routeDistance.toFixed(1)} km`, cat.name, paymentMethod); 
     } 
     catch (e: any) { 
+        console.error("Error during requestRide:", e); // Log the actual error
         showError(e.message); 
     } 
     finally { 
         setIsRequesting(false); 
+        console.log("--- Confirm Ride Finished ---");
     }
   };
 
