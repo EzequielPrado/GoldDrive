@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
-import { useNavigate } from 'react-router-dom';
 
 interface RideContextType {
   ride: any | null;
@@ -30,7 +29,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<'client' | 'driver' | null>(null);
   
-  // Voltamos para Array para evitar erros de HMR (Hot Module Replacement)
   const rejectedIdsRef = useRef<string[]>([]);
   
   const { toast } = useToast();
@@ -42,9 +40,13 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
 
   const fetchActiveRide = async (userId: string) => {
     try {
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle();
-      const role = profile?.role || 'client';
-      setUserRole(role);
+      // 1. Identificar Role se não tiver
+      let role = userRole;
+      if (!role) {
+          const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle();
+          role = profile?.role || 'client';
+          setUserRole(role);
+      }
 
       const queryField = role === 'driver' ? 'driver_id' : 'customer_id';
       
@@ -55,8 +57,12 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
         .in('status', ['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'])
         .maybeSingle();
 
-      if (data) setRide(data);
-      else setRide(null);
+      if (data) {
+          console.log("Corrida ativa encontrada/atualizada:", data.status);
+          setRide(data);
+      } else {
+          setRide(null);
+      }
       
     } catch (err) {
       console.error("Erro fetchActiveRide:", err);
@@ -77,14 +83,10 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           if (data) {
               const validRides = data.filter(r => {
                   if (r.customer_id === currentUserId) return false;
-                  
-                  // Verificação com Array (includes)
                   if (rejectedIdsRef.current.includes(r.id)) return false;
-
                   if (r.rejected_by && Array.isArray(r.rejected_by) && r.rejected_by.includes(currentUserId)) {
                       return false;
                   }
-
                   return true;
               });
               setAvailableRides(validRides);
@@ -94,6 +96,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       }
   };
 
+  // Auth Init
   useEffect(() => {
     const init = async () => {
         const { data: { session } } = await supabase.auth.getSession();
@@ -111,7 +114,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
         setCurrentUserId(null);
         setRide(null);
         setAvailableRides([]);
-        rejectedIdsRef.current = []; // Limpa Array
+        rejectedIdsRef.current = [];
       }
     });
 
@@ -120,41 +123,75 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, []);
 
+  // Polling para motoristas (Backup para Realtime)
   useEffect(() => {
       if (currentUserId && userRole === 'driver' && !ride) {
           fetchAvailableRides();
-          const interval = setInterval(fetchAvailableRides, 5000);
+          const interval = setInterval(fetchAvailableRides, 4000);
           return () => clearInterval(interval);
       }
   }, [currentUserId, userRole, ride]);
 
+  // REALTIME SETUP ROBUSTO
   useEffect(() => {
     if (!currentUserId) return;
 
-    const channel = supabase
-      .channel('public:rides_global')
+    // Canal específico para quando sou Passageiro (Customer)
+    const customerChannel = supabase
+      .channel('customer_updates')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'rides' },
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'rides',
+          filter: `customer_id=eq.${currentUserId}` // Filtro direto no Supabase
+        },
         async (payload) => {
-            if (
-                (payload.new && (payload.new as any).customer_id === currentUserId) ||
-                (payload.new && (payload.new as any).driver_id === currentUserId) ||
-                (payload.old && (payload.old as any).customer_id === currentUserId) ||
-                (payload.old && (payload.old as any).driver_id === currentUserId)
-            ) {
-                await fetchActiveRide(currentUserId);
-            }
-
-            if (userRole === 'driver' && !ride) {
-                 await fetchAvailableRides();
-            }
+            console.log("Realtime Customer Update:", payload);
+            await fetchActiveRide(currentUserId);
         }
       )
       .subscribe();
 
+    // Canal específico para quando sou Motorista (Driver)
+    // 1. Quando sou atribuído a uma corrida (Update onde driver_id sou eu)
+    const driverChannel = supabase
+      .channel('driver_updates')
+      .on(
+        'postgres_changes',
+        { 
+          event: 'UPDATE', 
+          schema: 'public', 
+          table: 'rides',
+          filter: `driver_id=eq.${currentUserId}` 
+        },
+        async (payload) => {
+             console.log("Realtime Driver Update:", payload);
+             await fetchActiveRide(currentUserId);
+        }
+      )
+      .subscribe();
+      
+    // Canal Global para novas corridas (apenas se for motorista e estiver livre)
+    let globalChannel: any = null;
+    if (userRole === 'driver' && !ride) {
+        globalChannel = supabase
+          .channel('global_rides')
+          .on(
+            'postgres_changes',
+            { event: 'INSERT', schema: 'public', table: 'rides', filter: 'status=eq.SEARCHING' },
+            async () => {
+                await fetchAvailableRides();
+            }
+          )
+          .subscribe();
+    }
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(customerChannel);
+      supabase.removeChannel(driverChannel);
+      if (globalChannel) supabase.removeChannel(globalChannel);
     };
   }, [currentUserId, userRole, ride]);
 
@@ -175,7 +212,8 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
         }).select().single();
       if (error) throw error;
       setRide(data);
-      toast({ title: "Sucesso", description: "Buscando motoristas...", className: "bg-green-600 text-white" });
+      // Força fetch imediato para garantir estado sincronizado
+      await fetchActiveRide(currentUserId);
     } catch (e: any) { toast({ title: "Erro", description: e.message, variant: "destructive" }); }
   };
 
@@ -197,12 +235,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
          const { data: check } = await supabase.from('rides').select('driver_id').eq('id', rideId).single();
          if (check?.driver_id) {
              toast({ title: "Aviso", description: "Esta corrida já foi aceita.", variant: "destructive" });
-             
-             // Adiciona ao Array se não existir
-             if (!rejectedIdsRef.current.includes(rideId)) {
-                 rejectedIdsRef.current.push(rideId);
-             }
-             
+             if (!rejectedIdsRef.current.includes(rideId)) rejectedIdsRef.current.push(rideId);
              setAvailableRides(prev => prev.filter(r => r.id !== rideId));
              return;
          }
@@ -216,13 +249,11 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const rejectRide = async (rideId: string) => {
-      // 1. Atualização local (Array push)
       if (!rejectedIdsRef.current.includes(rideId)) {
           rejectedIdsRef.current.push(rideId);
       }
       setAvailableRides(prev => prev.filter(r => r.id !== rideId));
 
-      // 2. Persistência
       try {
           const { error } = await supabase.rpc('reject_ride', { ride_id_param: rideId });
           if (error) console.error("Erro ao salvar rejeição no banco:", error);
@@ -235,7 +266,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       try {
           const { error } = await supabase.from('rides').update({ status: 'ARRIVED' }).eq('id', rideId);
           if (error) throw error;
-          toast({ title: "Chegou", description: "Passageiro notificado." });
+          await fetchActiveRide(currentUserId!);
       } catch (e: any) { toast({ title: "Erro", description: e.message }); }
   };
 
@@ -243,7 +274,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       try {
           const { error } = await supabase.from('rides').update({ status: 'IN_PROGRESS' }).eq('id', rideId);
           if (error) throw error;
-          toast({ title: "Iniciada", description: "Boa viagem!" });
+          await fetchActiveRide(currentUserId!);
       } catch (e: any) { toast({ title: "Erro", description: e.message }); }
   };
 
@@ -261,7 +292,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           const { error } = await supabase.from('rides').update(updateData).eq('id', rideId);
           if (error) throw error;
           setRide(null);
-          toast({ title: "Obrigado", description: "Avaliação enviada." });
       } catch (e: any) { toast({ title: "Erro", description: e.message }); }
   };
 

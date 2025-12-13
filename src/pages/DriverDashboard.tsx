@@ -163,7 +163,8 @@ const DriverDashboard = () => {
 
   const handleFinish = async () => {
       if(ride) {
-          setFinishedRideData({ ...ride, earned: Number(ride.driver_earnings) });
+          const earned = Number(ride.driver_earnings) || Number(ride.price);
+          setFinishedRideData({ ...ride, earned: earned });
           await finishRide(ride.id);
           setShowFinishScreen(true);
       }
@@ -203,6 +204,14 @@ const DriverDashboard = () => {
   const openHistoryDetail = (item: any) => {
       setSelectedHistoryItem(item);
       setShowHistoryDetail(true);
+  };
+
+  // Helper para mostrar preço seguro
+  const getDisplayPrice = (r: any) => {
+      if (!r) return "0.00";
+      // Se driver_earnings existir e for > 0, usa ele. Se não, usa o preço total como fallback visual.
+      const val = (r.driver_earnings && Number(r.driver_earnings) > 0) ? Number(r.driver_earnings) : Number(r.price);
+      return val.toFixed(2);
   };
 
   const cardBaseClasses = "bg-white/90 backdrop-blur-xl border border-white/40 p-6 rounded-[32px] shadow-2xl animate-in slide-in-from-bottom duration-500 w-full";
@@ -278,8 +287,8 @@ const DriverDashboard = () => {
                         </div>
 
                         <div className="text-center mb-6">
-                            <p className="text-slate-400 text-xs uppercase font-bold mb-1">Ganhos Estimados</p>
-                            <h2 className="text-5xl font-black tracking-tighter text-green-400">R$ {incomingRide.driver_earnings?.toFixed(2)}</h2>
+                            <p className="text-slate-400 text-xs uppercase font-bold mb-1">Valor da Corrida</p>
+                            <h2 className="text-5xl font-black tracking-tighter text-green-400">R$ {getDisplayPrice(incomingRide)}</h2>
                             <div className="flex justify-center gap-3 mt-4"><Badge variant="outline" className="border-white/20 text-slate-300">{incomingRide.distance}</Badge><Badge variant="outline" className="border-white/20 text-slate-300">{incomingRide.category}</Badge></div>
                         </div>
 
@@ -303,7 +312,7 @@ const DriverDashboard = () => {
                                 <h3 className="text-2xl font-bold text-slate-900">{ride?.client_details?.first_name} {ride?.client_details?.last_name}</h3>
                                 {ride?.client_details?.phone && <p className="text-sm text-gray-500 flex items-center gap-1"><Phone className="w-3 h-3" /> {ride.client_details.phone}</p>}
                             </div>
-                            <div className="text-right"><h3 className="text-3xl font-black text-green-600">R$ {ride?.driver_earnings?.toFixed(2)}</h3><p className="text-gray-400 text-xs uppercase font-bold tracking-wider">Ganhos</p></div>
+                            <div className="text-right"><h3 className="text-3xl font-black text-green-600">R$ {getDisplayPrice(ride)}</h3><p className="text-gray-400 text-xs uppercase font-bold tracking-wider">Valor</p></div>
                         </div>
 
                         <div className="flex flex-col gap-3">
@@ -346,7 +355,7 @@ const DriverDashboard = () => {
                                         <p className="text-xs text-gray-500">{formatDate(item.created_at).day} • {formatDate(item.created_at).time}</p>
                                     </div>
                                 </div>
-                                <span className="font-black text-green-700">R$ {Number(item.driver_earnings).toFixed(2)}</span>
+                                <span className="font-black text-green-700">R$ {getDisplayPrice(item)}</span>
                              </div>
                              <p className="text-xs text-gray-500 truncate mt-1">{item.destination_address}</p>
                          </div>
@@ -399,7 +408,7 @@ const DriverDashboard = () => {
           <DialogContent className="sm:max-w-md bg-white rounded-3xl border-0 p-0 overflow-hidden">
               <div className="bg-slate-900 p-6 text-white text-center">
                   <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Ganhos da Viagem</p>
-                  <h2 className="text-3xl font-black">R$ {Number(selectedHistoryItem?.driver_earnings).toFixed(2)}</h2>
+                  <h2 className="text-3xl font-black">R$ {getDisplayPrice(selectedHistoryItem)}</h2>
                   <p className="text-slate-400 text-sm mt-1">{selectedHistoryItem ? new Date(selectedHistoryItem.created_at).toLocaleDateString() + ' • ' + new Date(selectedHistoryItem.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</p>
               </div>
               <div className="p-6 space-y-6">
@@ -427,7 +436,7 @@ const DriverDashboard = () => {
                   <div className="bg-slate-900 text-white p-6 rounded-2xl space-y-3">
                        <div className="flex justify-between items-center"><span className="text-gray-400 text-sm">Valor Total</span><span className="font-bold text-lg">R$ {Number(selectedHistoryItem?.price).toFixed(2)}</span></div>
                        <div className="flex justify-between items-center"><span className="text-gray-400 text-sm">Taxa App</span><span className="font-bold text-lg text-red-400">- R$ {Number(selectedHistoryItem?.platform_fee).toFixed(2)}</span></div>
-                       <div className="flex justify-between items-center border-t border-white/10 pt-3 mt-3"><span className="text-white font-bold">Seu Ganho</span><span className="font-black text-2xl text-green-400">R$ {Number(selectedHistoryItem?.driver_earnings).toFixed(2)}</span></div>
+                       <div className="flex justify-between items-center border-t border-white/10 pt-3 mt-3"><span className="text-white font-bold">Seu Ganho</span><span className="font-black text-2xl text-green-400">R$ {getDisplayPrice(selectedHistoryItem)}</span></div>
                   </div>
                   
                   {/* Infos Extras */}

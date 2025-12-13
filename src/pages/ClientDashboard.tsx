@@ -273,12 +273,7 @@ const ClientDashboard = () => {
   const isSinglePaymentMethod = (appSettings.enableCash && !appSettings.enableWallet) || (!appSettings.enableCash && appSettings.enableWallet);
 
   const confirmRide = async () => {
-    console.log("--- Confirm Ride Initiated ---");
-
-    if (isRequesting) { 
-        console.warn("Already requesting...");
-        return; 
-    }
+    if (isRequesting) return;
 
     if (!pickupLocation || !destLocation) { 
         showError("Localização inválida."); 
@@ -299,7 +294,6 @@ const ClientDashboard = () => {
 
     setIsRequesting(true);
     try { 
-        console.log("Calling requestRide from Dashboard...");
         await requestRide(
             pickupLocation.address, 
             destLocation.address, 
@@ -308,10 +302,8 @@ const ClientDashboard = () => {
             cat.name, 
             paymentMethod
         ); 
-        console.log("requestRide finished successfully.");
     } 
     catch (e: any) { 
-        console.error("Error calling requestRide in Dashboard:", e); 
         showError("Erro: " + (e.message || "Tente novamente.")); 
     } 
     finally { 
@@ -327,7 +319,7 @@ const ClientDashboard = () => {
                   try {
                       const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`);
                       const data = await res.json();
-                      const address = data.display_name || "Minha Localização Atual"; // Usar display_name completo
+                      const address = data.display_name || "Minha Localização Atual"; 
                       
                       setPickupLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude, address: address });
                       setFormErrors(prev => ({ ...prev, pickup: false }));
