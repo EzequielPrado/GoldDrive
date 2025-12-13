@@ -280,6 +280,7 @@ const ClientDashboard = () => {
     console.log("selectedCategoryId:", selectedCategoryId);
     console.log("currentPrice:", currentPrice);
     console.log("paymentMethod:", paymentMethod);
+    console.log("userProfile?.balance:", userProfile?.balance);
 
     if (isRequesting) { 
         showError("Sua solicitação anterior ainda está em andamento."); 
@@ -445,7 +446,20 @@ const ClientDashboard = () => {
                         <div className="flex justify-between items-center mb-4 px-2 bg-gray-50 p-3 rounded-xl border border-gray-100"><div className="flex items-center gap-2"><MapPin className="w-4 h-4 text-slate-500" /><Badge variant="secondary" className="text-sm font-bold bg-slate-200 text-slate-900 border-0">{routeDistance.toFixed(1)} km</Badge></div><div className="flex items-center gap-1 text-slate-500"><Clock className="w-4 h-4" /><span className="text-xs font-medium">~{(routeDistance * 2).toFixed(0)} min</span></div></div>
                         {loadingCats ? <div className="py-10 text-center flex flex-col items-center gap-3"><Loader2 className="animate-spin text-yellow-500 w-8 h-8" /><p className="text-gray-400 text-sm">Buscando categorias...</p></div> : categories.length === 0 ? <div className="py-10 text-center"><p className="text-red-500 font-bold">Nenhuma categoria disponível.</p></div> : (<div className="space-y-3 mb-4 max-h-[30vh] overflow-y-auto pr-1 custom-scrollbar">{categories.map((cat) => (<div key={cat.id} onClick={() => setSelectedCategoryId(cat.id)} className={`relative flex items-center justify-between p-4 rounded-2xl border transition-all cursor-pointer overflow-hidden group ${selectedCategoryId === cat.id ? 'border-yellow-500 bg-yellow-50/50 shadow-md' : 'border-transparent bg-gray-50 hover:bg-white'}`}><div className="flex items-center gap-4 z-10"><div className={`w-12 h-12 rounded-full flex items-center justify-center ${selectedCategoryId === cat.id ? 'bg-yellow-500 text-black' : 'bg-white text-gray-500'}`}><Car className="w-6 h-6" /></div><div><div className="flex items-center gap-2"><h4 className="font-bold text-lg text-slate-900">{cat.name}</h4>{cat.name === 'Gold Driver' && <Badge className="text-[10px] bg-yellow-500 text-black border-0 px-1.5 py-0">FIXO</Badge>}</div><p className="text-xs text-gray-500 font-medium">{cat.description}</p></div></div><span className="font-black text-lg text-slate-900 z-10">R$ {calculatePrice(cat.id).toFixed(2)}</span></div>))}</div>)}
                         <div className={`mb-4 bg-gray-50 p-3 rounded-2xl border border-gray-100 flex items-center justify-center transition-colors ${!isSinglePaymentMethod ? 'cursor-pointer hover:bg-white' : ''}`} onClick={() => { if (!isSinglePaymentMethod) setPaymentMethod(prev => prev === 'WALLET' ? 'CASH' : 'WALLET'); }}><div className="flex items-center gap-3 w-full justify-between"><div className="flex items-center gap-3"><div className="w-10 h-10 bg-black text-white rounded-xl flex items-center justify-center">{paymentMethod === 'WALLET' ? <Wallet className="w-5 h-5" /> : <Banknote className="w-5 h-5" />}</div><div className="text-left"><p className="text-xs text-gray-400 font-bold uppercase">Pagamento</p><p className="font-bold text-slate-900">{paymentMethod === 'WALLET' ? 'Saldo da Carteira' : 'Dinheiro / PIX'}</p></div></div>{!isSinglePaymentMethod && (<div className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">Trocar</div>)}</div></div>
-                        <Button className="w-full h-14 text-lg font-bold rounded-2xl bg-black text-white hover:bg-zinc-800" onClick={confirmRide} disabled={!selectedCategoryId || isRequesting || loadingCats}>{isRequesting ? <Loader2 className="animate-spin" /> : "Confirmar Gold Mobile"}</Button>
+                        <Button 
+                            className="w-full h-14 text-lg font-bold rounded-2xl bg-black text-white hover:bg-zinc-800" 
+                            onClick={confirmRide} 
+                            disabled={!selectedCategoryId || isRequesting || loadingCats}
+                        >
+                            {isRequesting ? <Loader2 className="animate-spin" /> : "Confirmar Gold Mobile"}
+                        </Button>
+                        {/* Debugging logs for button disabled state */}
+                        {console.log("Button disabled state:", {
+                            selectedCategoryId: selectedCategoryId,
+                            isRequesting: isRequesting,
+                            loadingCats: loadingCats,
+                            isDisabled: !selectedCategoryId || isRequesting || loadingCats
+                        })}
                     </div>
                 )}
 
