@@ -33,6 +33,9 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   const currentUserIdRef = useRef(currentUserId);
   const rejectedIdsRef = useRef<string[]>([]);
   
+  // NOVA REF: Armazena IDs de corridas que o usuário já dispensou/fechou a tela final
+  const dismissedRidesRef = useRef<string[]>([]);
+  
   const { toast } = useToast();
 
   useEffect(() => {
@@ -66,6 +69,12 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
         .maybeSingle();
 
       if (data) {
+          // VERIFICAÇÃO CRÍTICA: Se o ID estiver na lista de dispensados, ignora e limpa o estado.
+          if (dismissedRidesRef.current.includes(data.id)) {
+              setRide(null);
+              return;
+          }
+
           const isFinished = ['CANCELLED', 'COMPLETED'].includes(data.status);
           if (isFinished) {
               const hasRated = role === 'driver' ? !!data.customer_rating : !!data.driver_rating;
@@ -75,6 +84,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
               }
               const updatedAt = new Date(data.created_at).getTime();
               const now = new Date().getTime();
+              // Mostra corridas finalizadas apenas se forem recentes (últimos 60 min) E não tiverem sido dispensadas
               if ((now - updatedAt) / 1000 / 60 < 60) {
                   setRide(data);
               } else {
@@ -135,6 +145,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
         setRide(null);
         setAvailableRides([]);
         rejectedIdsRef.current = [];
+        dismissedRidesRef.current = []; // Limpa lista ao deslogar
       }
     });
     return () => { authListener.subscription.unsubscribe(); };
@@ -177,6 +188,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
                 await fetchActiveRide(uid);
             }
 
+            // Atualização Instantânea para Motoristas
             if (role === 'driver' && !ride) {
                  await fetchAvailableRides();
             }
@@ -192,7 +204,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []); // Mantém vazio, usa Refs
+  }, []); 
 
   const requestRide = async (pickup: string, destination: string, price: number, distance: string, category: string, paymentMethod: string) => {
     if (!currentUserId) {
@@ -211,8 +223,11 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           payment_method: paymentMethod
         }).select().single();
       if (error) throw error;
+      
+      // Limpa lista de dispensados ao criar nova corrida para evitar conflitos de ID (raro, mas seguro)
+      if (dismissedRidesRef.current.length > 50) dismissedRidesRef.current = [];
+      
       setRide(data);
-      // Imediatamente tenta atualizar para garantir UI responsiva
       await fetchActiveRide(currentUserId);
     } catch (e: any) { 
         toast({ title: "Erro", description: e.message, variant: "destructive" }); 
@@ -287,8 +302,8 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           const { error } = await supabase.from('rides').update(updateData).eq('id', rideId);
           if (error) throw error;
           
-          // CRÍTICO: Limpa a corrida localmente IMEDIATAMENTE após sucesso
-          // Isso impede que a UI de avaliação reapareça
+          // Adiciona aos dispensados para garantir que não volte
+          dismissedRidesRef.current.push(rideId);
           setRide(null); 
           
           toast({ title: "Obrigado", description: "Avaliação enviada." });
@@ -306,7 +321,13 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       } catch(e: any) { toast({ title: "Erro", description: e.message }); throw e; }
   }
 
-  const clearRide = () => setRide(null);
+  // Função atualizada para limpar E ignorar a corrida atual
+  const clearRide = () => {
+      if (ride) {
+          dismissedRidesRef.current.push(ride.id);
+      }
+      setRide(null);
+  };
 
   return (
     <RideContext.Provider value={{ 
