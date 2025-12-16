@@ -66,6 +66,7 @@ const ClientDashboard = () => {
   });
   
   // Refs para rastrear se já mostramos o popup para a corrida atual (ID)
+  // Isso impede que o popup reabra se o status no banco continuar o mesmo
   const seenPopupsRef = useRef<{ [key: string]: boolean }>({});
 
   const [showChat, setShowChat] = useState(false);
