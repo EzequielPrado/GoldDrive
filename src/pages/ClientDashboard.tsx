@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import MapComponent from "@/components/MapComponent";
 import { 
   MapPin, Car, Navigation, Loader2, Star, AlertTriangle, XCircle, ChevronRight, Clock, Wallet, User, ArrowLeft, BellRing, History, X, Flag, CreditCard, Banknote, MessageCircle, CheckCircle2, Calendar
@@ -9,7 +9,7 @@ import { showSuccess, showError } from "@/utils/toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogClose } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -57,9 +57,17 @@ const ClientDashboard = () => {
   const [missingAmount, setMissingAmount] = useState(0);
   const [loadingCats, setLoadingCats] = useState(true);
   const [showCancelAlert, setShowCancelAlert] = useState(false);
-  const [showArrivalPopup, setShowArrivalPopup] = useState(false);
-  const [showStartPopup, setShowStartPopup] = useState(false);
-  const [showAcceptedPopup, setShowAcceptedPopup] = useState(false);
+  
+  // POPUP STATES (Controlados manualmente para evitar loop)
+  const [popupState, setPopupState] = useState({
+      arrival: false,
+      start: false,
+      accepted: false
+  });
+  
+  // Refs para rastrear se já mostramos o popup para a corrida atual (ID)
+  const seenPopupsRef = useRef<{ [key: string]: boolean }>({});
+
   const [showChat, setShowChat] = useState(false);
   
   // Dados de Preço Dinâmico e Configs
@@ -130,52 +138,41 @@ const ClientDashboard = () => {
       calculateRoute();
   }, [pickupLocation, destLocation]);
 
-  // --- CORREÇÃO DO LOOP DE POPUPS ---
+  // --- GERENCIAMENTO DE ESTADO E POPUPS (CORRIGIDO PARA NÃO LOOPAR) ---
   useEffect(() => {
     if (ride) {
       if (ride.status === 'CANCELLED') setStep('cancelled');
       else if (ride.status === 'COMPLETED') setStep('rating');
       else if (['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(ride.status)) setStep('waiting');
 
-      // Popup de ACEITA
-      if (ride.status === 'ACCEPTED') {
-          const shownKey = `accepted_shown_${ride.id}`;
-          if (!sessionStorage.getItem(shownKey)) {
-              setShowAcceptedPopup(true);
-              sessionStorage.setItem(shownKey, 'true');
-          }
+      // Helper para verificar se já mostramos
+      const hasSeen = (type: string) => seenPopupsRef.current[`${ride.id}_${type}`];
+      const markAsSeen = (type: string) => { seenPopupsRef.current[`${ride.id}_${type}`] = true; };
+
+      // Popup ACEITA
+      if (ride.status === 'ACCEPTED' && !hasSeen('accepted')) {
+          setPopupState(p => ({ ...p, accepted: true }));
+          markAsSeen('accepted');
       }
       
-      // Popup de CHEGOU (Corrigido para abrir só uma vez)
-      if (ride.status === 'ARRIVED') {
-          const shownKey = `arrived_shown_${ride.id}`;
-          if (!sessionStorage.getItem(shownKey)) {
-              setShowArrivalPopup(true);
-              sessionStorage.setItem(shownKey, 'true');
-          }
-      } else {
-          // Se mudou de status, garante que fecha
-          setShowArrivalPopup(false);
+      // Popup CHEGOU
+      if (ride.status === 'ARRIVED' && !hasSeen('arrival')) {
+          setPopupState(p => ({ ...p, arrival: true }));
+          markAsSeen('arrival');
       }
 
-      // Popup de INICIADA (Corrigido para abrir só uma vez)
-      if (ride.status === 'IN_PROGRESS') {
-          const shownKey = `started_shown_${ride.id}`;
-          if (!sessionStorage.getItem(shownKey)) {
-              setShowStartPopup(true);
-              sessionStorage.setItem(shownKey, 'true');
-          }
-      } else {
-          setShowStartPopup(false);
+      // Popup INICIADA
+      if (ride.status === 'IN_PROGRESS' && !hasSeen('start')) {
+          setPopupState(p => ({ ...p, start: true }));
+          markAsSeen('start');
       }
 
     } else {
       if (step !== 'search') setStep('search');
-      setShowArrivalPopup(false);
-      setShowStartPopup(false);
-      setShowAcceptedPopup(false);
+      // Limpa popups se não tiver corrida
+      setPopupState({ accepted: false, arrival: false, start: false });
     }
-  }, [ride?.status, ride?.id]); // Dependências ajustadas para evitar re-renders excessivos
+  }, [ride?.status, ride?.id]);
 
   const fetchInitialData = async () => {
     try {
@@ -483,7 +480,22 @@ const ClientDashboard = () => {
                 )}
                 
                 {step === 'rating' && (
-                     <div className={`${cardBaseClasses} text-center`}><div className="w-20 h-20 bg-green-100 rounded-full mx-auto flex items-center justify-center mb-6"><User className="w-10 h-10 text-green-600" /></div><h2 className="text-2xl font-black text-slate-900 mb-2">Chegamos!</h2><p className="text-gray-500 mb-6">Como foi sua experiência?</p><div className="flex justify-center gap-2 mb-6">{[1, 2, 3, 4, 5].map((star) => (<button key={star} onClick={() => setRating(star)} className="transition-transform hover:scale-125 focus:outline-none"><Star className={`w-10 h-10 ${rating >= star ? 'fill-yellow-400 text-yellow-400' : 'text-gray-200'}`} /></button>))}</div><div className="mb-6 text-left"><label className="text-xs font-bold text-gray-500 uppercase ml-1">Observação (Opcional)</label><Textarea placeholder="O carro estava limpo? O motorista foi educado?" className="bg-gray-50 border-gray-100 rounded-2xl resize-none mt-1" value={ratingComment} onChange={e => setRatingComment(e.target.value)} /></div><Button className="w-full h-14 text-lg font-bold bg-black text-white rounded-2xl hover:bg-zinc-800" onClick={() => { rateRide(ride!.id, rating || 5, false, ratingComment); setStep('search'); setRatingComment(""); setRating(0); }}>Enviar Avaliação</Button></div>
+                     <div className={`${cardBaseClasses} text-center`}>
+                        <div className="w-20 h-20 bg-green-100 rounded-full mx-auto flex items-center justify-center mb-6"><User className="w-10 h-10 text-green-600" /></div>
+                        <h2 className="text-2xl font-black text-slate-900 mb-2">Chegamos!</h2>
+                        <p className="text-gray-500 mb-6">Como foi sua experiência?</p>
+                        <div className="flex justify-center gap-2 mb-6">{[1, 2, 3, 4, 5].map((star) => (<button key={star} onClick={() => setRating(star)} className="transition-transform hover:scale-125 focus:outline-none"><Star className={`w-10 h-10 ${rating >= star ? 'fill-yellow-400 text-yellow-400' : 'text-gray-200'}`} /></button>))}</div>
+                        <div className="mb-6 text-left">
+                            <label className="text-xs font-bold text-gray-500 uppercase ml-1">Observação (Opcional)</label>
+                            <Textarea 
+                                placeholder="O carro estava limpo? O motorista foi educado?" 
+                                className="bg-gray-50 border-gray-100 rounded-2xl resize-none mt-1 text-slate-900 placeholder:text-gray-400 font-medium" 
+                                value={ratingComment} 
+                                onChange={e => setRatingComment(e.target.value)} 
+                            />
+                        </div>
+                        <Button className="w-full h-14 text-lg font-bold bg-black text-white rounded-2xl hover:bg-zinc-800" onClick={() => { rateRide(ride!.id, rating || 5, false, ratingComment); setStep('search'); setRatingComment(""); setRating(0); }}>Enviar Avaliação</Button>
+                     </div>
                 )}
 
                 {step === 'cancelled' && (
@@ -503,11 +515,15 @@ const ClientDashboard = () => {
       </div>
 
       <Dialog open={showLocationDialog} onOpenChange={setShowLocationDialog}><DialogContent className="sm:max-w-sm bg-white rounded-3xl border-0 text-center p-8"><div className="w-20 h-20 bg-blue-100 rounded-full mx-auto flex items-center justify-center mb-6"><MapPin className="w-10 h-10 text-blue-600" /></div><DialogHeader><DialogTitle className="text-2xl font-black text-slate-900 text-center">Ativar Localização?</DialogTitle><DialogDescription className="text-center pt-2">Precisamos saber onde você está para encontrar motoristas próximos e calcular o preço da corrida.</DialogDescription></DialogHeader><div className="flex flex-col gap-3 mt-6"><Button onClick={handlePermissionAllow} className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-base shadow-lg shadow-blue-500/20">Ativar GPS Agora</Button><Button variant="ghost" onClick={() => setShowLocationDialog(false)} className="w-full h-12 rounded-xl text-gray-500">Vou digitar o endereço</Button></div></DialogContent></Dialog>
-      <Dialog open={showArrivalPopup} onOpenChange={setShowArrivalPopup}><DialogContent className="sm:max-w-md bg-white border-0 shadow-2xl rounded-[40px] p-0 overflow-hidden"><div className="bg-yellow-400 h-32 relative flex items-center justify-center"><div className="absolute inset-0 bg-black/5 pattern-dots" /><div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-lg animate-bounce"><BellRing className="w-10 h-10 text-black fill-black" /></div></div><div className="px-8 pb-8 pt-4 text-center"><h2 className="text-3xl font-black text-slate-900 mb-2">Motorista Chegou!</h2><p className="text-gray-500 mb-6 text-lg">Seu motorista está aguardando no local de embarque.</p><div className="bg-gray-50 p-4 rounded-3xl flex items-center gap-4 mb-6 text-left border border-gray-100"><Avatar className="w-14 h-14 border-2 border-white shadow-sm"><AvatarImage src={ride?.driver_details?.avatar_url} /><AvatarFallback>M</AvatarFallback></Avatar><div><p className="font-bold text-lg text-slate-900">{ride?.driver_details?.name}</p><p className="text-sm text-gray-500">{ride?.driver_details?.car_model} • {ride?.driver_details?.car_plate}</p></div></div><Button className="w-full h-14 rounded-2xl text-lg font-bold bg-black text-white hover:bg-zinc-800" onClick={() => setShowArrivalPopup(false)}>Estou indo!</Button></div></DialogContent></Dialog>
-      <Dialog open={showStartPopup} onOpenChange={setShowStartPopup}><DialogContent className="sm:max-w-md bg-white border-0 shadow-2xl rounded-[40px] p-8 text-center"><div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-in zoom-in"><Flag className="w-10 h-10" /></div><h2 className="text-2xl font-black text-slate-900 mb-2">Corrida Iniciada</h2><p className="text-gray-500">Aproveite sua viagem com conforto e segurança.</p><Button className="w-full h-14 rounded-2xl text-lg font-bold bg-black text-white hover:bg-zinc-800 mt-6" onClick={() => setShowStartPopup(false)}>Ok, obrigado</Button></DialogContent></Dialog>
       
-      {/* NOVO: POPUP DE CORRIDA ACEITA */}
-      <Dialog open={showAcceptedPopup} onOpenChange={setShowAcceptedPopup}><DialogContent className="sm:max-w-md bg-white border-0 shadow-2xl rounded-[40px] p-8 text-center"><div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-in zoom-in"><CheckCircle2 className="w-12 h-12" /></div><h2 className="text-2xl font-black text-slate-900 mb-2">Motorista Encontrado!</h2><p className="text-gray-500 mb-6">{ride?.driver_details?.name} está a caminho do seu local.</p><Button className="w-full h-14 rounded-2xl text-lg font-bold bg-green-600 text-white hover:bg-green-700" onClick={() => setShowAcceptedPopup(false)}>Acompanhar</Button></DialogContent></Dialog>
+      {/* POPUP CHEGOU */}
+      <Dialog open={popupState.arrival} onOpenChange={(o) => setPopupState(p => ({...p, arrival: o}))}><DialogContent className="sm:max-w-md bg-white border-0 shadow-2xl rounded-[40px] p-0 overflow-hidden"><div className="bg-yellow-400 h-32 relative flex items-center justify-center"><div className="absolute inset-0 bg-black/5 pattern-dots" /><div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-lg animate-bounce"><BellRing className="w-10 h-10 text-black fill-black" /></div><div className="absolute top-4 right-4"><DialogClose asChild><Button variant="secondary" size="icon" className="h-8 w-8 rounded-full bg-white/20 hover:bg-white/40 text-black border-0"><X className="w-4 h-4" /></Button></DialogClose></div></div><div className="px-8 pb-8 pt-4 text-center"><h2 className="text-3xl font-black text-slate-900 mb-2">Motorista Chegou!</h2><p className="text-gray-500 mb-6 text-lg">Seu motorista está aguardando no local de embarque.</p><div className="bg-gray-50 p-4 rounded-3xl flex items-center gap-4 mb-6 text-left border border-gray-100"><Avatar className="w-14 h-14 border-2 border-white shadow-sm"><AvatarImage src={ride?.driver_details?.avatar_url} /><AvatarFallback>M</AvatarFallback></Avatar><div><p className="font-bold text-lg text-slate-900">{ride?.driver_details?.name}</p><p className="text-sm text-gray-500">{ride?.driver_details?.car_model} • {ride?.driver_details?.car_plate}</p></div></div><Button className="w-full h-14 rounded-2xl text-lg font-bold bg-black text-white hover:bg-zinc-800" onClick={() => setPopupState(p => ({...p, arrival: false}))}>Estou indo!</Button></div></DialogContent></Dialog>
+      
+      {/* POPUP INICIADA */}
+      <Dialog open={popupState.start} onOpenChange={(o) => setPopupState(p => ({...p, start: o}))}><DialogContent className="sm:max-w-md bg-white border-0 shadow-2xl rounded-[40px] p-8 text-center relative"><div className="absolute top-4 right-4"><DialogClose asChild><Button variant="ghost" size="icon" className="h-10 w-10 rounded-full bg-gray-100 hover:bg-gray-200 text-slate-900"><X className="w-5 h-5" /></Button></DialogClose></div><div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-in zoom-in"><Flag className="w-10 h-10" /></div><h2 className="text-2xl font-black text-slate-900 mb-2">Corrida Iniciada</h2><p className="text-gray-500">Aproveite sua viagem com conforto e segurança.</p><Button className="w-full h-14 rounded-2xl text-lg font-bold bg-black text-white hover:bg-zinc-800 mt-6" onClick={() => setPopupState(p => ({...p, start: false}))}>Ok, obrigado</Button></DialogContent></Dialog>
+      
+      {/* POPUP ACEITA */}
+      <Dialog open={popupState.accepted} onOpenChange={(o) => setPopupState(p => ({...p, accepted: o}))}><DialogContent className="sm:max-w-md bg-white border-0 shadow-2xl rounded-[40px] p-8 text-center relative"><div className="absolute top-4 right-4"><DialogClose asChild><Button variant="ghost" size="icon" className="h-10 w-10 rounded-full bg-gray-100 hover:bg-gray-200 text-slate-900"><X className="w-5 h-5" /></Button></DialogClose></div><div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-in zoom-in"><CheckCircle2 className="w-12 h-12" /></div><h2 className="text-2xl font-black text-slate-900 mb-2">Motorista Encontrado!</h2><p className="text-gray-500 mb-6">{ride?.driver_details?.name} está a caminho do seu local.</p><Button className="w-full h-14 rounded-2xl text-lg font-bold bg-green-600 text-white hover:bg-green-700" onClick={() => setPopupState(p => ({...p, accepted: false}))}>Acompanhar</Button></DialogContent></Dialog>
 
       <Dialog open={showBalanceAlert} onOpenChange={setShowBalanceAlert}><DialogContent className="sm:max-w-md bg-white rounded-3xl border-0"><DialogHeader><DialogTitle className="text-red-600 flex items-center gap-2"><Wallet /> Saldo Insuficiente</DialogTitle></DialogHeader><div className="text-center py-6"><p className="text-gray-500 mb-1">Faltam</p><h2 className="text-5xl font-black text-slate-900">R$ {missingAmount.toFixed(2)}</h2></div><DialogFooter><Button className="w-full rounded-xl h-12 font-bold bg-black text-white" onClick={() => navigate('/wallet')}>Recarregar Agora</Button></DialogFooter></DialogContent></Dialog>
       <AlertDialog open={showCancelAlert} onOpenChange={setShowCancelAlert}><AlertDialogContent className="rounded-3xl bg-white border-0"><AlertDialogHeader><AlertDialogTitle className="flex items-center gap-2 text-red-600"><AlertTriangle /> Cancelar Corrida?</AlertDialogTitle><AlertDialogDescription>Deseja realmente cancelar? Uma taxa pode ser cobrada.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel className="rounded-xl h-12">Voltar</AlertDialogCancel><AlertDialogAction onClick={() => { cancelRide(ride!.id); setShowCancelAlert(false); }} className="bg-red-600 hover:bg-red-700 rounded-xl h-12 font-bold text-white">Sim, Cancelar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>

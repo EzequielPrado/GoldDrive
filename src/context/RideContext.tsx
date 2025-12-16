@@ -286,7 +286,11 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           const updateData = isDriver ? { customer_rating: rating } : { driver_rating: rating, review_comment: comment };
           const { error } = await supabase.from('rides').update(updateData).eq('id', rideId);
           if (error) throw error;
-          await fetchActiveRide(currentUserId!);
+          
+          // CRÍTICO: Limpa a corrida localmente IMEDIATAMENTE após sucesso
+          // Isso impede que a UI de avaliação reapareça
+          setRide(null); 
+          
           toast({ title: "Obrigado", description: "Avaliação enviada." });
       } catch (e: any) { toast({ title: "Erro", description: e.message }); }
   };
