@@ -443,13 +443,13 @@ const DriverDashboard = () => {
 
       {/* MODAL DETALHES DA CORRIDA */}
       <Dialog open={showHistoryDetail} onOpenChange={setShowHistoryDetail}>
-          <DialogContent className="sm:max-w-md bg-white rounded-3xl border-0 p-0 overflow-hidden">
-              <div className="bg-slate-900 p-6 text-white text-center">
+          <DialogContent className="sm:max-w-md bg-white rounded-3xl border-0 p-0 overflow-hidden max-h-[80vh] flex flex-col">
+              <div className="bg-slate-900 p-6 text-white text-center shrink-0">
                   <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Ganhos da Viagem</p>
                   <h2 className="text-3xl font-black">R$ {getDisplayPrice(selectedHistoryItem)}</h2>
                   <p className="text-slate-400 text-sm mt-1">{selectedHistoryItem ? new Date(selectedHistoryItem.created_at).toLocaleDateString() + ' • ' + new Date(selectedHistoryItem.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</p>
               </div>
-              <div className="p-6 space-y-6">
+              <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
                   {/* Passageiro */}
                   <div className="bg-gray-50 p-4 rounded-2xl flex items-center gap-4 border border-gray-100">
                       <Avatar className="h-12 w-12 border-2 border-white shadow-sm"><AvatarImage src={selectedHistoryItem?.customer?.avatar_url} /><AvatarFallback className="bg-slate-200 text-slate-600 font-bold">{selectedHistoryItem?.customer?.first_name?.[0]}</AvatarFallback></Avatar>
