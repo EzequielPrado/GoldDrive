@@ -129,18 +129,38 @@ const DriverDashboard = () => {
       }
   };
 
+  // Gerenciamento Inteligente de Corridas Recebidas
   useEffect(() => {
-    if (isOnline && availableRides.length > 0 && !ride && activeTab === 'home') {
-        setIncomingRide(availableRides[0]);
-        setTimer(30);
-    } else {
-        setIncomingRide(null);
-    }
-  }, [availableRides, isOnline, ride, activeTab]);
+    // Se estiver online, sem corrida ativa, e na tela inicial
+    if (isOnline && !ride && activeTab === 'home') {
+        const nextRide = availableRides[0]; // Pega a primeira da fila
 
+        if (nextRide) {
+            // Se não tem corrida na tela OU se a corrida mudou (ID diferente)
+            if (!incomingRide || incomingRide.id !== nextRide.id) {
+                setIncomingRide(nextRide);
+                setTimer(30); // Reseta timer apenas para NOVAS corridas
+                // Aqui poderia tocar um som: new Audio('/alert.mp3').play();
+            }
+            // Se for a mesma corrida (incomingRide.id === nextRide.id), não faz nada para manter o timer rodando
+        } else {
+            // Se a lista ficou vazia (ex: passageiro cancelou ou outro aceitou)
+            if (incomingRide) setIncomingRide(null);
+        }
+    } else {
+        // Se ficou offline ou entrou em corrida
+        if (incomingRide) setIncomingRide(null);
+    }
+  }, [availableRides, isOnline, ride, activeTab, incomingRide]);
+
+  // Timer Regressivo
   useEffect(() => { 
-      if (incomingRide && timer > 0) { const i = setInterval(() => setTimer(t => t - 1), 1000); return () => clearInterval(i); } 
-      else if (timer === 0 && incomingRide) { handleReject(); } 
+      if (incomingRide && timer > 0) { 
+          const i = setInterval(() => setTimer(t => t - 1), 1000); 
+          return () => clearInterval(i); 
+      } else if (timer === 0 && incomingRide) { 
+          handleReject(); // Rejeita automaticamente ao fim do tempo
+      } 
   }, [incomingRide, timer]);
 
   const handleAccept = async () => { if (incomingRide) { await acceptRide(incomingRide.id); setIncomingRide(null); } };
@@ -158,7 +178,6 @@ const DriverDashboard = () => {
       if (ride) {
           await cancelRide(ride.id, "Cancelado pelo motorista");
           setShowCancelAlert(false);
-          // O contexto atualizará para CANCELLED, e a interface abaixo irá lidar com isso
       }
   };
 
@@ -177,7 +196,7 @@ const DriverDashboard = () => {
           setShowFinishScreen(false);
           setRating(0);
           setFinishedRideData(null);
-          clearRide(); // Limpa a corrida finalizada
+          clearRide(); 
       }
   };
 
@@ -208,10 +227,8 @@ const DriverDashboard = () => {
       setShowHistoryDetail(true);
   };
 
-  // Helper para mostrar preço seguro
   const getDisplayPrice = (r: any) => {
       if (!r) return "0.00";
-      // Se driver_earnings existir e for > 0, usa ele. Se não, usa o preço total como fallback visual.
       const val = (r.driver_earnings && Number(r.driver_earnings) > 0) ? Number(r.driver_earnings) : Number(r.price);
       return val.toFixed(2);
   };
@@ -248,7 +265,7 @@ const DriverDashboard = () => {
          {activeTab === 'home' && (
             <div className="w-full max-w-md pointer-events-auto transition-all duration-500">
                 
-                {/* TELA DE CANCELAMENTO (NOVO) */}
+                {/* TELA DE CANCELAMENTO */}
                 {ride?.status === 'CANCELLED' && (
                     <div className={`${cardBaseClasses} text-center`}>
                         <div className="w-20 h-20 bg-red-100 rounded-full mx-auto flex items-center justify-center mb-6">
@@ -262,7 +279,7 @@ const DriverDashboard = () => {
                     </div>
                 )}
 
-                {/* TELA ONLINE / OFFLINE (Só exibe se não tiver corrida ativa nem cancelada) */}
+                {/* TELA ONLINE / OFFLINE */}
                 {!ride && !isOnline && (
                     <div className="bg-white/90 backdrop-blur-xl border border-white/40 p-8 rounded-[32px] shadow-2xl text-center animate-in zoom-in-95">
                         <div className="w-24 h-24 bg-slate-100 rounded-full mx-auto flex items-center justify-center mb-6 relative">
@@ -274,6 +291,7 @@ const DriverDashboard = () => {
                     </div>
                 )}
 
+                {/* STATUS BUSCANDO */}
                 {!ride && isOnline && !incomingRide && (
                     <div className="bg-black/60 backdrop-blur-xl border border-white/10 px-6 py-4 rounded-full shadow-2xl flex items-center justify-center gap-3 animate-in fade-in">
                         <div className="relative"><div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" /><div className="absolute inset-0 w-3 h-3 bg-green-500 rounded-full animate-ping opacity-75" /></div>
@@ -285,7 +303,7 @@ const DriverDashboard = () => {
                 {!ride && incomingRide && (
                     <div className="bg-slate-900/95 backdrop-blur-xl border border-white/10 p-6 rounded-[32px] shadow-2xl animate-in slide-in-from-bottom text-white">
                         <div className="flex justify-between items-center mb-4">
-                            <Badge className="bg-green-500 text-black font-bold hover:bg-green-400 px-3 py-1">NOVA CORRIDA</Badge>
+                            <Badge className="bg-green-500 text-black font-bold hover:bg-green-400 px-3 py-1 animate-pulse">NOVA CORRIDA</Badge>
                             <div className="w-10 h-10 rounded-full border-2 border-white/20 flex items-center justify-center font-bold text-lg">{timer}</div>
                         </div>
 
@@ -423,7 +441,7 @@ const DriverDashboard = () => {
           <AlertDialogContent className="rounded-3xl bg-white border-0"><AlertDialogHeader><AlertDialogTitle className="flex items-center gap-2 text-red-600"><AlertTriangle /> Cancelar Corrida?</AlertDialogTitle><AlertDialogDescription>Esta ação prejudica sua taxa de aceitação.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel className="rounded-xl h-12">Voltar</AlertDialogCancel><AlertDialogAction onClick={confirmCancel} className="bg-red-600 hover:bg-red-700 rounded-xl h-12 font-bold text-white">Confirmar</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
 
-      {/* MODAL DETALHES DA CORRIDA (REDESENHADO) */}
+      {/* MODAL DETALHES DA CORRIDA */}
       <Dialog open={showHistoryDetail} onOpenChange={setShowHistoryDetail}>
           <DialogContent className="sm:max-w-md bg-white rounded-3xl border-0 p-0 overflow-hidden">
               <div className="bg-slate-900 p-6 text-white text-center">
