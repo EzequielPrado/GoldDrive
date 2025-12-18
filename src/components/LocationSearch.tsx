@@ -9,7 +9,7 @@ interface LocationSearchProps {
   onSelect: (location: { lat: number; lon: number; display_name: string } | null) => void;
   initialValue?: string;
   className?: string;
-  error?: boolean; // Nova prop para indicar erro
+  error?: boolean; 
 }
 
 const LocationSearch = ({ 
@@ -26,7 +26,6 @@ const LocationSearch = ({
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Fecha a lista se clicar fora
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
@@ -34,14 +33,13 @@ const LocationSearch = ({
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("change", handleClickOutside); // Corrigido para 'mousedown'
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   useEffect(() => {
     setQuery(initialValue || "");
   }, [initialValue]);
 
-  // Debounce para busca
   useEffect(() => {
     const timer = setTimeout(async () => {
       if (query.length > 2 && isOpen) {
@@ -65,20 +63,39 @@ const LocationSearch = ({
     return () => clearTimeout(timer);
   }, [query, isOpen]);
 
-  const handleSelect = (item: any) => {
-    // Usar o display_name completo para a seleção, mas exibir uma versão mais curta no input
-    const street = item.address.road || item.address.pedestrian || "";
-    const number = item.address.house_number || "";
-    const city = item.address.city || item.address.town || item.address.municipality || "";
-    
-    const formattedAddressForInput = street ? `${street}${number ? `, ${number}` : ''} - ${city}` : item.display_name.split(',')[0];
+  // Função auxiliar para formatar endereço limpo
+  const formatAddress = (item: any) => {
+      const addr = item.address;
+      const road = addr.road || addr.pedestrian || addr.street || item.name || "";
+      const number = addr.house_number || "";
+      const suburb = addr.suburb || addr.neighbourhood || addr.district || "";
+      const city = addr.city || addr.town || addr.municipality || "";
+      const state = addr.state_code || addr.state || "";
 
-    setQuery(formattedAddressForInput); // Exibe a versão formatada no input
+      // Monta string: Rua X, 123 - Bairro
+      let parts = [];
+      if (road) parts.push(road);
+      if (number) parts.push(number);
+      
+      let mainPart = parts.join(", ");
+      
+      // Adiciona bairro se existir
+      if (suburb) mainPart += ` - ${suburb}`;
+      // Adiciona cidade/UF se existir
+      if (city) mainPart += ` - ${city}`;
+      
+      return mainPart || item.display_name;
+  };
+
+  const handleSelect = (item: any) => {
+    const cleanAddress = formatAddress(item);
+
+    setQuery(cleanAddress);
     setIsOpen(false);
     onSelect({
       lat: parseFloat(item.lat),
       lon: parseFloat(item.lon),
-      display_name: item.display_name // Passa o display_name completo para o onSelect
+      display_name: cleanAddress // Agora passamos o endereço limpo para o sistema
     });
   };
 
@@ -90,8 +107,6 @@ const LocationSearch = ({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       setQuery(e.target.value);
       setIsOpen(true);
-      // Se o usuário altera o texto, invalidamos a seleção anterior (opcional, mas recomendado)
-      // onSelect(null); 
   };
 
   return (
@@ -120,7 +135,6 @@ const LocationSearch = ({
           </Button>
       )}
 
-      {/* Lista de Resultados */}
       {isOpen && (results.length > 0 || loading) && (
         <div className="absolute top-12 left-0 right-0 mt-3 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-[9999] pointer-events-auto animate-in fade-in zoom-in-95 duration-200">
           {loading && (
@@ -129,22 +143,25 @@ const LocationSearch = ({
             </div>
           )}
           
-          {!loading && results.map((item, index) => (
-            <button
-              key={index}
-              onClick={() => handleSelect(item)}
-              className="w-full text-left p-4 hover:bg-gray-100 border-b border-gray-50 last:border-0 transition-colors flex items-start gap-3 cursor-pointer relative z-[10000]"
-              type="button"
-            >
-              <div className="bg-gray-100 p-2 rounded-full shrink-0 mt-0.5">
-                  <MapPin className="w-4 h-4 text-gray-500" />
-              </div>
-              <div>
-                  <p className="font-bold text-sm text-slate-900 line-clamp-1">{item.address.road || item.display_name.split(',')[0]}</p>
-                  <p className="text-xs text-gray-500 line-clamp-1">{item.display_name}</p>
-              </div>
-            </button>
-          ))}
+          {!loading && results.map((item, index) => {
+            const cleanTitle = formatAddress(item);
+            return (
+              <button
+                key={index}
+                onClick={() => handleSelect(item)}
+                className="w-full text-left p-4 hover:bg-gray-100 border-b border-gray-50 last:border-0 transition-colors flex items-start gap-3 cursor-pointer relative z-[10000]"
+                type="button"
+              >
+                <div className="bg-gray-100 p-2 rounded-full shrink-0 mt-0.5">
+                    <MapPin className="w-4 h-4 text-gray-500" />
+                </div>
+                <div>
+                    <p className="font-bold text-sm text-slate-900 line-clamp-1">{cleanTitle.split('-')[0]}</p>
+                    <p className="text-xs text-gray-500 line-clamp-1">{cleanTitle}</p>
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

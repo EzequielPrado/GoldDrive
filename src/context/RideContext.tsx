@@ -32,8 +32,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   const userRoleRef = useRef(userRole);
   const currentUserIdRef = useRef(currentUserId);
   const rejectedIdsRef = useRef<string[]>([]);
-  
-  // NOVA REF: Armazena IDs de corridas que o usuário já dispensou/fechou a tela final
   const dismissedRidesRef = useRef<string[]>([]);
   
   const { toast } = useToast();
@@ -69,7 +67,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
         .maybeSingle();
 
       if (data) {
-          // VERIFICAÇÃO CRÍTICA: Se o ID estiver na lista de dispensados, ignora e limpa o estado.
           if (dismissedRidesRef.current.includes(data.id)) {
               setRide(null);
               return;
@@ -84,7 +81,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
               }
               const updatedAt = new Date(data.created_at).getTime();
               const now = new Date().getTime();
-              // Mostra corridas finalizadas apenas se forem recentes (últimos 60 min) E não tiverem sido dispensadas
               if ((now - updatedAt) / 1000 / 60 < 60) {
                   setRide(data);
               } else {
@@ -145,12 +141,13 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
         setRide(null);
         setAvailableRides([]);
         rejectedIdsRef.current = [];
-        dismissedRidesRef.current = []; // Limpa lista ao deslogar
+        dismissedRidesRef.current = [];
       }
     });
     return () => { authListener.subscription.unsubscribe(); };
   }, []);
 
+  // Polling como fallback
   useEffect(() => {
       let interval: NodeJS.Timeout;
       const shouldPoll = currentUserId && ((userRole === 'client' && ride) || (userRole === 'client' && !ride) || (userRole === 'driver' && ride));
@@ -164,12 +161,12 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       let interval: NodeJS.Timeout;
       if (currentUserId && userRole === 'driver' && !ride) {
           fetchAvailableRides();
-          interval = setInterval(fetchAvailableRides, 2000);
+          interval = setInterval(fetchAvailableRides, 5000); // Polling mais lento, prioriza realtime
       }
       return () => { if (interval) clearInterval(interval); };
   }, [currentUserId, userRole, ride]);
 
-  // Realtime Subscription with Status Check
+  // Realtime Subscription OTIMIZADA
   useEffect(() => {
     const channel = supabase
       .channel('global_ride_sync')
@@ -178,28 +175,32 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
         { event: '*', schema: 'public', table: 'rides' },
         async (payload) => {
             const newRecord = payload.new as any;
-            const oldRecord = payload.old as any;
             const uid = currentUserIdRef.current;
             const role = userRoleRef.current;
             
-            const isRelatedToMe = (newRecord?.customer_id === uid) || (newRecord?.driver_id === uid) || (oldRecord?.customer_id === uid) || (oldRecord?.driver_id === uid);
-
-            if (isRelatedToMe && uid) {
-                await fetchActiveRide(uid);
+            // Se for INSERT de nova corrida e sou motorista, atualizo instantaneamente
+            if (payload.eventType === 'INSERT' && role === 'driver' && newRecord.status === 'SEARCHING' && !newRecord.driver_id) {
+                // Fetch necessário para pegar os detalhes do cliente (join)
+                // Mas disparamos imediatamente
+                await fetchAvailableRides();
             }
-
-            // Atualização Instantânea para Motoristas
-            if (role === 'driver' && !ride) {
-                 await fetchAvailableRides();
+            // Se for UPDATE de status (cancelamento, aceite, etc)
+            else if (payload.eventType === 'UPDATE') {
+                if (role === 'driver') {
+                    // Remove da lista de disponíveis se não for mais SEARCHING
+                    if (newRecord.status !== 'SEARCHING' || newRecord.driver_id) {
+                        setAvailableRides(prev => prev.filter(r => r.id !== newRecord.id));
+                    }
+                }
+                
+                const isRelatedToMe = (newRecord?.customer_id === uid) || (newRecord?.driver_id === uid);
+                if (isRelatedToMe && uid) {
+                    await fetchActiveRide(uid);
+                }
             }
         }
       )
-      .subscribe((status) => {
-          if (status === 'CHANNEL_ERROR') {
-              console.error("Erro na conexão Realtime. Tentando reconectar...");
-              supabase.removeChannel(channel);
-          }
-      });
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
@@ -224,7 +225,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
         }).select().single();
       if (error) throw error;
       
-      // Limpa lista de dispensados ao criar nova corrida para evitar conflitos de ID (raro, mas seguro)
       if (dismissedRidesRef.current.length > 50) dismissedRidesRef.current = [];
       
       setRide(data);
@@ -302,7 +302,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           const { error } = await supabase.from('rides').update(updateData).eq('id', rideId);
           if (error) throw error;
           
-          // Adiciona aos dispensados para garantir que não volte
           dismissedRidesRef.current.push(rideId);
           setRide(null); 
           
@@ -321,7 +320,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       } catch(e: any) { toast({ title: "Erro", description: e.message }); throw e; }
   }
 
-  // Função atualizada para limpar E ignorar a corrida atual
   const clearRide = () => {
       if (ride) {
           dismissedRidesRef.current.push(ride.id);

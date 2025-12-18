@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Wallet, MapPin, Navigation, Shield, DollarSign, Star, Menu, History, CheckCircle, Car, Calendar, ArrowRight, AlertTriangle, ChevronRight, TrendingUp, MessageCircle, Phone, XCircle } from "lucide-react";
+import { Wallet, MapPin, Navigation, Shield, DollarSign, Star, Menu, History, CheckCircle, Car, Calendar, ArrowRight, AlertTriangle, ChevronRight, TrendingUp, MessageCircle, Phone, XCircle, Map as MapIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -45,7 +45,6 @@ const DriverDashboard = () => {
 
   const isOnTrip = !!ride && ['ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(ride?.status || '');
 
-  // Inicializa tab com base na URL
   useEffect(() => {
       const tabParam = searchParams.get('tab');
       if (tabParam && ['home', 'history', 'wallet', 'profile'].includes(tabParam)) {
@@ -129,37 +128,29 @@ const DriverDashboard = () => {
       }
   };
 
-  // Gerenciamento Inteligente de Corridas Recebidas
   useEffect(() => {
-    // Se estiver online, sem corrida ativa, e na tela inicial
     if (isOnline && !ride && activeTab === 'home') {
-        const nextRide = availableRides[0]; // Pega a primeira da fila
+        const nextRide = availableRides[0]; 
 
         if (nextRide) {
-            // Se não tem corrida na tela OU se a corrida mudou (ID diferente)
             if (!incomingRide || incomingRide.id !== nextRide.id) {
                 setIncomingRide(nextRide);
-                setTimer(30); // Reseta timer apenas para NOVAS corridas
-                // Aqui poderia tocar um som: new Audio('/alert.mp3').play();
+                setTimer(30); 
             }
-            // Se for a mesma corrida (incomingRide.id === nextRide.id), não faz nada para manter o timer rodando
         } else {
-            // Se a lista ficou vazia (ex: passageiro cancelou ou outro aceitou)
             if (incomingRide) setIncomingRide(null);
         }
     } else {
-        // Se ficou offline ou entrou em corrida
         if (incomingRide) setIncomingRide(null);
     }
   }, [availableRides, isOnline, ride, activeTab, incomingRide]);
 
-  // Timer Regressivo
   useEffect(() => { 
       if (incomingRide && timer > 0) { 
           const i = setInterval(() => setTimer(t => t - 1), 1000); 
           return () => clearInterval(i); 
       } else if (timer === 0 && incomingRide) { 
-          handleReject(); // Rejeita automaticamente ao fim do tempo
+          handleReject(); 
       } 
   }, [incomingRide, timer]);
 
@@ -212,6 +203,20 @@ const DriverDashboard = () => {
       else setActiveTab(tab);
   };
 
+  const handleNavigate = (type: 'waze' | 'maps') => {
+      if (!ride) return;
+      // Se não iniciou (ACEITA ou CHEGOU), vai para Origem. Se iniciou, vai para Destino.
+      const targetAddress = ride.status === 'IN_PROGRESS' ? ride.destination_address : ride.pickup_address;
+      
+      const encoded = encodeURIComponent(targetAddress);
+      
+      if (type === 'waze') {
+          window.open(`https://waze.com/ul?q=${encoded}&navigate=yes`, '_blank');
+      } else {
+          window.open(`https://www.google.com/maps/search/?api=1&query=${encoded}`, '_blank');
+      }
+  };
+
   const formatDate = (dateStr: string) => {
       const date = new Date(dateStr);
       return {
@@ -238,7 +243,6 @@ const DriverDashboard = () => {
   return (
     <div className="h-screen flex flex-col bg-slate-50 relative overflow-hidden font-sans">
       
-      {/* MARCA D'ÁGUA FIXA NO TOPO */}
       <img src="/logo-goldmobile-2.png" alt="Logo" className="fixed top-4 left-1/2 -translate-x-1/2 h-6 opacity-80 z-50 pointer-events-none drop-shadow-md" />
 
       <div className="absolute inset-0 z-0">
@@ -261,11 +265,9 @@ const DriverDashboard = () => {
 
       <div className="absolute inset-0 z-10 flex flex-col justify-end pb-32 md:pb-10 md:justify-center items-center pointer-events-none p-4">
 
-         {/* --- VIEW: HOME --- */}
          {activeTab === 'home' && (
             <div className="w-full max-w-md pointer-events-auto transition-all duration-500">
                 
-                {/* TELA DE CANCELAMENTO */}
                 {ride?.status === 'CANCELLED' && (
                     <div className={`${cardBaseClasses} text-center`}>
                         <div className="w-20 h-20 bg-red-100 rounded-full mx-auto flex items-center justify-center mb-6">
@@ -279,7 +281,6 @@ const DriverDashboard = () => {
                     </div>
                 )}
 
-                {/* TELA ONLINE / OFFLINE */}
                 {!ride && !isOnline && (
                     <div className="bg-white/90 backdrop-blur-xl border border-white/40 p-8 rounded-[32px] shadow-2xl text-center animate-in zoom-in-95">
                         <div className="w-24 h-24 bg-slate-100 rounded-full mx-auto flex items-center justify-center mb-6 relative">
@@ -291,7 +292,6 @@ const DriverDashboard = () => {
                     </div>
                 )}
 
-                {/* STATUS BUSCANDO */}
                 {!ride && isOnline && !incomingRide && (
                     <div className="bg-black/60 backdrop-blur-xl border border-white/10 px-6 py-4 rounded-full shadow-2xl flex items-center justify-center gap-3 animate-in fade-in">
                         <div className="relative"><div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" /><div className="absolute inset-0 w-3 h-3 bg-green-500 rounded-full animate-ping opacity-75" /></div>
@@ -299,7 +299,6 @@ const DriverDashboard = () => {
                     </div>
                 )}
 
-                {/* TELA DE CHAMADA RECEBIDA */}
                 {!ride && incomingRide && (
                     <div className="bg-slate-900/95 backdrop-blur-xl border border-white/10 p-6 rounded-[32px] shadow-2xl animate-in slide-in-from-bottom text-white">
                         <div className="flex justify-between items-center mb-4">
@@ -341,7 +340,6 @@ const DriverDashboard = () => {
                     </div>
                 )}
 
-                {/* TELA DE CORRIDA ATIVA */}
                 {isOnTrip && !showFinishScreen && (
                      <div className={cardBaseClasses}>
                         <div className="flex justify-between items-center mb-6">
@@ -354,6 +352,23 @@ const DriverDashboard = () => {
                         </div>
 
                         <div className="flex flex-col gap-3">
+                             <div className="flex gap-2">
+                                <Button 
+                                    variant="outline" 
+                                    className="flex-1 border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold h-12 rounded-xl"
+                                    onClick={() => handleNavigate('waze')}
+                                >
+                                    <Navigation className="mr-2 w-4 h-4" /> Waze
+                                </Button>
+                                <Button 
+                                    variant="outline" 
+                                    className="flex-1 border-gray-200 bg-gray-50 text-slate-600 hover:bg-gray-100 font-bold h-12 rounded-xl"
+                                    onClick={() => handleNavigate('maps')}
+                                >
+                                    <MapIcon className="mr-2 w-4 h-4" /> Maps
+                                </Button>
+                             </div>
+
                              <div 
                                 className="bg-gray-100 hover:bg-gray-200 p-3 rounded-2xl flex items-center gap-3 cursor-pointer transition-colors"
                                 onClick={() => setShowChat(true)}
@@ -376,7 +391,6 @@ const DriverDashboard = () => {
             </div>
          )}
 
-         {/* --- VIEW: HISTÓRICO --- */}
          {activeTab === 'history' && (
             <div className={`w-full max-w-md h-[65vh] ${cardBaseClasses} flex flex-col pointer-events-auto`}>
                  <h2 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-2">
@@ -402,7 +416,6 @@ const DriverDashboard = () => {
             </div>
          )}
 
-         {/* --- VIEW: CARTEIRA --- */}
          {activeTab === 'wallet' && (
              <div className="w-full max-w-md pointer-events-auto animate-in slide-in-from-bottom">
                  <Card className="bg-black text-white border-0 shadow-2xl rounded-[32px] mb-4 overflow-hidden relative">
@@ -441,7 +454,6 @@ const DriverDashboard = () => {
           <AlertDialogContent className="rounded-3xl bg-white border-0"><AlertDialogHeader><AlertDialogTitle className="flex items-center gap-2 text-red-600"><AlertTriangle /> Cancelar Corrida?</AlertDialogTitle><AlertDialogDescription>Esta ação prejudica sua taxa de aceitação.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel className="rounded-xl h-12">Voltar</AlertDialogCancel><AlertDialogAction onClick={confirmCancel} className="bg-red-600 hover:bg-red-700 rounded-xl h-12 font-bold text-white">Confirmar</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
 
-      {/* MODAL DETALHES DA CORRIDA */}
       <Dialog open={showHistoryDetail} onOpenChange={setShowHistoryDetail}>
           <DialogContent className="sm:max-w-md bg-white rounded-3xl border-0 p-0 overflow-hidden max-h-[80vh] flex flex-col">
               <div className="bg-slate-900 p-6 text-white text-center shrink-0">
@@ -450,7 +462,6 @@ const DriverDashboard = () => {
                   <p className="text-slate-400 text-sm mt-1">{selectedHistoryItem ? new Date(selectedHistoryItem.created_at).toLocaleDateString() + ' • ' + new Date(selectedHistoryItem.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</p>
               </div>
               <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
-                  {/* Passageiro */}
                   <div className="bg-gray-50 p-4 rounded-2xl flex items-center gap-4 border border-gray-100">
                       <Avatar className="h-12 w-12 border-2 border-white shadow-sm"><AvatarImage src={selectedHistoryItem?.customer?.avatar_url} /><AvatarFallback className="bg-slate-200 text-slate-600 font-bold">{selectedHistoryItem?.customer?.first_name?.[0]}</AvatarFallback></Avatar>
                       <div>
@@ -459,7 +470,6 @@ const DriverDashboard = () => {
                       </div>
                   </div>
 
-                  {/* Rota */}
                   <div className="space-y-4 px-2">
                        <div className="flex gap-4">
                            <div className="flex flex-col items-center pt-1"><div className="w-3 h-3 bg-slate-900 rounded-full" /><div className="w-0.5 flex-1 bg-gray-200 my-1 min-h-[30px]" /><div className="w-3 h-3 bg-green-500 rounded-full" /></div>
@@ -470,14 +480,12 @@ const DriverDashboard = () => {
                        </div>
                   </div>
 
-                  {/* Valores */}
                   <div className="bg-slate-900 text-white p-6 rounded-2xl space-y-3">
                        <div className="flex justify-between items-center"><span className="text-gray-400 text-sm">Valor Total</span><span className="font-bold text-lg">R$ {Number(selectedHistoryItem?.price).toFixed(2)}</span></div>
                        <div className="flex justify-between items-center"><span className="text-gray-400 text-sm">Taxa App</span><span className="font-bold text-lg text-red-400">- R$ {Number(selectedHistoryItem?.platform_fee).toFixed(2)}</span></div>
                        <div className="flex justify-between items-center border-t border-white/10 pt-3 mt-3"><span className="text-white font-bold">Seu Ganho</span><span className="font-black text-2xl text-green-400">R$ {getDisplayPrice(selectedHistoryItem)}</span></div>
                   </div>
                   
-                  {/* Infos Extras */}
                   <div className="grid grid-cols-2 gap-4 text-center">
                        <div className="bg-gray-50 p-3 rounded-xl"><p className="text-xs text-gray-400 font-bold uppercase">Avaliação</p><div className="flex items-center justify-center gap-1 font-bold text-slate-900"><Star className="w-4 h-4 fill-yellow-400 text-yellow-400" /> {selectedHistoryItem?.customer_rating || '-'}</div></div>
                        <div className="bg-gray-50 p-3 rounded-xl"><p className="text-xs text-gray-400 font-bold uppercase">Data</p><p className="font-bold text-slate-900">{selectedHistoryItem ? new Date(selectedHistoryItem.created_at).toLocaleDateString() : '-'}</p></div>
@@ -490,7 +498,6 @@ const DriverDashboard = () => {
           </DialogContent>
       </Dialog>
 
-      {/* TELA DE SUCESSO (FINALIZAR CORRIDA) */}
       {showFinishScreen && finishedRideData && (
           <div className="absolute inset-0 z-50 bg-white/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 animate-in fade-in slide-in-from-bottom duration-500">
               <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-6">
