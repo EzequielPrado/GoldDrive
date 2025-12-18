@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Wallet, MapPin, Navigation, Shield, DollarSign, Star, Menu, History, CheckCircle, Car, Calendar, ArrowRight, AlertTriangle, ChevronRight, TrendingUp, MessageCircle, Phone, XCircle, Map as MapIcon, Compass } from "lucide-react";
+import { Wallet, MapPin, Navigation, Shield, DollarSign, Star, Menu, History, CheckCircle, Car, Calendar, ArrowRight, AlertTriangle, ChevronRight, TrendingUp, MessageCircle, Phone, XCircle, Map as MapIcon, Compass, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -207,15 +207,26 @@ const DriverDashboard = () => {
   const cleanAddress = (address: string) => {
       if (!address) return "Endereço desconhecido";
       
-      // Tenta dividir por vírgulas e pegar as 3 primeiras partes relevantes
-      // Ex: "Rua X, 123, Bairro Y, Cidade Z, Estado, Pais, CEP"
-      const parts = address.split(',').map(p => p.trim());
-      
-      if (parts.length <= 3) return address;
+      const parts = address.split(',');
+      if (parts.length > 0) {
+          // Ex: "Rua das Flores"
+          let main = parts[0].trim();
+          
+          // Ex: "123"
+          let number = parts.length > 1 ? parts[1].trim() : "";
+          
+          // Ex: "Centro"
+          let district = parts.length > 2 ? parts[2].trim() : "";
+          
+          // Se o segundo elemento parecer um bairro (não numero), ajusta
+          if (isNaN(Number(number)) && number.length > 5) {
+              district = number;
+              number = "";
+          }
 
-      // Estratégia: Pegar Rua, Número e Bairro.
-      // Se não tiver número explícito, pega Rua e Bairro.
-      return `${parts[0]}, ${parts[1]}${parts[2] ? ` - ${parts[2]}` : ''}`;
+          return `${main}${number ? `, ${number}` : ''}${district ? ` - ${district}` : ''}`;
+      }
+      return address;
   };
 
   // Função de Navegação Robusta (Usa Lat/Lon se disponível)
@@ -236,14 +247,12 @@ const DriverDashboard = () => {
       }
 
       if (type === 'waze') {
-          // Waze URL Scheme
           if (lat && lng) {
               window.open(`https://waze.com/ul?ll=${lat},${lng}&navigate=yes`, '_blank');
           } else {
               window.open(`https://waze.com/ul?q=${encodeURIComponent(query)}&navigate=yes`, '_blank');
           }
       } else {
-          // Google Maps URL Scheme
           if (lat && lng) {
                window.open(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`, '_blank');
           } else {
@@ -273,26 +282,29 @@ const DriverDashboard = () => {
       return val.toFixed(2);
   };
 
-  const NavigationCard = ({ target }: { target: 'pickup' | 'dest' }) => (
-      <div className="flex gap-2 mb-4">
-          <Button 
+  // Componente de Cards de Navegação
+  const NavigationCards = ({ target }: { target: 'pickup' | 'dest' }) => (
+      <div className="grid grid-cols-2 gap-3 mb-4">
+          <div 
             onClick={() => handleNavigate('waze', target)}
-            className="flex-1 bg-blue-400 hover:bg-blue-500 text-white font-bold rounded-xl h-12 relative overflow-hidden group shadow-lg shadow-blue-400/20"
+            className="bg-blue-500 hover:bg-blue-600 text-white rounded-2xl p-3 flex flex-col items-center justify-center cursor-pointer transition-all shadow-md active:scale-95 group relative overflow-hidden"
           >
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
-              <Navigation className="w-5 h-5 mr-2" /> Waze
-          </Button>
-          <Button 
+              <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+              <Navigation className="w-6 h-6 mb-1" />
+              <span className="font-bold text-sm">Abrir Waze</span>
+          </div>
+          <div 
             onClick={() => handleNavigate('maps', target)}
-            className="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl h-12 relative overflow-hidden group shadow-lg shadow-green-500/20"
+            className="bg-green-600 hover:bg-green-700 text-white rounded-2xl p-3 flex flex-col items-center justify-center cursor-pointer transition-all shadow-md active:scale-95 group relative overflow-hidden"
           >
-               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
-               <MapIcon className="w-5 h-5 mr-2" /> Maps
-          </Button>
+               <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+               <MapIcon className="w-6 h-6 mb-1" />
+               <span className="font-bold text-sm">Abrir Maps</span>
+          </div>
       </div>
   );
 
-  const cardBaseClasses = "bg-white/90 backdrop-blur-xl border border-white/40 p-6 rounded-[32px] shadow-2xl animate-in slide-in-from-bottom duration-500 w-full";
+  const cardBaseClasses = "bg-white/95 backdrop-blur-xl border border-white/40 p-6 rounded-[32px] shadow-2xl animate-in slide-in-from-bottom duration-500 w-full";
 
   return (
     <div className="h-screen flex flex-col bg-slate-50 relative overflow-hidden font-sans">
@@ -382,15 +394,9 @@ const DriverDashboard = () => {
                             <div className="flex justify-center gap-3 mt-4"><Badge variant="outline" className="border-white/20 text-slate-300">{incomingRide.distance}</Badge><Badge variant="outline" className="border-white/20 text-slate-300">{incomingRide.category}</Badge></div>
                         </div>
 
-                        {/* Botões de Navegação Antecipada */}
-                        <div className="mb-4">
-                            <p className="text-[10px] text-slate-400 font-bold uppercase mb-2">Ver local de embarque:</p>
-                            <NavigationCard target="pickup" />
-                        </div>
-
                         <div className="space-y-4 mb-8 bg-white/5 p-4 rounded-2xl border border-white/10">
-                             <div className="flex items-start gap-3"><div className="w-2 h-2 mt-2 bg-white rounded-full"/><div><p className="text-xs text-slate-400 font-bold uppercase">Embarque</p><p className="font-medium text-sm leading-tight">{cleanAddress(incomingRide.pickup_address)}</p></div></div>
-                             <div className="flex items-start gap-3"><div className="w-2 h-2 mt-2 bg-green-500 rounded-full"/><div><p className="text-xs text-slate-400 font-bold uppercase">Destino</p><p className="font-medium text-sm leading-tight">{cleanAddress(incomingRide.destination_address)}</p></div></div>
+                             <div className="flex items-start gap-3"><div className="w-2 h-2 mt-2 bg-white rounded-full shrink-0"/><div><p className="text-xs text-slate-400 font-bold uppercase">Embarque</p><p className="font-medium text-sm leading-tight text-white/90">{cleanAddress(incomingRide.pickup_address)}</p></div></div>
+                             <div className="flex items-start gap-3"><div className="w-2 h-2 mt-2 bg-green-500 rounded-full shrink-0"/><div><p className="text-xs text-slate-400 font-bold uppercase">Destino</p><p className="font-medium text-sm leading-tight text-white/90">{cleanAddress(incomingRide.destination_address)}</p></div></div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
@@ -412,33 +418,37 @@ const DriverDashboard = () => {
                         </div>
 
                         <div className="bg-slate-50 rounded-2xl p-4 mb-4 border border-slate-100">
-                             <p className="text-[10px] text-slate-400 font-bold uppercase mb-2 flex items-center gap-1">
+                             <p className="text-[10px] text-slate-400 font-bold uppercase mb-3 flex items-center gap-1">
                                  <Compass className="w-3 h-3" />
-                                 {ride?.status === 'IN_PROGRESS' ? 'Navegar para Destino:' : 'Navegar para Embarque:'}
+                                 {ride?.status === 'IN_PROGRESS' ? 'Navegar para Destino' : 'Navegar para Embarque'}
                              </p>
-                             <NavigationCard target={ride?.status === 'IN_PROGRESS' ? 'dest' : 'pickup'} />
-                             <p className="text-sm font-medium text-slate-900 leading-tight mt-2">
+                             
+                             {/* CARDS DE NAVEGAÇÃO BONITOS */}
+                             <NavigationCards target={ride?.status === 'IN_PROGRESS' ? 'dest' : 'pickup'} />
+                             
+                             <p className="text-sm font-medium text-slate-900 leading-tight mt-2 text-center bg-white p-2 rounded-lg border border-slate-100 shadow-sm">
                                  {cleanAddress(ride?.status === 'IN_PROGRESS' ? ride?.destination_address : ride?.pickup_address)}
                              </p>
                         </div>
 
                         <div className="flex flex-col gap-3">
                              <div 
-                                className="bg-gray-100 hover:bg-gray-200 p-3 rounded-2xl flex items-center gap-3 cursor-pointer transition-colors"
+                                className="bg-gray-100 hover:bg-gray-200 p-3 rounded-2xl flex items-center gap-3 cursor-pointer transition-colors border border-gray-200"
                                 onClick={() => setShowChat(true)}
                              >
                                 <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-slate-900 shadow-sm">
                                     <MessageCircle className="w-5 h-5" />
                                 </div>
                                 <div className="flex-1 text-left">
-                                    <p className="text-xs font-bold text-gray-500 uppercase">Mensagem para Passageiro</p>
-                                    <p className="text-sm font-medium text-slate-900">Abrir chat...</p>
+                                    <p className="text-xs font-bold text-gray-500 uppercase">Mensagem</p>
+                                    <p className="text-sm font-medium text-slate-900">Abrir chat com passageiro</p>
                                 </div>
+                                <ArrowUpRight className="w-4 h-4 text-gray-400" />
                              </div>
 
-                             {ride?.status === 'ACCEPTED' && (<div className="flex gap-3"><Button variant="ghost" className="flex-1 text-red-500 hover:bg-red-50 h-14 rounded-xl font-bold" onClick={handleCancelClick}>Cancelar</Button><Button className="flex-[2] h-14 bg-black hover:bg-zinc-800 text-white font-bold rounded-xl" onClick={() => confirmArrival(ride!.id)}><MapPin className="mr-2 h-5 w-5" /> Confirmar Chegada</Button></div>)}
-                             {ride?.status === 'ARRIVED' && (<div className="flex gap-3"><Button variant="ghost" className="flex-1 text-red-500 hover:bg-red-50 h-14 rounded-xl font-bold" onClick={handleCancelClick}>Cancelar</Button><Button className="flex-[2] h-14 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl animate-pulse" onClick={() => startRide(ride!.id)}><Navigation className="mr-2 h-5 w-5" /> Iniciar Corrida</Button></div>)}
-                             {ride?.status === 'IN_PROGRESS' && (<Button className="w-full h-14 text-xl bg-black hover:bg-zinc-800 text-white font-bold rounded-xl" onClick={handleFinish}><Shield className="mr-2 h-6 w-6" /> Finalizar Viagem</Button>)}
+                             {ride?.status === 'ACCEPTED' && (<div className="flex gap-3"><Button variant="ghost" className="flex-1 text-red-500 hover:bg-red-50 h-14 rounded-xl font-bold" onClick={handleCancelClick}>Cancelar</Button><Button className="flex-[2] h-14 bg-black hover:bg-zinc-800 text-white font-bold rounded-xl shadow-lg" onClick={() => confirmArrival(ride!.id)}><MapPin className="mr-2 h-5 w-5" /> Confirmar Chegada</Button></div>)}
+                             {ride?.status === 'ARRIVED' && (<div className="flex gap-3"><Button variant="ghost" className="flex-1 text-red-500 hover:bg-red-50 h-14 rounded-xl font-bold" onClick={handleCancelClick}>Cancelar</Button><Button className="flex-[2] h-14 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl animate-pulse shadow-lg" onClick={() => startRide(ride!.id)}><Navigation className="mr-2 h-5 w-5" /> Iniciar Corrida</Button></div>)}
+                             {ride?.status === 'IN_PROGRESS' && (<Button className="w-full h-14 text-xl bg-black hover:bg-zinc-800 text-white font-bold rounded-xl shadow-lg" onClick={handleFinish}><Shield className="mr-2 h-6 w-6" /> Finalizar Viagem</Button>)}
                         </div>
                      </div>
                 )}
