@@ -10,6 +10,8 @@ interface LocationSearchProps {
   initialValue?: string;
   className?: string;
   error?: boolean; 
+  referenceLat?: number;
+  referenceLon?: number;
 }
 
 const LocationSearch = ({ 
@@ -18,7 +20,9 @@ const LocationSearch = ({
   onSelect, 
   initialValue = "", 
   className = "",
-  error = false 
+  error = false,
+  referenceLat,
+  referenceLon
 }: LocationSearchProps) => {
   const [query, setQuery] = useState(initialValue);
   const [results, setResults] = useState<any[]>([]);
@@ -45,11 +49,19 @@ const LocationSearch = ({
       if (query.length > 2 && isOpen) {
         setLoading(true);
         try {
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=5&countrycodes=br`
-          );
+          // Usando Photon API em vez de Nominatim para melhor Fuzzy Search (espaços, erros)
+          let url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=6`;
+          
+          // Se tivermos a localização do usuário, priorizamos resultados próximos
+          if (referenceLat && referenceLon) {
+              url += `&lat=${referenceLat}&lon=${referenceLon}`;
+          }
+
+          const response = await fetch(url);
           const data = await response.json();
-          setResults(data);
+          
+          // Photon retorna GeoJSON
+          setResults(data.features || []);
         } catch (error) {
           console.error("Erro na busca:", error);
         } finally {
@@ -58,44 +70,47 @@ const LocationSearch = ({
       } else if (query.length <= 2) {
         setResults([]);
       }
-    }, 500);
+    }, 400); // Debounce um pouco menor para parecer mais rápido
 
     return () => clearTimeout(timer);
-  }, [query, isOpen]);
+  }, [query, isOpen, referenceLat, referenceLon]);
 
-  // Função auxiliar para formatar endereço limpo
-  const formatAddress = (item: any) => {
-      const addr = item.address;
-      const road = addr.road || addr.pedestrian || addr.street || item.name || "";
-      const number = addr.house_number || "";
-      const suburb = addr.suburb || addr.neighbourhood || addr.district || "";
-      const city = addr.city || addr.town || addr.municipality || "";
-      const state = addr.state_code || addr.state || "";
+  // Formatador inteligente para o Photon
+  const formatPhotonAddress = (feature: any) => {
+      const p = feature.properties;
+      const parts = [];
 
-      // Monta string: Rua X, 123 - Bairro
-      let parts = [];
-      if (road) parts.push(road);
-      if (number) parts.push(number);
+      // Nome do lugar ou rua principal
+      if (p.name) parts.push(p.name);
+      else if (p.street) parts.push(p.street);
       
-      let mainPart = parts.join(", ");
+      // Se tiver nome E rua, adiciona a rua como contexto
+      if (p.name && p.street) parts.push(p.street);
+
+      if (p.housenumber) parts.push(p.housenumber);
       
-      // Adiciona bairro se existir
-      if (suburb) mainPart += ` - ${suburb}`;
-      // Adiciona cidade/UF se existir
-      if (city) mainPart += ` - ${city}`;
+      // Bairro ou Cidade
+      if (p.district) parts.push(p.district);
+      else if (p.city) parts.push(p.city);
+      else if (p.town) parts.push(p.town);
       
-      return mainPart || item.display_name;
+      // Estado (opcional para ficar curto)
+      // if (p.state) parts.push(p.state);
+
+      return parts.join(', ');
   };
 
-  const handleSelect = (item: any) => {
-    const cleanAddress = formatAddress(item);
+  const handleSelect = (feature: any) => {
+    const cleanAddress = formatPhotonAddress(feature);
+    const [lon, lat] = feature.geometry.coordinates; // GeoJSON é Lon, Lat
 
     setQuery(cleanAddress);
     setIsOpen(false);
+    
     onSelect({
-      lat: parseFloat(item.lat),
-      lon: parseFloat(item.lon),
-      display_name: cleanAddress // Agora passamos o endereço limpo para o sistema
+      lat: lat,
+      lon: lon,
+      display_name: cleanAddress
     });
   };
 
@@ -144,7 +159,10 @@ const LocationSearch = ({
           )}
           
           {!loading && results.map((item, index) => {
-            const cleanTitle = formatAddress(item);
+            const cleanTitle = formatPhotonAddress(item);
+            const mainName = item.properties.name || item.properties.street || cleanTitle.split(',')[0];
+            const secondaryInfo = cleanTitle.replace(mainName, '').replace(/^,\s*/, '') || item.properties.city || item.properties.state;
+
             return (
               <button
                 key={index}
@@ -156,8 +174,8 @@ const LocationSearch = ({
                     <MapPin className="w-4 h-4 text-gray-500" />
                 </div>
                 <div>
-                    <p className="font-bold text-sm text-slate-900 line-clamp-1">{cleanTitle.split('-')[0]}</p>
-                    <p className="text-xs text-gray-500 line-clamp-1">{cleanTitle}</p>
+                    <p className="font-bold text-sm text-slate-900 line-clamp-1">{mainName}</p>
+                    <p className="text-xs text-gray-500 line-clamp-1">{secondaryInfo}</p>
                 </div>
               </button>
             );

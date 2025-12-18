@@ -35,6 +35,9 @@ const ClientDashboard = () => {
   const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
   const [routeDistance, setRouteDistance] = useState<number>(0); // em KM
   
+  // GPS State para Bias de Busca
+  const [userGps, setUserGps] = useState<{lat: number, lon: number} | null>(null);
+  
   // Form Errors
   const [formErrors, setFormErrors] = useState({ pickup: false, dest: false });
   
@@ -58,17 +61,14 @@ const ClientDashboard = () => {
   const [loadingCats, setLoadingCats] = useState(true);
   const [showCancelAlert, setShowCancelAlert] = useState(false);
   
-  // POPUP STATES (Controlados manualmente para evitar loop)
+  // POPUP STATES
   const [popupState, setPopupState] = useState({
       arrival: false,
       start: false,
       accepted: false
   });
   
-  // Refs para rastrear se já mostramos o popup para a corrida atual (ID)
-  // Isso impede que o popup reabra se o status no banco continuar o mesmo
   const seenPopupsRef = useRef<{ [key: string]: boolean }>({});
-
   const [showChat, setShowChat] = useState(false);
   
   // Dados de Preço Dinâmico e Configs
@@ -80,7 +80,6 @@ const ClientDashboard = () => {
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<any>(null);
 
-  // Inicializa tab com base na URL
   useEffect(() => {
       const tabParam = searchParams.get('tab');
       if (tabParam && ['home', 'history', 'wallet', 'profile'].includes(tabParam)) {
@@ -90,9 +89,14 @@ const ClientDashboard = () => {
 
   useEffect(() => {
     fetchInitialData();
+    // Tenta pegar GPS silenciosamente para melhorar a busca
+    if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition((pos) => {
+            setUserGps({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+        }, (err) => console.log("GPS silent check failed", err));
+    }
   }, [activeTab]);
 
-  // Novo Efeito: Solicitar GPS apenas se habilitado no Admin
   useEffect(() => {
       if (activeTab === 'home' && !pickupLocation && !hasAskedLocation && adminConfig.gps_popup_enabled === 'true') {
           const timer = setTimeout(() => {
@@ -103,7 +107,6 @@ const ClientDashboard = () => {
       }
   }, [activeTab, hasAskedLocation, pickupLocation, adminConfig]);
 
-  // Efeito para calcular rota
   useEffect(() => {
       const calculateRoute = async () => {
           if (pickupLocation && destLocation) {
@@ -139,30 +142,25 @@ const ClientDashboard = () => {
       calculateRoute();
   }, [pickupLocation, destLocation]);
 
-  // --- GERENCIAMENTO DE ESTADO E POPUPS (CORRIGIDO PARA NÃO LOOPAR) ---
   useEffect(() => {
     if (ride) {
       if (ride.status === 'CANCELLED') setStep('cancelled');
       else if (ride.status === 'COMPLETED') setStep('rating');
       else if (['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(ride.status)) setStep('waiting');
 
-      // Helper para verificar se já mostramos
       const hasSeen = (type: string) => seenPopupsRef.current[`${ride.id}_${type}`];
       const markAsSeen = (type: string) => { seenPopupsRef.current[`${ride.id}_${type}`] = true; };
 
-      // Popup ACEITA
       if (ride.status === 'ACCEPTED' && !hasSeen('accepted')) {
           setPopupState(p => ({ ...p, accepted: true }));
           markAsSeen('accepted');
       }
       
-      // Popup CHEGOU
       if (ride.status === 'ARRIVED' && !hasSeen('arrival')) {
           setPopupState(p => ({ ...p, arrival: true }));
           markAsSeen('arrival');
       }
 
-      // Popup INICIADA
       if (ride.status === 'IN_PROGRESS' && !hasSeen('start')) {
           setPopupState(p => ({ ...p, start: true }));
           markAsSeen('start');
@@ -170,7 +168,6 @@ const ClientDashboard = () => {
 
     } else {
       if (step !== 'search') setStep('search');
-      // Limpa popups se não tiver corrida
       setPopupState({ accepted: false, arrival: false, start: false });
     }
   }, [ride?.status, ride?.id]);
@@ -246,7 +243,6 @@ const ClientDashboard = () => {
       setStep('confirm'); 
   };
 
-  // --- LÓGICA DE PREÇO ---
   const calculatePrice = (catId?: string) => {
       const targetCatId = catId || selectedCategoryId;
       const category = categories.find(c => c.id === targetCatId);
@@ -339,9 +335,24 @@ const ClientDashboard = () => {
           navigator.geolocation.getCurrentPosition(
               async (pos) => {
                   try {
-                      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`);
+                      setUserGps({ lat: pos.coords.latitude, lon: pos.coords.longitude }); // Atualiza state global de GPS
+                      
+                      // Usando Photon para reverse geocoding também (mais rápido)
+                      const res = await fetch(`https://photon.komoot.io/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`);
                       const data = await res.json();
-                      const address = data.display_name || "Minha Localização Atual"; 
+                      
+                      let address = "Minha Localização Atual";
+                      if (data.features && data.features.length > 0) {
+                          const p = data.features[0].properties;
+                          const parts = [];
+                          if (p.name) parts.push(p.name);
+                          else if (p.street) parts.push(p.street);
+                          
+                          if (p.housenumber) parts.push(p.housenumber);
+                          if (p.district || p.city) parts.push(p.district || p.city);
+                          
+                          if (parts.length > 0) address = parts.join(', ');
+                      }
                       
                       setPickupLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude, address: address });
                       setFormErrors(prev => ({ ...prev, pickup: false }));
@@ -358,10 +369,8 @@ const ClientDashboard = () => {
               (error) => {
                   setGpsLoading(false);
                   if (!silent) {
-                      console.error("GPS Error:", error);
                       let msg = "Erro ao obter GPS";
                       if (error.code === 1) msg = "Permissão negada. Ative o GPS no navegador.";
-                      else if (error.code === 2) msg = "Sinal de GPS indisponível.";
                       showError(msg);
                   }
               },
@@ -385,15 +394,12 @@ const ClientDashboard = () => {
   return (
     <div className="relative h-screen w-full overflow-hidden font-sans bg-gray-100">
       
-      {/* MARCA D'ÁGUA FIXA NO TOPO */}
       <img src="/logo-goldmobile-2.png" alt="Logo" className="fixed top-4 left-1/2 -translate-x-1/2 h-6 opacity-80 z-50 pointer-events-none drop-shadow-md" />
 
-      {/* MAPA */}
       <div className="absolute inset-0 z-0">
          <MapComponent pickupLocation={pickupLocation} destinationLocation={destLocation} routeCoordinates={routeCoords} />
       </div>
 
-      {/* HEADER */}
       <div className="absolute top-0 left-0 right-0 p-6 z-20 flex justify-between items-start pointer-events-none mt-4">
           <div className="pointer-events-auto bg-white/90 backdrop-blur-xl border border-white/20 p-2 pr-4 rounded-full flex items-center gap-3 shadow-lg animate-in slide-in-from-top duration-500 cursor-pointer hover:scale-105 transition-transform" onClick={() => navigate('/profile')}>
              <Avatar className="h-10 w-10 ring-2 ring-gray-100"><AvatarImage src={userProfile?.avatar_url} /><AvatarFallback className="bg-yellow-500 text-black font-bold">{userProfile?.first_name?.[0]}</AvatarFallback></Avatar>
@@ -425,6 +431,8 @@ const ClientDashboard = () => {
                                     }}
                                     className="flex-1"
                                     error={formErrors.pickup}
+                                    referenceLat={userGps?.lat}
+                                    referenceLon={userGps?.lon}
                                 />
                                 <Button size="icon" variant="outline" className="h-14 w-14 rounded-2xl shrink-0 border-gray-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-colors" onClick={() => getCurrentLocation(false)} disabled={gpsLoading}>
                                     {gpsLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <MapPin className="w-5 h-5" />}
@@ -444,6 +452,8 @@ const ClientDashboard = () => {
                                         }
                                     }}
                                     error={formErrors.dest}
+                                    referenceLat={pickupLocation?.lat || userGps?.lat}
+                                    referenceLon={pickupLocation?.lon || userGps?.lon}
                                 />
                             </div>
                         </div>
