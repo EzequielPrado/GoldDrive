@@ -6,7 +6,16 @@ interface RideContextType {
   ride: any | null;
   availableRides: any[];
   loading: boolean;
-  requestRide: (pickup: string, destination: string, price: number, distance: string, category: string, paymentMethod: string) => Promise<void>;
+  requestRide: (
+      pickup: string, 
+      destination: string, 
+      pickupCoords: { lat: number, lng: number },
+      destCoords: { lat: number, lng: number },
+      price: number, 
+      distance: string, 
+      category: string, 
+      paymentMethod: string
+  ) => Promise<void>;
   cancelRide: (rideId: string, reason?: string) => Promise<void>;
   acceptRide: (rideId: string) => Promise<void>;
   rejectRide: (rideId: string) => Promise<void>;
@@ -207,7 +216,16 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, []); 
 
-  const requestRide = async (pickup: string, destination: string, price: number, distance: string, category: string, paymentMethod: string) => {
+  const requestRide = async (
+      pickup: string, 
+      destination: string, 
+      pickupCoords: { lat: number, lng: number },
+      destCoords: { lat: number, lng: number },
+      price: number, 
+      distance: string, 
+      category: string, 
+      paymentMethod: string
+  ) => {
     if (!currentUserId) {
         toast({ title: "Erro", description: "Faça login.", variant: "destructive" });
         return;
@@ -217,6 +235,10 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           customer_id: currentUserId,
           pickup_address: pickup,
           destination_address: destination,
+          pickup_lat: pickupCoords.lat,
+          pickup_lng: pickupCoords.lng,
+          destination_lat: destCoords.lat,
+          destination_lng: destCoords.lng,
           price: price,
           distance: distance,
           status: 'SEARCHING',

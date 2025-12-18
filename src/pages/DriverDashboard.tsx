@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Wallet, MapPin, Navigation, Shield, DollarSign, Star, Menu, History, CheckCircle, Car, Calendar, ArrowRight, AlertTriangle, ChevronRight, TrendingUp, MessageCircle, Phone, XCircle, Map as MapIcon } from "lucide-react";
+import { Wallet, MapPin, Navigation, Shield, DollarSign, Star, Menu, History, CheckCircle, Car, Calendar, ArrowRight, AlertTriangle, ChevronRight, TrendingUp, MessageCircle, Phone, XCircle, Map as MapIcon, Compass } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -203,17 +203,52 @@ const DriverDashboard = () => {
       else setActiveTab(tab);
   };
 
-  const handleNavigate = (type: 'waze' | 'maps') => {
-      if (!ride) return;
-      // Se não iniciou (ACEITA ou CHEGOU), vai para Origem. Se iniciou, vai para Destino.
-      const targetAddress = ride.status === 'IN_PROGRESS' ? ride.destination_address : ride.pickup_address;
+  // Função para limpar visualmente o endereço
+  const cleanAddress = (address: string) => {
+      if (!address) return "Endereço desconhecido";
       
-      const encoded = encodeURIComponent(targetAddress);
+      // Tenta dividir por vírgulas e pegar as 3 primeiras partes relevantes
+      // Ex: "Rua X, 123, Bairro Y, Cidade Z, Estado, Pais, CEP"
+      const parts = address.split(',').map(p => p.trim());
       
-      if (type === 'waze') {
-          window.open(`https://waze.com/ul?q=${encoded}&navigate=yes`, '_blank');
+      if (parts.length <= 3) return address;
+
+      // Estratégia: Pegar Rua, Número e Bairro.
+      // Se não tiver número explícito, pega Rua e Bairro.
+      return `${parts[0]}, ${parts[1]}${parts[2] ? ` - ${parts[2]}` : ''}`;
+  };
+
+  // Função de Navegação Robusta (Usa Lat/Lon se disponível)
+  const handleNavigate = (type: 'waze' | 'maps', target: 'pickup' | 'dest') => {
+      const currentRide = ride || incomingRide;
+      if (!currentRide) return;
+
+      let lat, lng, query;
+      
+      if (target === 'pickup') {
+          lat = currentRide.pickup_lat;
+          lng = currentRide.pickup_lng;
+          query = currentRide.pickup_address;
       } else {
-          window.open(`https://www.google.com/maps/search/?api=1&query=${encoded}`, '_blank');
+          lat = currentRide.destination_lat;
+          lng = currentRide.destination_lng;
+          query = currentRide.destination_address;
+      }
+
+      if (type === 'waze') {
+          // Waze URL Scheme
+          if (lat && lng) {
+              window.open(`https://waze.com/ul?ll=${lat},${lng}&navigate=yes`, '_blank');
+          } else {
+              window.open(`https://waze.com/ul?q=${encodeURIComponent(query)}&navigate=yes`, '_blank');
+          }
+      } else {
+          // Google Maps URL Scheme
+          if (lat && lng) {
+               window.open(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`, '_blank');
+          } else {
+               window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank');
+          }
       }
   };
 
@@ -237,6 +272,25 @@ const DriverDashboard = () => {
       const val = (r.driver_earnings && Number(r.driver_earnings) > 0) ? Number(r.driver_earnings) : Number(r.price);
       return val.toFixed(2);
   };
+
+  const NavigationCard = ({ target }: { target: 'pickup' | 'dest' }) => (
+      <div className="flex gap-2 mb-4">
+          <Button 
+            onClick={() => handleNavigate('waze', target)}
+            className="flex-1 bg-blue-400 hover:bg-blue-500 text-white font-bold rounded-xl h-12 relative overflow-hidden group shadow-lg shadow-blue-400/20"
+          >
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
+              <Navigation className="w-5 h-5 mr-2" /> Waze
+          </Button>
+          <Button 
+            onClick={() => handleNavigate('maps', target)}
+            className="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl h-12 relative overflow-hidden group shadow-lg shadow-green-500/20"
+          >
+               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
+               <MapIcon className="w-5 h-5 mr-2" /> Maps
+          </Button>
+      </div>
+  );
 
   const cardBaseClasses = "bg-white/90 backdrop-blur-xl border border-white/40 p-6 rounded-[32px] shadow-2xl animate-in slide-in-from-bottom duration-500 w-full";
 
@@ -328,9 +382,15 @@ const DriverDashboard = () => {
                             <div className="flex justify-center gap-3 mt-4"><Badge variant="outline" className="border-white/20 text-slate-300">{incomingRide.distance}</Badge><Badge variant="outline" className="border-white/20 text-slate-300">{incomingRide.category}</Badge></div>
                         </div>
 
+                        {/* Botões de Navegação Antecipada */}
+                        <div className="mb-4">
+                            <p className="text-[10px] text-slate-400 font-bold uppercase mb-2">Ver local de embarque:</p>
+                            <NavigationCard target="pickup" />
+                        </div>
+
                         <div className="space-y-4 mb-8 bg-white/5 p-4 rounded-2xl border border-white/10">
-                             <div className="flex items-start gap-3"><div className="w-2 h-2 mt-2 bg-white rounded-full"/><div><p className="text-xs text-slate-400 font-bold uppercase">Embarque</p><p className="font-medium text-sm leading-tight">{incomingRide.pickup_address}</p></div></div>
-                             <div className="flex items-start gap-3"><div className="w-2 h-2 mt-2 bg-green-500 rounded-full"/><div><p className="text-xs text-slate-400 font-bold uppercase">Destino</p><p className="font-medium text-sm leading-tight">{incomingRide.destination_address}</p></div></div>
+                             <div className="flex items-start gap-3"><div className="w-2 h-2 mt-2 bg-white rounded-full"/><div><p className="text-xs text-slate-400 font-bold uppercase">Embarque</p><p className="font-medium text-sm leading-tight">{cleanAddress(incomingRide.pickup_address)}</p></div></div>
+                             <div className="flex items-start gap-3"><div className="w-2 h-2 mt-2 bg-green-500 rounded-full"/><div><p className="text-xs text-slate-400 font-bold uppercase">Destino</p><p className="font-medium text-sm leading-tight">{cleanAddress(incomingRide.destination_address)}</p></div></div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
@@ -351,24 +411,18 @@ const DriverDashboard = () => {
                             <div className="text-right"><h3 className="text-3xl font-black text-green-600">R$ {getDisplayPrice(ride)}</h3><p className="text-gray-400 text-xs uppercase font-bold tracking-wider">Valor</p></div>
                         </div>
 
-                        <div className="flex flex-col gap-3">
-                             <div className="flex gap-2">
-                                <Button 
-                                    variant="outline" 
-                                    className="flex-1 border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold h-12 rounded-xl"
-                                    onClick={() => handleNavigate('waze')}
-                                >
-                                    <Navigation className="mr-2 w-4 h-4" /> Waze
-                                </Button>
-                                <Button 
-                                    variant="outline" 
-                                    className="flex-1 border-gray-200 bg-gray-50 text-slate-600 hover:bg-gray-100 font-bold h-12 rounded-xl"
-                                    onClick={() => handleNavigate('maps')}
-                                >
-                                    <MapIcon className="mr-2 w-4 h-4" /> Maps
-                                </Button>
-                             </div>
+                        <div className="bg-slate-50 rounded-2xl p-4 mb-4 border border-slate-100">
+                             <p className="text-[10px] text-slate-400 font-bold uppercase mb-2 flex items-center gap-1">
+                                 <Compass className="w-3 h-3" />
+                                 {ride?.status === 'IN_PROGRESS' ? 'Navegar para Destino:' : 'Navegar para Embarque:'}
+                             </p>
+                             <NavigationCard target={ride?.status === 'IN_PROGRESS' ? 'dest' : 'pickup'} />
+                             <p className="text-sm font-medium text-slate-900 leading-tight mt-2">
+                                 {cleanAddress(ride?.status === 'IN_PROGRESS' ? ride?.destination_address : ride?.pickup_address)}
+                             </p>
+                        </div>
 
+                        <div className="flex flex-col gap-3">
                              <div 
                                 className="bg-gray-100 hover:bg-gray-200 p-3 rounded-2xl flex items-center gap-3 cursor-pointer transition-colors"
                                 onClick={() => setShowChat(true)}
@@ -409,7 +463,7 @@ const DriverDashboard = () => {
                                 </div>
                                 <span className="font-black text-green-700">R$ {getDisplayPrice(item)}</span>
                              </div>
-                             <p className="text-xs text-gray-500 truncate mt-1">{item.destination_address}</p>
+                             <p className="text-xs text-gray-500 truncate mt-1">{cleanAddress(item.destination_address)}</p>
                          </div>
                      ))}
                  </ScrollArea>
@@ -474,8 +528,8 @@ const DriverDashboard = () => {
                        <div className="flex gap-4">
                            <div className="flex flex-col items-center pt-1"><div className="w-3 h-3 bg-slate-900 rounded-full" /><div className="w-0.5 flex-1 bg-gray-200 my-1 min-h-[30px]" /><div className="w-3 h-3 bg-green-500 rounded-full" /></div>
                            <div className="space-y-6 flex-1">
-                               <div><p className="text-xs font-bold text-gray-400 uppercase">Origem</p><p className="font-medium text-slate-900 leading-tight">{selectedHistoryItem?.pickup_address}</p></div>
-                               <div><p className="text-xs font-bold text-gray-400 uppercase">Destino</p><p className="font-medium text-slate-900 leading-tight">{selectedHistoryItem?.destination_address}</p></div>
+                               <div><p className="text-xs font-bold text-gray-400 uppercase">Origem</p><p className="font-medium text-slate-900 leading-tight">{cleanAddress(selectedHistoryItem?.pickup_address)}</p></div>
+                               <div><p className="text-xs font-bold text-gray-400 uppercase">Destino</p><p className="font-medium text-slate-900 leading-tight">{cleanAddress(selectedHistoryItem?.destination_address)}</p></div>
                            </div>
                        </div>
                   </div>

@@ -316,7 +316,9 @@ const ClientDashboard = () => {
     try { 
         await requestRide(
             pickupLocation.address, 
-            destLocation.address, 
+            destLocation.address,
+            { lat: pickupLocation.lat, lng: pickupLocation.lon },
+            { lat: destLocation.lat, lng: destLocation.lon },
             currentPrice, 
             `${routeDistance.toFixed(1)} km`, 
             cat.name, 
