@@ -7,12 +7,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { showError, showSuccess } from "@/utils/toast";
-import { ArrowLeft, Mail, Lock, User, KeyRound, Car, MapPin, Shield, Loader2 } from "lucide-react";
+import { ArrowLeft, Mail, Lock, User, KeyRound, Car, MapPin, Shield, Loader2, Smartphone } from "lucide-react";
+import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 
 const Login = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("client");
+  
+  // Controle manual do PWA Popup
+  const [showPwaHelp, setShowPwaHelp] = useState(false);
   
   // Form States
   const [email, setEmail] = useState("");
@@ -177,6 +181,10 @@ const Login = () => {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4 relative overflow-hidden">
+      
+      {/* Componente de Instalação (Automático + Manual via Botão) */}
+      <PWAInstallPrompt openForce={showPwaHelp} onCloseForce={() => setShowPwaHelp(false)} />
+
       {/* Background Decorativo */}
       <div className={`absolute top-0 left-0 right-0 h-1/2 transition-colors duration-500 ease-in-out -z-10 ${
           activeTab === 'driver' ? 'bg-yellow-500' : activeTab === 'admin' ? 'bg-slate-900' : 'bg-black'
@@ -308,15 +316,27 @@ const Login = () => {
           </Tabs>
         </CardContent>
         
-        <CardFooter className="flex justify-center text-sm bg-gray-50/50 py-4 border-t">
-            {isSignUp ? "Já possui uma conta?" : "Novo por aqui?"} 
-            <button 
-                className="text-black font-bold ml-1 hover:underline focus:outline-none"
-                onClick={toggleMode}
-                type="button"
+        <CardFooter className="flex flex-col gap-4 justify-center text-sm bg-gray-50/50 py-4 border-t">
+            <div className="text-center">
+                {isSignUp ? "Já possui uma conta?" : "Novo por aqui?"} 
+                <button 
+                    className="text-black font-bold ml-1 hover:underline focus:outline-none"
+                    onClick={toggleMode}
+                    type="button"
+                >
+                    {isSignUp ? "Fazer Login" : "Criar conta grátis"}
+                </button>
+            </div>
+
+            {/* Botão para abrir o popup de instalação manualmente */}
+            <Button 
+                variant="ghost" 
+                size="sm" 
+                className="text-xs text-gray-500 hover:text-black gap-2"
+                onClick={() => setShowPwaHelp(true)}
             >
-                {isSignUp ? "Fazer Login" : "Criar conta grátis"}
-            </button>
+                <Smartphone className="w-3 h-3" /> Instalar Aplicativo
+            </Button>
         </CardFooter>
       </Card>
       

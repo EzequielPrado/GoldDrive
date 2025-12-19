@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter, DrawerClose } from "@/components/ui/drawer";
-import { Share, MoreVertical, PlusSquare, Smartphone, X } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Share, MoreVertical, PlusSquare, Smartphone, X, MoreHorizontal, Download } from "lucide-react";
 
 interface PWAProps {
     openForce?: boolean;
@@ -14,89 +14,120 @@ const PWAInstallPrompt = ({ openForce, onCloseForce }: PWAProps) => {
   const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
-    // Detecta se é iOS
+    // Detecta se é iOS para definir a aba padrão
     const isIosDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
     setIsIOS(isIosDevice);
 
-    // Verifica se já foi dispensado (apenas se não for forçado via Profile)
-    const hasDismissed = localStorage.getItem('pwa_install_dismissed');
+    // Verifica se já foi dispensado (apenas se não for forçado externamente)
+    const hasDismissed = localStorage.getItem('pwa_install_dismissed_v2'); // mudei a chave para resetar para usuários antigos
     
     if (openForce) {
         setIsOpen(true);
     } else if (!hasDismissed) {
-        // Delay para não aparecer imediatamente ao carregar o app
-        const timer = setTimeout(() => setIsOpen(true), 3000);
+        // Delay pequeno para não ser invasivo logo no primeiro milissegundo
+        const timer = setTimeout(() => setIsOpen(true), 1500);
         return () => clearTimeout(timer);
     }
   }, [openForce]);
 
   const handleDismiss = () => {
-    localStorage.setItem('pwa_install_dismissed', 'true');
+    localStorage.setItem('pwa_install_dismissed_v2', 'true');
     setIsOpen(false);
     if (onCloseForce) onCloseForce();
   };
 
   return (
-    <Drawer open={isOpen} onOpenChange={setIsOpen}>
-      <DrawerContent className="bg-white rounded-t-[32px]">
-        <div className="mx-auto w-full max-w-sm">
-          <DrawerHeader className="text-center pt-8">
-            <div className="w-16 h-16 bg-yellow-500 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg shadow-yellow-500/30">
-                <Smartphone className="w-8 h-8 text-black" />
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleDismiss()}>
+      <DialogContent className="sm:max-w-md bg-white rounded-[32px] border-0 p-0 overflow-hidden">
+        
+        {/* Header Visual */}
+        <div className="bg-yellow-500 p-6 text-center relative">
+            <button 
+                onClick={handleDismiss}
+                className="absolute top-4 right-4 text-black/50 hover:text-black transition-colors"
+            >
+                <X className="w-6 h-6" />
+            </button>
+            <div className="w-16 h-16 bg-white rounded-2xl mx-auto mb-3 flex items-center justify-center shadow-lg shadow-black/10">
+                <Download className="w-8 h-8 text-black" />
             </div>
-            <DrawerTitle className="text-2xl font-black text-slate-900">Instale o App</DrawerTitle>
-            <DrawerDescription className="text-base mt-2">
-              Tenha a melhor experiência adicionando o Gold Mobile à sua tela inicial.
-            </DrawerDescription>
-          </DrawerHeader>
-          
-          <div className="p-4">
+            <DialogTitle className="text-2xl font-black text-slate-900">Baixar App</DialogTitle>
+            <DialogDescription className="text-slate-900/80 font-medium">
+                Instale o Gold Mobile para uma experiência melhor.
+            </DialogDescription>
+        </div>
+        
+        <div className="p-6">
             <Tabs defaultValue={isIOS ? "ios" : "android"} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-6">
-                <TabsTrigger value="ios">iPhone (iOS)</TabsTrigger>
-                <TabsTrigger value="android">Android</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-2 mb-6 bg-gray-100 p-1 rounded-xl">
+                <TabsTrigger value="ios" className="rounded-lg font-bold">iPhone (iOS)</TabsTrigger>
+                <TabsTrigger value="android" className="rounded-lg font-bold">Android</TabsTrigger>
               </TabsList>
               
-              <TabsContent value="ios" className="space-y-4 animate-in slide-in-from-bottom-2">
-                  <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                      <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-blue-500">
-                          <Share className="w-5 h-5" />
+              {/* ABA IOS */}
+              <TabsContent value="ios" className="space-y-4 animate-in slide-in-from-right-2">
+                  <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 space-y-3">
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Tutorial de Instalação</p>
+                      
+                      <div className="flex items-start gap-3">
+                          <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">1</div>
+                          <p className="text-sm text-slate-700">Clique nos <span className="font-bold">3 pontinhos</span> ou no botão de <span className="font-bold">Compartilhar</span> <Share className="w-3 h-3 inline" />.</p>
                       </div>
-                      <p className="text-sm text-slate-600 font-medium">1. Toque no botão <span className="font-bold text-slate-900">Compartilhar</span> na barra inferior.</p>
-                  </div>
-                  <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                      <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-slate-900">
-                          <PlusSquare className="w-5 h-5" />
+
+                      <div className="flex items-start gap-3">
+                          <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">2</div>
+                          <p className="text-sm text-slate-700">Selecione <span className="font-bold">Compartilhar</span> (se necessário).</p>
                       </div>
-                      <p className="text-sm text-slate-600 font-medium">2. Role para baixo e selecione <span className="font-bold text-slate-900">Adicionar à Tela de Início</span>.</p>
+
+                      <div className="flex items-start gap-3">
+                          <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">3</div>
+                          <p className="text-sm text-slate-700">Role e clique em <span className="font-bold">Mais</span> <MoreHorizontal className="w-3 h-3 inline" /> (se não aparecer direto).</p>
+                      </div>
+
+                      <div className="flex items-start gap-3">
+                          <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">4</div>
+                          <p className="text-sm text-slate-700">Toque em <span className="font-bold">Adicionar à Tela de Início</span> <PlusSquare className="w-3 h-3 inline" />.</p>
+                      </div>
+
+                      <div className="flex items-start gap-3">
+                          <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">5</div>
+                          <p className="text-sm text-slate-700">Confirme clicando em <span className="font-bold">Adicionar</span>.</p>
+                      </div>
                   </div>
               </TabsContent>
 
-              <TabsContent value="android" className="space-y-4 animate-in slide-in-from-bottom-2">
-                  <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                      <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-slate-900">
-                          <MoreVertical className="w-5 h-5" />
+              {/* ABA ANDROID */}
+              <TabsContent value="android" className="space-y-4 animate-in slide-in-from-right-2">
+                  <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 space-y-3">
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Tutorial de Instalação</p>
+                      
+                      <div className="flex items-start gap-3">
+                          <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">1</div>
+                          <p className="text-sm text-slate-700">Toque nos <span className="font-bold">3 pontinhos</span> <MoreVertical className="w-3 h-3 inline" /> no canto superior direito do navegador.</p>
                       </div>
-                      <p className="text-sm text-slate-600 font-medium">1. Toque nos <span className="font-bold text-slate-900">três pontos</span> no canto superior direito.</p>
-                  </div>
-                  <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                      <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-slate-900">
-                          <Smartphone className="w-5 h-5" />
+                      
+                      <div className="flex items-start gap-3">
+                          <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">2</div>
+                          <p className="text-sm text-slate-700">Selecione a opção <span className="font-bold">Instalar aplicativo</span> ou <span className="font-bold">Adicionar à tela inicial</span>.</p>
                       </div>
-                      <p className="text-sm text-slate-600 font-medium">2. Selecione <span className="font-bold text-slate-900">Instalar aplicativo</span> ou <span className="font-bold text-slate-900">Adicionar à tela inicial</span>.</p>
+
+                      <div className="flex items-start gap-3">
+                          <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">3</div>
+                          <p className="text-sm text-slate-700">Confirme a instalação quando solicitado.</p>
+                      </div>
                   </div>
               </TabsContent>
             </Tabs>
-          </div>
-
-          <DrawerFooter className="pt-2 pb-8">
-            <Button onClick={handleDismiss} className="h-14 rounded-2xl bg-slate-900 text-white font-bold text-lg">
-                Entendi, fechar
-            </Button>
-          </DrawerFooter>
         </div>
-      </DrawerContent>
-    </Drawer>
+
+        <div className="p-6 pt-0">
+            <Button onClick={handleDismiss} className="w-full h-14 rounded-2xl bg-black text-white hover:bg-zinc-800 font-bold text-lg shadow-lg">
+                Entendi
+            </Button>
+        </div>
+
+      </DialogContent>
+    </Dialog>
   );
 };
 
