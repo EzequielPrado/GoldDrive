@@ -590,7 +590,7 @@ const DriverDashboard = () => {
 
       {/* --- MODAL MAÇANETA (DESIGN ABSURDO) --- */}
       <Dialog open={showManualRideModal} onOpenChange={setShowManualRideModal}>
-          <DialogContent className="w-[95%] max-w-md bg-white rounded-[40px] border-0 p-0 overflow-hidden shadow-2xl h-auto max-h-[90vh] flex flex-col">
+          <DialogContent className="w-[95%] max-w-md bg-white rounded-[40px] border-0 p-0 overflow-hidden shadow-2xl h-auto max-h-[90vh] flex flex-col [&>button]:hidden">
               
               {/* Header Visual */}
               <div className="bg-gradient-to-r from-slate-900 to-black p-6 relative overflow-hidden text-white shrink-0">
@@ -625,14 +625,14 @@ const DriverDashboard = () => {
                               <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Passageiro</Label>
                               <div className="relative">
                                   <User className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
-                                  <Input placeholder="Nome" className="h-11 pl-9 bg-slate-50 border-slate-200 rounded-xl font-bold text-sm text-slate-900" value={manualForm.name} onChange={e => setManualForm({...manualForm, name: e.target.value})} />
+                                  <Input placeholder="Nome" className="h-11 pl-9 bg-slate-50 border-slate-200 rounded-xl font-bold text-sm text-black" value={manualForm.name} onChange={e => setManualForm({...manualForm, name: e.target.value})} />
                               </div>
                           </div>
                           <div className="space-y-1.5">
                               <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Telefone</Label>
                               <div className="relative">
                                   <Phone className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
-                                  <Input placeholder="(34) 9..." className="h-11 pl-9 bg-slate-50 border-slate-200 rounded-xl font-bold text-sm text-slate-900" value={manualForm.phone} onChange={e => setManualForm({...manualForm, phone: e.target.value})} />
+                                  <Input placeholder="(34) 9..." className="h-11 pl-9 bg-slate-50 border-slate-200 rounded-xl font-bold text-sm text-black" value={manualForm.phone} onChange={e => setManualForm({...manualForm, phone: e.target.value})} />
                               </div>
                           </div>
                       </div>
@@ -700,8 +700,8 @@ const DriverDashboard = () => {
                           </div>
                       </div>
                   ) : (
-                      <div className="bg-gray-50 border border-dashed border-gray-200 rounded-2xl p-6 text-center">
-                          <p className="text-gray-400 text-sm font-medium">Preencha os endereços para calcular o valor.</p>
+                      <div className="bg-gray-50 border border-dashed border-gray-200 rounded-xl p-3 text-center">
+                          <p className="text-gray-400 text-xs font-medium">Preencha os endereços para calcular.</p>
                       </div>
                   )}
               </div>
