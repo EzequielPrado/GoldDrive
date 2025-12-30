@@ -625,14 +625,14 @@ const DriverDashboard = () => {
                               <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Passageiro</Label>
                               <div className="relative">
                                   <User className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
-                                  <Input placeholder="Nome" className="h-11 pl-9 bg-slate-50 border-slate-200 rounded-xl font-bold text-sm" value={manualForm.name} onChange={e => setManualForm({...manualForm, name: e.target.value})} />
+                                  <Input placeholder="Nome" className="h-11 pl-9 bg-slate-50 border-slate-200 rounded-xl font-bold text-sm text-slate-900" value={manualForm.name} onChange={e => setManualForm({...manualForm, name: e.target.value})} />
                               </div>
                           </div>
                           <div className="space-y-1.5">
                               <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Telefone</Label>
                               <div className="relative">
                                   <Phone className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
-                                  <Input placeholder="(34) 9..." className="h-11 pl-9 bg-slate-50 border-slate-200 rounded-xl font-bold text-sm" value={manualForm.phone} onChange={e => setManualForm({...manualForm, phone: e.target.value})} />
+                                  <Input placeholder="(34) 9..." className="h-11 pl-9 bg-slate-50 border-slate-200 rounded-xl font-bold text-sm text-slate-900" value={manualForm.phone} onChange={e => setManualForm({...manualForm, phone: e.target.value})} />
                               </div>
                           </div>
                       </div>
@@ -676,8 +676,8 @@ const DriverDashboard = () => {
                                   icon={() => null}
                                   onSelect={(val) => setManualForm({...manualForm, dest: val})}
                                   className="pl-2"
-                                  referenceLat={driverGps?.lat} // Usa GPS do motorista como referência de busca
-                                  referenceLon={driverGps?.lon}
+                                  referenceLat={manualForm.pickup?.lat || driverGps?.lat}
+                                  referenceLon={manualForm.pickup?.lon || driverGps?.lon}
                               />
                           </div>
                       </div>
