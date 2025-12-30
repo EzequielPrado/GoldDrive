@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Wallet, MapPin, Navigation, Shield, DollarSign, Star, Menu, History, CheckCircle, Car, Calendar, ArrowRight, AlertTriangle, ChevronRight, TrendingUp, MessageCircle, Phone, XCircle, UserPlus, Clock, MousePointer2, User } from "lucide-react";
+import { Wallet, MapPin, Navigation, Shield, DollarSign, Star, Menu, History, CheckCircle, Car, Calendar, ArrowRight, AlertTriangle, ChevronRight, TrendingUp, MessageCircle, Phone, XCircle, UserPlus, Clock, MousePointer2, User, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -41,6 +41,7 @@ const DriverDashboard = () => {
   const [calculatingManual, setCalculatingManual] = useState(false);
   const [submittingManual, setSubmittingManual] = useState(false);
   const [gpsLoadingManual, setGpsLoadingManual] = useState(false);
+  const [driverGps, setDriverGps] = useState<{lat: number, lon: number} | null>(null);
   
   // Modals Control
   const [showCancelAlert, setShowCancelAlert] = useState(false);
@@ -69,6 +70,15 @@ const DriverDashboard = () => {
           setActiveTab(tabParam);
       }
   }, [searchParams]);
+
+  useEffect(() => {
+      // Pega GPS silenciosamente para melhorar busca
+      if ("geolocation" in navigator) {
+          navigator.geolocation.getCurrentPosition((pos) => {
+              setDriverGps({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+          }, (err) => console.log("GPS silent check failed", err));
+      }
+  }, []);
 
   useEffect(() => {
       if (!currentUserId) return;
@@ -189,6 +199,8 @@ const DriverDashboard = () => {
                       const data = await res.json();
                       const address = data.display_name || "Minha Localização Atual";
                       
+                      setDriverGps({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+
                       setManualForm(prev => ({
                           ...prev,
                           pickup: {
@@ -578,82 +590,94 @@ const DriverDashboard = () => {
 
       {/* --- MODAL MAÇANETA (DESIGN ABSURDO) --- */}
       <Dialog open={showManualRideModal} onOpenChange={setShowManualRideModal}>
-          <DialogContent className="sm:max-w-md bg-white rounded-[40px] border-0 p-0 overflow-hidden shadow-2xl">
+          <DialogContent className="w-[95%] max-w-md bg-white rounded-[40px] border-0 p-0 overflow-hidden shadow-2xl h-auto max-h-[90vh] flex flex-col">
               
               {/* Header Visual */}
-              <div className="bg-gradient-to-r from-slate-900 to-black p-8 relative overflow-hidden text-white">
+              <div className="bg-gradient-to-r from-slate-900 to-black p-6 relative overflow-hidden text-white shrink-0">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-500 rounded-full blur-[60px] opacity-30 pointer-events-none"></div>
                   
-                  <div className="absolute top-6 right-6">
-                      <div className="p-2 bg-white/10 rounded-full cursor-pointer hover:bg-white/20 transition-colors backdrop-blur-sm" onClick={() => setShowManualRideModal(false)}>
-                          <XCircle className="w-6 h-6 text-white" />
+                  {/* Botão de Fechar */}
+                  <div className="absolute top-4 right-4">
+                      <div className="p-2 bg-white/10 rounded-full cursor-pointer hover:bg-white/20 transition-colors backdrop-blur-sm z-50" onClick={() => setShowManualRideModal(false)}>
+                          <X className="w-5 h-5 text-white" />
                       </div>
                   </div>
 
-                  <div className="relative z-10">
-                      <div className="w-14 h-14 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-2xl flex items-center justify-center shadow-lg shadow-yellow-500/20 mb-4">
-                          <UserPlus className="w-7 h-7 text-black" />
+                  <div className="relative z-10 flex items-center gap-4">
+                      <div className="w-12 h-12 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-2xl flex items-center justify-center shadow-lg shadow-yellow-500/20 shrink-0">
+                          <UserPlus className="w-6 h-6 text-black" />
                       </div>
-                      <h2 className="text-3xl font-black tracking-tight text-white mb-1">Nova Corrida</h2>
-                      <p className="text-slate-400 font-medium text-sm flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                          Modo Maçaneta Ativo
-                      </p>
+                      <div>
+                          <h2 className="text-2xl font-black tracking-tight text-white leading-none">Nova Corrida</h2>
+                          <p className="text-slate-400 font-medium text-xs flex items-center gap-2 mt-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                              Modo Maçaneta Ativo
+                          </p>
+                      </div>
                   </div>
               </div>
 
-              <div className="p-8 space-y-6">
+              <div className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
                   {/* Dados do Passageiro */}
                   <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                              <Label className="text-xs font-bold uppercase text-slate-500 ml-1">Passageiro</Label>
+                      <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                              <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Passageiro</Label>
                               <div className="relative">
                                   <User className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
-                                  <Input placeholder="Nome" className="h-12 pl-9 bg-slate-50 border-slate-200 rounded-xl font-bold" value={manualForm.name} onChange={e => setManualForm({...manualForm, name: e.target.value})} />
+                                  <Input placeholder="Nome" className="h-11 pl-9 bg-slate-50 border-slate-200 rounded-xl font-bold text-sm" value={manualForm.name} onChange={e => setManualForm({...manualForm, name: e.target.value})} />
                               </div>
                           </div>
-                          <div className="space-y-2">
-                              <Label className="text-xs font-bold uppercase text-slate-500 ml-1">Contato</Label>
+                          <div className="space-y-1.5">
+                              <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Telefone</Label>
                               <div className="relative">
                                   <Phone className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
-                                  <Input placeholder="(34) 9..." className="h-12 pl-9 bg-slate-50 border-slate-200 rounded-xl font-bold" value={manualForm.phone} onChange={e => setManualForm({...manualForm, phone: e.target.value})} />
+                                  <Input placeholder="(34) 9..." className="h-11 pl-9 bg-slate-50 border-slate-200 rounded-xl font-bold text-sm" value={manualForm.phone} onChange={e => setManualForm({...manualForm, phone: e.target.value})} />
                               </div>
                           </div>
                       </div>
                   </div>
 
-                  {/* Endereços */}
+                  {/* Endereços com Botão GPS inteligente */}
                   <div className="space-y-4">
-                      <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                              <Label className="text-xs font-bold uppercase text-slate-500 ml-1">Ponto de Partida</Label>
-                              <button onClick={getManualGPS} className="text-[10px] font-bold bg-blue-50 text-blue-600 px-2 py-1 rounded-md hover:bg-blue-100 flex items-center gap-1 transition-colors" disabled={gpsLoadingManual}>
-                                  {gpsLoadingManual ? <Clock className="w-3 h-3 animate-spin"/> : <MousePointer2 className="w-3 h-3" />}
-                                  Usar GPS
-                              </button>
-                          </div>
-                          <div className="relative group">
-                              <div className="absolute left-3 top-3.5 z-20 pointer-events-none"><div className="w-2 h-2 bg-slate-900 rounded-full ring-2 ring-slate-100"></div></div>
-                              <LocationSearch 
-                                  placeholder="Onde o passageiro está?" 
-                                  icon={() => null} // Icone customizado acima
-                                  onSelect={(val) => setManualForm({...manualForm, pickup: val})}
-                                  initialValue={manualForm.pickup?.display_name}
-                                  className="pl-2"
-                              />
+                      <div className="space-y-1.5">
+                          <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Ponto de Partida</Label>
+                          <div className="flex gap-2">
+                              <div className="relative group flex-1">
+                                  <div className="absolute left-3 top-4 z-20 pointer-events-none"><div className="w-2 h-2 bg-slate-900 rounded-full ring-2 ring-slate-100"></div></div>
+                                  <LocationSearch 
+                                      placeholder="Onde o passageiro está?" 
+                                      icon={() => null} // Icone customizado acima
+                                      onSelect={(val) => setManualForm({...manualForm, pickup: val})}
+                                      initialValue={manualForm.pickup?.display_name}
+                                      className="pl-2"
+                                      referenceLat={driverGps?.lat}
+                                      referenceLon={driverGps?.lon}
+                                  />
+                              </div>
+                              <Button 
+                                  size="icon" 
+                                  variant="outline" 
+                                  className="h-14 w-14 rounded-2xl shrink-0 border-gray-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-colors" 
+                                  onClick={getManualGPS} 
+                                  disabled={gpsLoadingManual}
+                              >
+                                  {gpsLoadingManual ? <Clock className="w-5 h-5 animate-spin" /> : <MapPin className="w-5 h-5" />}
+                              </Button>
                           </div>
                       </div>
 
-                      <div className="space-y-2">
-                          <Label className="text-xs font-bold uppercase text-slate-500 ml-1">Destino Final</Label>
+                      <div className="space-y-1.5">
+                          <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Destino Final</Label>
                           <div className="relative group">
-                              <div className="absolute left-3 top-3.5 z-20 pointer-events-none"><div className="w-2 h-2 bg-green-500 rounded-full ring-2 ring-green-100"></div></div>
+                              <div className="absolute left-3 top-4 z-20 pointer-events-none"><div className="w-2 h-2 bg-green-500 rounded-full ring-2 ring-green-100"></div></div>
                               <LocationSearch 
                                   placeholder="Para onde vamos?" 
                                   icon={() => null}
                                   onSelect={(val) => setManualForm({...manualForm, dest: val})}
                                   className="pl-2"
+                                  referenceLat={driverGps?.lat} // Usa GPS do motorista como referência de busca
+                                  referenceLon={driverGps?.lon}
                               />
                           </div>
                       </div>
@@ -665,12 +689,12 @@ const DriverDashboard = () => {
                           <div className="absolute top-0 right-0 w-32 h-32 bg-green-500 rounded-full blur-[50px] opacity-20"></div>
                           <div className="relative z-10 flex justify-between items-center">
                               <div>
-                                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Distância</p>
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Distância</p>
                                   <p className="text-2xl font-bold">{manualRoute.distance.toFixed(1)} <span className="text-sm font-normal text-slate-500">km</span></p>
                               </div>
                               <div className="h-8 w-px bg-white/10"></div>
                               <div className="text-right">
-                                  <p className="text-xs font-bold text-green-400 uppercase tracking-wider mb-1">Total a Cobrar</p>
+                                  <p className="text-[10px] font-bold text-green-400 uppercase tracking-wider mb-1">Total a Cobrar</p>
                                   <p className="text-3xl font-black text-white">R$ {manualRoute.price.toFixed(2)}</p>
                               </div>
                           </div>
@@ -680,10 +704,11 @@ const DriverDashboard = () => {
                           <p className="text-gray-400 text-sm font-medium">Preencha os endereços para calcular o valor.</p>
                       </div>
                   )}
+              </div>
 
-                  {/* Botão de Ação */}
+              <div className="p-6 pt-0 bg-white shrink-0">
                   <Button 
-                      className="w-full h-16 rounded-2xl font-black text-lg bg-yellow-500 hover:bg-yellow-400 text-black shadow-xl shadow-yellow-500/20 transition-all hover:scale-[1.01] active:scale-[0.98]"
+                      className="w-full h-14 rounded-2xl font-black text-lg bg-yellow-500 hover:bg-yellow-400 text-black shadow-xl shadow-yellow-500/20 transition-all hover:scale-[1.01] active:scale-[0.98]"
                       onClick={handleStartManualRide} 
                       disabled={calculatingManual || submittingManual || !manualForm.pickup || !manualForm.dest}
                   >
@@ -716,8 +741,8 @@ const DriverDashboard = () => {
                   <div className="bg-gray-50 p-4 rounded-2xl flex items-center gap-4 border border-gray-100">
                       <Avatar className="h-12 w-12 border-2 border-white shadow-sm"><AvatarImage src={selectedHistoryItem?.customer?.avatar_url} /><AvatarFallback className="bg-slate-200 text-slate-600 font-bold">{selectedHistoryItem?.customer?.first_name?.[0]}</AvatarFallback></Avatar>
                       <div>
-                          <p className="font-bold text-slate-900">{selectedHistoryItem?.customer?.first_name} {selectedHistoryItem?.customer?.last_name}</p>
-                          <p className="text-xs text-gray-500">{selectedHistoryItem?.customer?.phone || 'Sem telefone'}</p>
+                          <p className="font-bold text-slate-900">{selectedHistoryItem?.customer?.first_name || (selectedHistoryItem?.guest_name ? selectedHistoryItem.guest_name : 'Passageiro')} {selectedHistoryItem?.customer?.last_name}</p>
+                          <p className="text-xs text-gray-500">{selectedHistoryItem?.customer?.phone || selectedHistoryItem?.guest_phone || 'Sem telefone'}</p>
                       </div>
                   </div>
 
