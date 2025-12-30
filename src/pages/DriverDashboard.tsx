@@ -430,10 +430,16 @@ const DriverDashboard = () => {
       </div>
 
       <div className="absolute top-0 left-0 right-0 p-6 z-20 flex justify-between items-start pointer-events-none mt-4">
-          <div className={`pointer-events-auto backdrop-blur-xl border border-white/20 p-2 pr-4 rounded-full flex items-center gap-3 shadow-lg transition-all duration-300 ${isOnline ? 'bg-black/80' : 'bg-white/80'}`}>
-             <Switch checked={isOnline} onCheckedChange={toggleOnline} className="data-[state=checked]:bg-green-500" />
-             <span className={`text-xs font-bold uppercase tracking-wider ${isOnline ? 'text-white' : 'text-slate-500'}`}>{isOnline ? 'Online' : 'Offline'}</span>
-          </div>
+          {/* BOTÃO ONLINE (ESCONDIDO DURANTE A CORRIDA) */}
+          {!isOnTrip && (
+              <div className={`pointer-events-auto backdrop-blur-xl border border-white/20 p-2 pr-4 rounded-full flex items-center gap-3 shadow-lg transition-all duration-300 ${isOnline ? 'bg-black/80' : 'bg-white/80'}`}>
+                 <Switch checked={isOnline} onCheckedChange={toggleOnline} className="data-[state=checked]:bg-green-500" />
+                 <span className={`text-xs font-bold uppercase tracking-wider ${isOnline ? 'text-white' : 'text-slate-500'}`}>{isOnline ? 'Online' : 'Offline'}</span>
+              </div>
+          )}
+          
+          {/* Se estiver em corrida, apenas um spacer para alinhar o avatar à direita */}
+          {isOnTrip && <div />}
 
           <div className="pointer-events-auto bg-white/10 backdrop-blur-xl border border-white/20 p-1 rounded-full shadow-lg cursor-pointer" onClick={() => navigate('/profile')}>
              <Avatar className="h-10 w-10 ring-2 ring-white/30">
@@ -531,7 +537,7 @@ const DriverDashboard = () => {
                                  <AvatarFallback className="bg-slate-700 text-white">{incomingRide.client_details?.first_name?.[0]}</AvatarFallback>
                              </Avatar>
                              <div>
-                                 <h3 className="font-bold text-white text-lg leading-tight">
+                                 <h3 className="font-bold text-white text-base leading-tight">
                                      {incomingRide.client_details?.first_name ? `${incomingRide.client_details.first_name} Passageiro` : 'Passageiro'}
                                  </h3>
                                  <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
@@ -544,7 +550,7 @@ const DriverDashboard = () => {
                         {/* Price Row */}
                         <div className="flex items-end justify-between mb-8 pb-6 border-b border-slate-800">
                             <div>
-                                <h2 className="text-5xl font-black tracking-tighter text-green-500">R$ {getDisplayPrice(incomingRide)}</h2>
+                                <h2 className="text-4xl font-black tracking-tighter text-green-500">R$ {getDisplayPrice(incomingRide)}</h2>
                                 <div className="flex gap-2 mt-2">
                                     <Badge variant="outline" className="border-slate-700 text-slate-400 text-[10px] font-bold bg-slate-900/50">{incomingRide.distance}</Badge>
                                     <Badge variant="outline" className="border-slate-700 text-slate-400 text-[10px] font-bold bg-slate-900/50">{incomingRide.category}</Badge>
@@ -588,12 +594,12 @@ const DriverDashboard = () => {
                                 <Badge className="mb-2 bg-black text-white hover:bg-black font-bold uppercase tracking-wider text-[10px] px-3 py-1">
                                     {ride?.status === 'ACCEPTED' ? 'A CAMINHO' : ride?.status === 'ARRIVED' ? 'NO LOCAL' : 'EM VIAGEM'}
                                 </Badge>
-                                <h3 className="text-3xl font-black text-slate-900 tracking-tight leading-none mb-1">
+                                <h3 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-1">
                                     {ride?.client_details?.first_name ? ride.client_details.first_name.split(' ')[0] : 'Passageiro'} P...
                                 </h3>
                             </div>
                             <div className="text-right">
-                                <h3 className="text-4xl font-black text-green-600 tracking-tighter">R$ {getDisplayPrice(ride)}</h3>
+                                <h3 className="text-3xl font-black text-green-600 tracking-tighter">R$ {getDisplayPrice(ride)}</h3>
                                 <p className="text-gray-300 text-[10px] uppercase font-bold tracking-widest mt-1">VALOR</p>
                             </div>
                         </div>
