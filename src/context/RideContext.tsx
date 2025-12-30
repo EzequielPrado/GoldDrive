@@ -16,6 +16,17 @@ interface RideContextType {
       category: string, 
       paymentMethod: string
   ) => Promise<void>;
+  createManualRide: (
+      passengerName: string,
+      passengerPhone: string,
+      pickup: string,
+      destination: string,
+      pickupCoords: { lat: number, lng: number },
+      destCoords: { lat: number, lng: number },
+      price: number,
+      distance: string,
+      category: string
+  ) => Promise<void>;
   cancelRide: (rideId: string, reason?: string) => Promise<void>;
   acceptRide: (rideId: string) => Promise<void>;
   rejectRide: (rideId: string) => Promise<void>;
@@ -79,6 +90,16 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           if (dismissedRidesRef.current.includes(data.id)) {
               setRide(null);
               return;
+          }
+
+          // Tratamento para Corrida Manual (Maçaneta)
+          if (data.ride_type === 'MANUAL' && data.guest_name) {
+              data.client_details = {
+                  first_name: data.guest_name.split(' ')[0],
+                  last_name: data.guest_name.split(' ').slice(1).join(' '),
+                  phone: data.guest_phone,
+                  avatar_url: null 
+              };
           }
 
           const isFinished = ['CANCELLED', 'COMPLETED'].includes(data.status);
@@ -276,6 +297,66 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const createManualRide = async (
+      passengerName: string,
+      passengerPhone: string,
+      pickup: string,
+      destination: string,
+      pickupCoords: { lat: number, lng: number },
+      destCoords: { lat: number, lng: number },
+      price: number,
+      distance: string,
+      category: string
+  ) => {
+      if (!currentUserId) return;
+      
+      try {
+          // Usamos o ID do motorista como customer_id para satisfazer a chave estrangeira
+          // Mas preenchemos os campos guest_name e ride_type
+          const { data, error } = await supabase.from('rides').insert({
+              customer_id: currentUserId, // Self-assigned
+              driver_id: currentUserId,   // Auto-assigned
+              pickup_address: pickup,
+              destination_address: destination,
+              pickup_lat: pickupCoords.lat,
+              pickup_lng: pickupCoords.lng,
+              destination_lat: destCoords.lat,
+              destination_lng: destCoords.lng,
+              price: price,
+              distance: distance,
+              status: 'IN_PROGRESS', // Começa direto em viagem
+              category: category,
+              payment_method: 'CASH', // Geralmente é dinheiro/pix
+              ride_type: 'MANUAL',
+              guest_name: passengerName,
+              guest_phone: passengerPhone,
+              driver_earnings: price // 100% para o motorista no manual (opcional, ajustável)
+          }).select().single();
+
+          if (error) throw error;
+          
+          // Formata manualmente o objeto para a UI não quebrar esperando profiles
+          const activeRide = {
+              ...data,
+              client_details: {
+                  first_name: passengerName.split(' ')[0],
+                  last_name: passengerName.split(' ').slice(1).join(' '),
+                  phone: passengerPhone,
+                  avatar_url: null
+              },
+              driver_details: null // Será preenchido no fetch normal se necessário
+          };
+
+          setRide(activeRide);
+          toast({ title: "Corrida Iniciada", description: `Passageiro: ${passengerName}` });
+          await fetchActiveRide(currentUserId);
+
+      } catch (e: any) {
+          console.error("Create Manual Ride Error", e);
+          toast({ title: "Erro ao criar corrida", description: e.message, variant: "destructive" });
+      }
+  };
+
   const cancelRide = async (rideId: string, reason?: string) => {
     try {
         const { error } = await supabase.rpc('cancel_ride_as_user', { ride_id_to_cancel: rideId });
@@ -294,28 +375,22 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
      if (!currentUserId) return;
      try {
          // --- TRAVA ATÔMICA (ANTI-CONFLITO) ---
-         // Tentamos atualizar a corrida APENAS SE o driver_id for null.
-         // Se alguém já tiver aceitado, 'data' virá vazio porque a condição .is('driver_id', null) falhará.
          const { data, error } = await supabase
             .from('rides')
             .update({ status: 'ACCEPTED', driver_id: currentUserId })
             .eq('id', rideId)
-            .is('driver_id', null) // <--- O SEGREDO ESTÁ AQUI
+            .is('driver_id', null) 
             .select();
 
          if (error) throw error;
 
-         // Verificação de Sucesso
          if (!data || data.length === 0) {
-             // Se entrou aqui, é porque a condição .is('driver_id', null) falhou
-             // Significa que outro motorista aceitou milissegundos antes
              toast({ 
                  title: "Corrida Indisponível", 
                  description: "Outro motorista aceitou esta corrida.", 
                  variant: "destructive" 
              });
              
-             // Remove da lista para não tentar de novo
              if (!rejectedIdsRef.current.includes(rideId)) rejectedIdsRef.current.push(rideId);
              setAvailableRides(prev => prev.filter(r => r.id !== rideId));
              return;
@@ -395,7 +470,8 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   return (
     <RideContext.Provider value={{ 
         ride, availableRides, loading, 
-        requestRide, cancelRide, acceptRide, rejectRide, 
+        requestRide, createManualRide, 
+        cancelRide, acceptRide, rejectRide, 
         startRide, finishRide, rateRide, confirmArrival, 
         addBalance, clearRide, 
         currentUserId, userRole 
