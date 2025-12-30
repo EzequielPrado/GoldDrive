@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Wallet, MapPin, Navigation, Shield, DollarSign, Star, Menu, History, CheckCircle, Car, Calendar, ArrowRight, AlertTriangle, ChevronRight, TrendingUp, MessageCircle, Phone, XCircle, UserPlus, Clock, MousePointer2, User, X } from "lucide-react";
+import { Wallet, MapPin, Navigation, Shield, DollarSign, Star, Menu, History, CheckCircle, Car, Calendar, ArrowRight, AlertTriangle, ChevronRight, TrendingUp, MessageCircle, Phone, XCircle, UserPlus, Clock, MousePointer2, User, X, Hand } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -540,7 +540,14 @@ const DriverDashboard = () => {
                                 <div className="flex items-center gap-2">
                                     <Avatar className="w-8 h-8 border border-white"><AvatarImage src={item.customer?.avatar_url} /><AvatarFallback>{item.customer?.first_name?.[0]}</AvatarFallback></Avatar>
                                     <div>
-                                        <p className="font-bold text-slate-900 text-sm">{item.customer?.first_name || 'Passageiro'}</p>
+                                        <div className="flex items-center gap-2">
+                                            <p className="font-bold text-slate-900 text-sm">{item.customer?.first_name || (item.guest_name ? item.guest_name.split(' ')[0] : 'Passageiro')}</p>
+                                            {item.ride_type === 'MANUAL' && (
+                                                <Badge variant="secondary" className="text-[9px] h-5 bg-yellow-100 text-yellow-800 border-yellow-200 px-1.5">
+                                                    MAÇANETA
+                                                </Badge>
+                                            )}
+                                        </div>
                                         <p className="text-xs text-gray-500">{formatDate(item.created_at).day} • {formatDate(item.created_at).time}</p>
                                     </div>
                                 </div>
@@ -596,12 +603,14 @@ const DriverDashboard = () => {
               <div className="bg-gradient-to-r from-slate-900 to-black p-6 relative overflow-hidden text-white shrink-0">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-500 rounded-full blur-[60px] opacity-30 pointer-events-none"></div>
                   
-                  {/* Botão de Fechar */}
-                  <div className="absolute top-4 right-4">
-                      <div className="p-2 bg-white/10 rounded-full cursor-pointer hover:bg-white/20 transition-colors backdrop-blur-sm z-50" onClick={() => setShowManualRideModal(false)}>
-                          <X className="w-5 h-5 text-white" />
-                      </div>
-                  </div>
+                  {/* Botão de Fechar NATIVO CORRIGIDO */}
+                  <button 
+                      className="absolute top-4 right-4 p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors backdrop-blur-sm z-[60] outline-none" 
+                      onClick={() => setShowManualRideModal(false)}
+                      type="button"
+                  >
+                      <X className="w-5 h-5 text-white" />
+                  </button>
 
                   <div className="relative z-10 flex items-center gap-4">
                       <div className="w-12 h-12 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-2xl flex items-center justify-center shadow-lg shadow-yellow-500/20 shrink-0">
@@ -625,14 +634,14 @@ const DriverDashboard = () => {
                               <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Passageiro</Label>
                               <div className="relative">
                                   <User className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
-                                  <Input placeholder="Nome" className="h-11 pl-9 bg-slate-50 border-slate-200 rounded-xl font-bold text-sm text-black" value={manualForm.name} onChange={e => setManualForm({...manualForm, name: e.target.value})} />
+                                  <Input placeholder="Nome" className="h-11 pl-9 bg-slate-50 border-slate-200 rounded-xl font-bold text-sm text-black placeholder:text-gray-400" value={manualForm.name} onChange={e => setManualForm({...manualForm, name: e.target.value})} />
                               </div>
                           </div>
                           <div className="space-y-1.5">
                               <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Telefone</Label>
                               <div className="relative">
                                   <Phone className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
-                                  <Input placeholder="(34) 9..." className="h-11 pl-9 bg-slate-50 border-slate-200 rounded-xl font-bold text-sm text-black" value={manualForm.phone} onChange={e => setManualForm({...manualForm, phone: e.target.value})} />
+                                  <Input placeholder="(34) 9..." className="h-11 pl-9 bg-slate-50 border-slate-200 rounded-xl font-bold text-sm text-black placeholder:text-gray-400" value={manualForm.phone} onChange={e => setManualForm({...manualForm, phone: e.target.value})} />
                               </div>
                           </div>
                       </div>
@@ -700,8 +709,8 @@ const DriverDashboard = () => {
                           </div>
                       </div>
                   ) : (
-                      <div className="bg-gray-50 border border-dashed border-gray-200 rounded-xl p-3 text-center">
-                          <p className="text-gray-400 text-xs font-medium">Preencha os endereços para calcular.</p>
+                      <div className="text-center py-2">
+                          <p className="text-slate-400 text-xs font-medium bg-slate-50 inline-block px-3 py-1 rounded-full border border-slate-100">Preencha os endereços para calcular o valor.</p>
                       </div>
                   )}
               </div>
@@ -732,6 +741,13 @@ const DriverDashboard = () => {
       <Dialog open={showHistoryDetail} onOpenChange={setShowHistoryDetail}>
           <DialogContent className="sm:max-w-md bg-white rounded-3xl border-0 p-0 overflow-hidden max-h-[80vh] flex flex-col">
               <div className="bg-slate-900 p-6 text-white text-center shrink-0">
+                  {selectedHistoryItem?.ride_type === 'MANUAL' && (
+                      <div className="mb-2 flex justify-center">
+                          <Badge className="bg-yellow-500 text-black hover:bg-yellow-400 font-bold border-0 px-3 py-1 flex items-center gap-1.5">
+                              <Hand className="w-3 h-3" /> Corrida Avulsa (Maçaneta)
+                          </Badge>
+                      </div>
+                  )}
                   <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Ganhos da Viagem</p>
                   <h2 className="text-3xl font-black">R$ {getDisplayPrice(selectedHistoryItem)}</h2>
                   <p className="text-slate-400 text-sm mt-1">{selectedHistoryItem ? new Date(selectedHistoryItem.created_at).toLocaleDateString() + ' • ' + new Date(selectedHistoryItem.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</p>
@@ -739,7 +755,7 @@ const DriverDashboard = () => {
               <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
                   {/* Passageiro */}
                   <div className="bg-gray-50 p-4 rounded-2xl flex items-center gap-4 border border-gray-100">
-                      <Avatar className="h-12 w-12 border-2 border-white shadow-sm"><AvatarImage src={selectedHistoryItem?.customer?.avatar_url} /><AvatarFallback className="bg-slate-200 text-slate-600 font-bold">{selectedHistoryItem?.customer?.first_name?.[0]}</AvatarFallback></Avatar>
+                      <Avatar className="h-12 w-12 border-2 border-white shadow-sm"><AvatarImage src={selectedHistoryItem?.customer?.avatar_url} /><AvatarFallback className="bg-slate-200 text-slate-600 font-bold">{selectedHistoryItem?.customer?.first_name?.[0] || selectedHistoryItem?.guest_name?.[0]}</AvatarFallback></Avatar>
                       <div>
                           <p className="font-bold text-slate-900">{selectedHistoryItem?.customer?.first_name || (selectedHistoryItem?.guest_name ? selectedHistoryItem.guest_name : 'Passageiro')} {selectedHistoryItem?.customer?.last_name}</p>
                           <p className="text-xs text-gray-500">{selectedHistoryItem?.customer?.phone || selectedHistoryItem?.guest_phone || 'Sem telefone'}</p>
