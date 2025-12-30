@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
-import { Wallet, MapPin, Navigation, Shield, DollarSign, Star, Menu, History, CheckCircle, Car, Calendar, ArrowRight, AlertTriangle, ChevronRight, TrendingUp, MessageCircle, Phone, XCircle, UserPlus, Clock, MousePointer2, User, X, Hand, Map } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Wallet, MapPin, Navigation, Shield, DollarSign, Star, Menu, History, CheckCircle, Car, Calendar, ArrowRight, AlertTriangle, ChevronRight, TrendingUp, MessageCircle, Phone, XCircle, UserPlus, Clock, MousePointer2, User, X, Hand, Map, Flag, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import MapComponent from "@/components/MapComponent";
 import { useRide } from "@/context/RideContext";
@@ -19,6 +19,42 @@ import { Input } from "@/components/ui/input";
 import LocationSearch from "@/components/LocationSearch";
 import { Label } from "@/components/ui/label";
 
+// Componente Reutilizável de Botões de Navegação
+const NavigationBlock = ({ label, lat, lng, address, icon: Icon = MapPin }: any) => {
+    const openMap = (app: 'waze' | 'google') => {
+        if (!lat || !lng) return;
+        const url = app === 'waze' 
+            ? `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`
+            : `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+        window.open(url, '_blank');
+    };
+
+    return (
+        <div className="w-full mb-4">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                <Icon className="w-3 h-3" /> {label}
+            </p>
+            <div className="flex gap-3 mb-2">
+                <Button 
+                    className="flex-1 bg-[#3b82f6] hover:bg-[#2563eb] text-white font-bold rounded-xl h-12 shadow-sm flex items-center justify-center gap-2 transition-transform active:scale-95" 
+                    onClick={() => openMap('waze')}
+                >
+                    <Navigation className="w-4 h-4 fill-white" /> Waze
+                </Button>
+                <Button 
+                    className="flex-1 bg-[#22c55e] hover:bg-[#16a34a] text-white font-bold rounded-xl h-12 shadow-sm flex items-center justify-center gap-2 transition-transform active:scale-95" 
+                    onClick={() => openMap('google')}
+                >
+                    <Map className="w-4 h-4 fill-white" /> Maps
+                </Button>
+            </div>
+            <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                <p className="text-xs font-medium text-slate-700 leading-tight line-clamp-2">{address}</p>
+            </div>
+        </div>
+    );
+};
+
 const DriverDashboard = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -28,7 +64,7 @@ const DriverDashboard = () => {
   const [activeTab, setActiveTab] = useState('home');
   const [isOnline, setIsOnline] = useState(false);
   const [incomingRide, setIncomingRide] = useState<any | null>(null);
-  const [timer, setTimer] = useState(60); // RESTAURADO PARA 60 SEGUNDOS
+  const [timer, setTimer] = useState(60); 
   const [driverProfile, setDriverProfile] = useState<any>(null);
   const [showChat, setShowChat] = useState(false);
   
@@ -45,6 +81,11 @@ const DriverDashboard = () => {
   
   // Modals Control
   const [showCancelAlert, setShowCancelAlert] = useState(false);
+  
+  // Custom Finish Modal
+  const [showFinishConfirm, setShowFinishConfirm] = useState(false);
+  
+  // Finish Success Screen
   const [showFinishScreen, setShowFinishScreen] = useState(false);
   const [finishedRideData, setFinishedRideData] = useState<any>(null);
   const [showHistoryDetail, setShowHistoryDetail] = useState(false);
@@ -281,7 +322,7 @@ const DriverDashboard = () => {
         if (nextRide) {
             if (!incomingRide || incomingRide.id !== nextRide.id) {
                 setIncomingRide(nextRide);
-                setTimer(60); // RESTAURADO PARA 60 SEGUNDOS
+                setTimer(60); 
             }
         } else {
             if (incomingRide) setIncomingRide(null);
@@ -319,8 +360,13 @@ const DriverDashboard = () => {
       }
   };
 
-  const handleFinish = async () => {
+  const handleRequestFinish = () => {
+      setShowFinishConfirm(true);
+  };
+
+  const confirmFinish = async () => {
       if(ride) {
+          setShowFinishConfirm(false);
           const earned = Number(ride.driver_earnings) || Number(ride.price);
           setFinishedRideData({ ...ride, earned: earned });
           await finishRide(ride.id);
@@ -371,32 +417,6 @@ const DriverDashboard = () => {
       return val.toFixed(2);
   };
 
-  // --- FUNÇÃO PARA ABRIR MAPAS ---
-  const openMap = (lat: number, lng: number, app: 'waze' | 'google') => {
-      if (!lat || !lng) return;
-      const url = app === 'waze' 
-          ? `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`
-          : `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-      window.open(url, '_blank');
-  };
-
-  const openRideNavigation = (app: 'waze' | 'google', currentRide: any) => {
-      if (!currentRide) return;
-      
-      // Lógica de destino: Se aceitou (indo buscar) -> Pickup. Se em viagem -> Destino.
-      let targetLat, targetLng;
-      
-      if (currentRide.status === 'ACCEPTED' || currentRide.status === 'ARRIVED') {
-          targetLat = currentRide.pickup_lat;
-          targetLng = currentRide.pickup_lng;
-      } else {
-          targetLat = currentRide.destination_lat;
-          targetLng = currentRide.destination_lng;
-      }
-      
-      openMap(targetLat, targetLng, app);
-  };
-
   const cardBaseClasses = "bg-white/90 backdrop-blur-xl border border-white/40 p-6 rounded-[32px] shadow-2xl animate-in slide-in-from-bottom duration-500 w-full";
 
   return (
@@ -422,6 +442,25 @@ const DriverDashboard = () => {
              </Avatar>
           </div>
       </div>
+
+      {/* --- TOASTS DE ESTADO (NO TOPO) --- */}
+      {ride?.status === 'ARRIVED' && (
+          <div className="absolute top-20 left-4 right-4 z-20 animate-in slide-in-from-top-4 fade-in">
+              <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-xl flex items-center gap-3 border border-slate-800">
+                  <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-black shrink-0"><CheckCircle2 className="w-6 h-6" /></div>
+                  <div><p className="font-black text-sm">Chegou!</p><p className="text-xs text-gray-400">Passageiro avisado.</p></div>
+              </div>
+          </div>
+      )}
+      
+      {ride?.status === 'IN_PROGRESS' && (
+          <div className="absolute top-20 left-4 right-4 z-20 animate-in slide-in-from-top-4 fade-in">
+              <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-xl flex items-center gap-3 border border-slate-800">
+                  <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white shrink-0"><Navigation className="w-5 h-5" /></div>
+                  <div><p className="font-black text-sm">Iniciada</p><p className="text-xs text-gray-400">Boa viagem!</p></div>
+              </div>
+          </div>
+      )}
 
       <div className="absolute inset-0 z-10 flex flex-col justify-end pb-32 md:pb-10 md:justify-center items-center pointer-events-none p-4">
 
@@ -476,97 +515,178 @@ const DriverDashboard = () => {
                     </div>
                 )}
 
-                {/* TELA DE CHAMADA RECEBIDA */}
+                {/* TELA DE CHAMADA RECEBIDA (DARK CARD) */}
                 {!ride && incomingRide && (
-                    <div className="bg-slate-900/95 backdrop-blur-xl border border-white/10 p-6 rounded-[32px] shadow-2xl animate-in slide-in-from-bottom text-white">
-                        <div className="flex justify-between items-center mb-4">
-                            <Badge className="bg-green-500 text-black font-bold hover:bg-green-400 px-3 py-1 animate-pulse">NOVA CORRIDA</Badge>
-                            <div className="w-10 h-10 rounded-full border-2 border-white/20 flex items-center justify-center font-bold text-lg">{timer}</div>
+                    <div className="bg-[#0f172a] text-white rounded-[32px] p-6 shadow-2xl animate-in slide-in-from-bottom border border-slate-800">
+                        {/* Header Row */}
+                        <div className="flex justify-between items-center mb-6">
+                            <Badge className="bg-green-500 text-black font-black hover:bg-green-400 px-3 py-1 animate-pulse uppercase tracking-wider text-[10px]">NOVA CORRIDA</Badge>
+                            <div className="w-10 h-10 rounded-full border-2 border-slate-700 bg-slate-800 flex items-center justify-center font-bold text-sm text-white">{timer}</div>
                         </div>
 
-                        <div className="flex items-center gap-3 bg-white/10 p-3 rounded-2xl mb-4">
-                             <Avatar className="h-10 w-10 border border-white/30">
+                        {/* User Row */}
+                        <div className="flex items-center gap-4 mb-6">
+                             <Avatar className="h-12 w-12 border-2 border-slate-700">
                                  <AvatarImage src={incomingRide.client_details?.avatar_url} />
-                                 <AvatarFallback>{incomingRide.client_details?.first_name?.[0]}</AvatarFallback>
+                                 <AvatarFallback className="bg-slate-700 text-white">{incomingRide.client_details?.first_name?.[0]}</AvatarFallback>
                              </Avatar>
                              <div>
-                                 <p className="font-bold text-sm">
-                                     {incomingRide.client_details?.first_name ? `${incomingRide.client_details.first_name} ${incomingRide.client_details.last_name || ''}` : 'Passageiro'}
-                                 </p>
-                                 <div className="flex items-center gap-1 text-xs text-gray-300">
+                                 <h3 className="font-bold text-white text-lg leading-tight">
+                                     {incomingRide.client_details?.first_name ? `${incomingRide.client_details.first_name} Passageiro` : 'Passageiro'}
+                                 </h3>
+                                 <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
                                      <Phone className="w-3 h-3" /> 
                                      {incomingRide.client_details?.phone || 'Sem telefone'}
-                                 </div>
+                                 </p>
                              </div>
                         </div>
 
-                        <div className="text-center mb-6">
-                            <p className="text-slate-400 text-xs uppercase font-bold mb-1">Valor da Corrida</p>
-                            <h2 className="text-5xl font-black tracking-tighter text-green-400">R$ {getDisplayPrice(incomingRide)}</h2>
-                            <div className="flex justify-center gap-3 mt-4"><Badge variant="outline" className="border-white/20 text-slate-300">{incomingRide.distance}</Badge><Badge variant="outline" className="border-white/20 text-slate-300">{incomingRide.category}</Badge></div>
+                        {/* Price Row */}
+                        <div className="flex items-end justify-between mb-8 pb-6 border-b border-slate-800">
+                            <div>
+                                <h2 className="text-5xl font-black tracking-tighter text-green-500">R$ {getDisplayPrice(incomingRide)}</h2>
+                                <div className="flex gap-2 mt-2">
+                                    <Badge variant="outline" className="border-slate-700 text-slate-400 text-[10px] font-bold bg-slate-900/50">{incomingRide.distance}</Badge>
+                                    <Badge variant="outline" className="border-slate-700 text-slate-400 text-[10px] font-bold bg-slate-900/50">{incomingRide.category}</Badge>
+                                </div>
+                            </div>
                         </div>
 
-                        <div className="space-y-4 mb-6 bg-white/5 p-4 rounded-2xl border border-white/10">
-                             <div className="flex items-start gap-3"><div className="w-2 h-2 mt-2 bg-white rounded-full"/><div><p className="text-xs text-slate-400 font-bold uppercase">Embarque</p><p className="font-medium text-sm leading-tight">{incomingRide.pickup_address}</p></div></div>
-                             <div className="flex items-start gap-3"><div className="w-2 h-2 mt-2 bg-green-500 rounded-full"/><div><p className="text-xs text-slate-400 font-bold uppercase">Destino</p><p className="font-medium text-sm leading-tight">{incomingRide.destination_address}</p></div></div>
+                        {/* Navigation Sections */}
+                        <div className="space-y-6 mb-8 max-h-[220px] overflow-y-auto custom-scrollbar">
+                             <NavigationBlock 
+                                label="LOCAL DE EMBARQUE" 
+                                lat={incomingRide.pickup_lat} 
+                                lng={incomingRide.pickup_lng} 
+                                address={incomingRide.pickup_address} 
+                                icon={MapPin} 
+                             />
+                             <NavigationBlock 
+                                label="DESTINO FINAL" 
+                                lat={incomingRide.destination_lat} 
+                                lng={incomingRide.destination_lng} 
+                                address={incomingRide.destination_address} 
+                                icon={Flag} 
+                             />
                         </div>
 
-                        {/* BOTÕES DE VER NO MAPA (ANTES DE ACEITAR) */}
-                        <div className="flex gap-2 mb-6">
-                            <Button size="sm" variant="outline" className="flex-1 bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white" onClick={() => openMap(incomingRide.pickup_lat, incomingRide.pickup_lng, 'google')}>
-                                <MapPin className="w-3 h-3 mr-2" /> Ver Google
-                            </Button>
-                            <Button size="sm" variant="outline" className="flex-1 bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white" onClick={() => openMap(incomingRide.pickup_lat, incomingRide.pickup_lng, 'waze')}>
-                                <Navigation className="w-3 h-3 mr-2" /> Ver Waze
-                            </Button>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <Button variant="ghost" className="h-14 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold" onClick={handleReject}>Recusar</Button>
-                            <Button className="h-14 rounded-xl bg-green-500 hover:bg-green-400 text-black font-black animate-pulse shadow-lg shadow-green-500/20" onClick={handleAccept}>ACEITAR</Button>
+                        {/* Footer Buttons */}
+                        <div className="flex gap-4">
+                            <Button variant="outline" className="flex-1 h-14 rounded-xl border-slate-700 bg-transparent text-slate-300 hover:bg-slate-800 hover:text-white font-bold" onClick={handleReject}>Recusar</Button>
+                            <Button className="flex-1 h-14 rounded-xl bg-green-600 hover:bg-green-500 text-white font-black shadow-lg shadow-green-900/20 uppercase tracking-wide" onClick={handleAccept}>ACEITAR</Button>
                         </div>
                     </div>
                 )}
 
-                {/* TELA DE CORRIDA ATIVA */}
+                {/* TELA DE CORRIDA ATIVA (LIGHT CARD) */}
                 {isOnTrip && !showFinishScreen && (
-                     <div className={cardBaseClasses}>
-                        <div className="flex justify-between items-center mb-6">
+                     <div className="bg-white rounded-[32px] p-6 shadow-2xl border border-gray-100 animate-in slide-in-from-bottom">
+                        
+                        {/* Header Status & Price */}
+                        <div className="flex justify-between items-start mb-6">
                             <div>
-                                <Badge className="mb-2 bg-black text-white hover:bg-black">{ride?.status === 'ACCEPTED' ? 'A CAMINHO' : ride?.status === 'ARRIVED' ? 'NO LOCAL' : 'EM VIAGEM'}</Badge>
-                                <h3 className="text-2xl font-bold text-slate-900 truncate max-w-[180px]">{ride?.client_details?.first_name} {ride?.client_details?.last_name}</h3>
-                                {ride?.client_details?.phone && <p className="text-sm text-gray-500 flex items-center gap-1"><Phone className="w-3 h-3" /> {ride.client_details.phone}</p>}
+                                <Badge className="mb-2 bg-black text-white hover:bg-black font-bold uppercase tracking-wider text-[10px] px-3 py-1">
+                                    {ride?.status === 'ACCEPTED' ? 'A CAMINHO' : ride?.status === 'ARRIVED' ? 'NO LOCAL' : 'EM VIAGEM'}
+                                </Badge>
+                                <h3 className="text-3xl font-black text-slate-900 tracking-tight leading-none mb-1">
+                                    {ride?.client_details?.first_name ? ride.client_details.first_name.split(' ')[0] : 'Passageiro'} P...
+                                </h3>
                             </div>
-                            <div className="text-right"><h3 className="text-3xl font-black text-green-600">R$ {getDisplayPrice(ride)}</h3><p className="text-gray-400 text-xs uppercase font-bold tracking-wider">Valor</p></div>
+                            <div className="text-right">
+                                <h3 className="text-4xl font-black text-green-600 tracking-tighter">R$ {getDisplayPrice(ride)}</h3>
+                                <p className="text-gray-300 text-[10px] uppercase font-bold tracking-widest mt-1">VALOR</p>
+                            </div>
                         </div>
 
-                        <div className="flex flex-col gap-3">
-                             {/* BOTÕES DE NAVEGAÇÃO RÁPIDA */}
-                             <div className="grid grid-cols-2 gap-2 mb-2">
-                                <Button className="bg-blue-100 hover:bg-blue-200 text-blue-700 border-0 font-bold shadow-sm" onClick={() => openRideNavigation('google', ride)}>
-                                    <MapPin className="w-4 h-4 mr-2" /> Google Maps
-                                </Button>
-                                <Button className="bg-blue-50 hover:bg-blue-100 text-blue-600 border-0 font-bold shadow-sm" onClick={() => openRideNavigation('waze', ride)}>
-                                    <Navigation className="w-4 h-4 mr-2" /> Waze
-                                </Button>
-                             </div>
+                        {/* Dynamic Navigation Section */}
+                        <div className="max-h-[35vh] overflow-y-auto custom-scrollbar mb-4 space-y-4">
+                            {/* Se ACEITO (A Caminho): Mostrar Embarque */}
+                            {ride?.status === 'ACCEPTED' && (
+                                <NavigationBlock 
+                                    label="NAVEGAR PARA EMBARQUE" 
+                                    lat={ride.pickup_lat} 
+                                    lng={ride.pickup_lng} 
+                                    address={ride.pickup_address} 
+                                    icon={Navigation}
+                                />
+                            )}
 
-                             <div 
-                                className="bg-gray-100 hover:bg-gray-200 p-3 rounded-2xl flex items-center gap-3 cursor-pointer transition-colors"
-                                onClick={() => setShowChat(true)}
-                             >
-                                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-slate-900 shadow-sm">
-                                    <MessageCircle className="w-5 h-5" />
-                                </div>
-                                <div className="flex-1 text-left">
-                                    <p className="text-xs font-bold text-gray-500 uppercase">Mensagem para Passageiro</p>
-                                    <p className="text-sm font-medium text-slate-900">Abrir chat...</p>
-                                </div>
-                             </div>
+                            {/* Se NO LOCAL (Chegou): Mostrar Embarque (Topo) e Destino (Abaixo) */}
+                            {ride?.status === 'ARRIVED' && (
+                                <>
+                                    <NavigationBlock 
+                                        label="EMBARQUE (AQUI)" 
+                                        lat={ride.pickup_lat} 
+                                        lng={ride.pickup_lng} 
+                                        address={ride.pickup_address} 
+                                        icon={MapPin}
+                                    />
+                                    <NavigationBlock 
+                                        label="DESTINO (PRÓXIMO)" 
+                                        lat={ride.destination_lat} 
+                                        lng={ride.destination_lng} 
+                                        address={ride.destination_address} 
+                                        icon={Flag}
+                                    />
+                                </>
+                            )}
 
-                             {ride?.status === 'ACCEPTED' && (<div className="flex gap-3"><Button variant="ghost" className="flex-1 text-red-500 hover:bg-red-50 h-14 rounded-xl font-bold" onClick={handleCancelClick}>Cancelar</Button><Button className="flex-[2] h-14 bg-black hover:bg-zinc-800 text-white font-bold rounded-xl" onClick={() => confirmArrival(ride!.id)}><MapPin className="mr-2 h-5 w-5" /> Confirmar Chegada</Button></div>)}
-                             {ride?.status === 'ARRIVED' && (<div className="flex gap-3"><Button variant="ghost" className="flex-1 text-red-500 hover:bg-red-50 h-14 rounded-xl font-bold" onClick={handleCancelClick}>Cancelar</Button><Button className="flex-[2] h-14 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl animate-pulse" onClick={() => startRide(ride!.id)}><Navigation className="mr-2 h-5 w-5" /> Iniciar Corrida</Button></div>)}
-                             {ride?.status === 'IN_PROGRESS' && (<Button className="w-full h-14 text-xl bg-black hover:bg-zinc-800 text-white font-bold rounded-xl" onClick={handleFinish}><Shield className="mr-2 h-6 w-6" /> Finalizar Viagem</Button>)}
+                            {/* Se EM VIAGEM: Mostrar Destino */}
+                            {ride?.status === 'IN_PROGRESS' && (
+                                <NavigationBlock 
+                                    label="NAVEGAR PARA DESTINO" 
+                                    lat={ride.destination_lat} 
+                                    lng={ride.destination_lng} 
+                                    address={ride.destination_address} 
+                                    icon={Navigation}
+                                />
+                            )}
+                        </div>
+
+                        {/* Chat Button */}
+                        <div 
+                            className="bg-gray-50 hover:bg-gray-100 p-4 rounded-2xl flex items-center gap-4 cursor-pointer transition-colors border border-gray-100 mb-6 group"
+                            onClick={() => setShowChat(true)}
+                        >
+                            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-slate-900 shadow-sm border border-gray-100 group-hover:scale-110 transition-transform">
+                                <MessageCircle className="w-5 h-5" />
+                            </div>
+                            <div className="flex-1 text-left">
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">MENSAGEM</p>
+                                <p className="text-sm font-bold text-slate-900">Chat Passageiro</p>
+                            </div>
+                            {/* Badge de notificação se precisar */}
+                            <div className="w-2 h-2 bg-red-500 rounded-full mr-2 hidden"></div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex items-center gap-4">
+                            {ride?.status !== 'IN_PROGRESS' && (
+                                <button 
+                                    className="text-red-500 font-bold text-sm px-4 hover:underline"
+                                    onClick={handleCancelClick}
+                                >
+                                    Cancelar
+                                </button>
+                            )}
+                            
+                            <div className="flex-1">
+                                {ride?.status === 'ACCEPTED' && (
+                                    <Button className="w-full h-14 bg-black hover:bg-zinc-900 text-white font-bold rounded-2xl text-lg shadow-xl" onClick={() => confirmArrival(ride!.id)}>
+                                        <MapPin className="mr-2 h-5 w-5" /> Cheguei
+                                    </Button>
+                                )}
+                                {ride?.status === 'ARRIVED' && (
+                                    <Button className="w-full h-14 bg-[#86efac] hover:bg-[#4ade80] text-green-900 font-bold rounded-2xl text-lg shadow-xl flex items-center justify-center" onClick={() => startRide(ride!.id)}>
+                                        <Navigation className="mr-2 h-5 w-5 fill-green-900" /> Iniciar
+                                    </Button>
+                                )}
+                                {ride?.status === 'IN_PROGRESS' && (
+                                    <Button className="w-full h-14 bg-black hover:bg-zinc-900 text-white font-bold rounded-2xl text-lg shadow-xl" onClick={handleRequestFinish}>
+                                        Finalizar Viagem
+                                    </Button>
+                                )}
+                            </div>
                         </div>
                      </div>
                 )}
@@ -640,6 +760,33 @@ const DriverDashboard = () => {
          )}
 
       </div>
+
+      {/* --- CUSTOM FINISH CONFIRM MODAL --- */}
+      <Dialog open={showFinishConfirm} onOpenChange={setShowFinishConfirm}>
+          <DialogContent className="sm:max-w-xs bg-white rounded-[32px] p-6 border-0 text-center shadow-2xl">
+              <div className="mx-auto w-12 h-12 rounded-full border-2 border-green-500 flex items-center justify-center mb-4 text-green-600">
+                  <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <DialogTitle className="text-xl font-bold text-green-600 text-center mb-2">Finalizar Viagem?</DialogTitle>
+              <DialogDescription className="text-center text-gray-500 text-sm mb-6 leading-relaxed">
+                  Confirme se você chegou ao destino final e se o pagamento foi realizado (se em dinheiro).
+              </DialogDescription>
+              <div className="flex flex-col gap-3">
+                  <Button 
+                      className="w-full h-12 bg-[#22c55e] hover:bg-[#16a34a] text-white font-bold rounded-xl text-base shadow-lg shadow-green-500/20" 
+                      onClick={confirmFinish}
+                  >
+                      Sim, Finalizar
+                  </Button>
+                  <Button 
+                      className="w-full h-12 bg-black hover:bg-zinc-800 text-white font-bold rounded-xl text-base" 
+                      onClick={() => setShowFinishConfirm(false)}
+                  >
+                      Cancelar
+                  </Button>
+              </div>
+          </DialogContent>
+      </Dialog>
 
       {/* --- MODAL MAÇANETA (DESIGN ABSURDO) --- */}
       <Dialog open={showManualRideModal} onOpenChange={setShowManualRideModal}>
