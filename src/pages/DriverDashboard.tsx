@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Wallet, MapPin, Navigation, Shield, DollarSign, Star, Menu, History, CheckCircle, Car, Calendar, ArrowRight, AlertTriangle, ChevronRight, TrendingUp, MessageCircle, Phone, XCircle, UserPlus, Clock } from "lucide-react";
+import { Wallet, MapPin, Navigation, Shield, DollarSign, Star, Menu, History, CheckCircle, Car, Calendar, ArrowRight, AlertTriangle, ChevronRight, TrendingUp, MessageCircle, Phone, XCircle, UserPlus, Clock, MousePointer2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -40,6 +40,7 @@ const DriverDashboard = () => {
   const [manualRoute, setManualRoute] = useState<{distance: number, price: number} | null>(null);
   const [calculatingManual, setCalculatingManual] = useState(false);
   const [submittingManual, setSubmittingManual] = useState(false);
+  const [gpsLoadingManual, setGpsLoadingManual] = useState(false);
   
   // Modals Control
   const [showCancelAlert, setShowCancelAlert] = useState(false);
@@ -174,6 +175,53 @@ const DriverDashboard = () => {
           showError(e.message);
       } finally {
           setSubmittingManual(false);
+      }
+  };
+
+  const getManualGPS = () => {
+      setGpsLoadingManual(true);
+      if ("geolocation" in navigator) {
+          navigator.geolocation.getCurrentPosition(
+              async (pos) => {
+                  try {
+                      // Reverse geocode para pegar o endereço
+                      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`);
+                      const data = await res.json();
+                      const address = data.display_name || "Minha Localização Atual";
+                      
+                      setManualForm(prev => ({
+                          ...prev,
+                          pickup: {
+                              lat: pos.coords.latitude,
+                              lon: pos.coords.longitude,
+                              display_name: address
+                          }
+                      }));
+                      showSuccess("Localização atual definida!");
+                  } catch (e) {
+                      // Fallback se falhar reverse
+                      setManualForm(prev => ({
+                          ...prev,
+                          pickup: {
+                              lat: pos.coords.latitude,
+                              lon: pos.coords.longitude,
+                              display_name: "Localização Atual (GPS)"
+                          }
+                      }));
+                  } finally {
+                      setGpsLoadingManual(false);
+                  }
+              },
+              (err) => {
+                  console.error(err);
+                  showError("Erro ao obter GPS.");
+                  setGpsLoadingManual(false);
+              },
+              { enableHighAccuracy: true }
+          );
+      } else {
+          showError("GPS não suportado.");
+          setGpsLoadingManual(false);
       }
   };
 
@@ -316,6 +364,7 @@ const DriverDashboard = () => {
   return (
     <div className="h-screen flex flex-col bg-slate-50 relative overflow-hidden font-sans">
       
+      {/* MARCA D'ÁGUA FIXA NO TOPO */}
       <img src="/logo-goldmobile-2.png" alt="Logo" className="fixed top-4 left-1/2 -translate-x-1/2 h-6 opacity-80 z-50 pointer-events-none drop-shadow-md" />
 
       <div className="absolute inset-0 z-0">
@@ -342,6 +391,7 @@ const DriverDashboard = () => {
          {activeTab === 'home' && (
             <div className="w-full max-w-md pointer-events-auto transition-all duration-500">
                 
+                {/* TELA DE CANCELAMENTO */}
                 {ride?.status === 'CANCELLED' && (
                     <div className={`${cardBaseClasses} text-center`}>
                         <div className="w-20 h-20 bg-red-100 rounded-full mx-auto flex items-center justify-center mb-6">
@@ -355,6 +405,7 @@ const DriverDashboard = () => {
                     </div>
                 )}
 
+                {/* TELA ONLINE / OFFLINE */}
                 {!ride && !isOnline && (
                     <div className="bg-white/90 backdrop-blur-xl border border-white/40 p-8 rounded-[32px] shadow-2xl text-center animate-in zoom-in-95">
                         <div className="w-24 h-24 bg-slate-100 rounded-full mx-auto flex items-center justify-center mb-6 relative">
@@ -366,6 +417,7 @@ const DriverDashboard = () => {
                     </div>
                 )}
 
+                {/* STATUS BUSCANDO */}
                 {!ride && isOnline && !incomingRide && (
                     <div className="flex flex-col gap-4 animate-in fade-in">
                         <div className="bg-black/60 backdrop-blur-xl border border-white/10 px-6 py-4 rounded-full shadow-2xl flex items-center justify-center gap-3">
@@ -373,17 +425,20 @@ const DriverDashboard = () => {
                             <p className="text-white font-bold">Procurando passageiros...</p>
                         </div>
                         
-                        {/* Botão Maçaneta */}
+                        {/* Botão Maçaneta com Borda Gold */}
                         <Button 
-                            className="bg-white hover:bg-gray-100 text-slate-900 h-14 rounded-2xl shadow-xl border border-white/50 backdrop-blur-lg flex items-center gap-2 font-bold"
+                            className="bg-white hover:bg-gray-50 text-slate-900 h-14 rounded-2xl shadow-xl border-2 border-yellow-500 backdrop-blur-lg flex items-center justify-center gap-3 font-black text-base hover:scale-[1.02] transition-transform"
                             onClick={() => setShowManualRideModal(true)}
                         >
-                            <UserPlus className="w-5 h-5 text-yellow-500" /> 
-                            Novo Passageiro Avulso
+                            <div className="w-8 h-8 bg-yellow-500 text-black rounded-full flex items-center justify-center shadow-md">
+                                <UserPlus className="w-5 h-5" />
+                            </div>
+                            Corrida Avulsa (Maçaneta)
                         </Button>
                     </div>
                 )}
 
+                {/* TELA DE CHAMADA RECEBIDA */}
                 {!ride && incomingRide && (
                     <div className="bg-slate-900/95 backdrop-blur-xl border border-white/10 p-6 rounded-[32px] shadow-2xl animate-in slide-in-from-bottom text-white">
                         <div className="flex justify-between items-center mb-4">
@@ -425,6 +480,7 @@ const DriverDashboard = () => {
                     </div>
                 )}
 
+                {/* TELA DE CORRIDA ATIVA */}
                 {isOnTrip && !showFinishScreen && (
                      <div className={cardBaseClasses}>
                         <div className="flex justify-between items-center mb-6">
@@ -459,6 +515,7 @@ const DriverDashboard = () => {
             </div>
          )}
 
+         {/* --- VIEW: HISTÓRICO --- */}
          {activeTab === 'history' && (
             <div className={`w-full max-w-md h-[65vh] ${cardBaseClasses} flex flex-col pointer-events-auto`}>
                  <h2 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-2">
@@ -484,6 +541,7 @@ const DriverDashboard = () => {
             </div>
          )}
 
+         {/* --- VIEW: CARTEIRA --- */}
          {activeTab === 'wallet' && (
              <div className="w-full max-w-md pointer-events-auto animate-in slide-in-from-bottom">
                  <Card className="bg-black text-white border-0 shadow-2xl rounded-[32px] mb-4 overflow-hidden relative">
@@ -518,59 +576,124 @@ const DriverDashboard = () => {
 
       </div>
 
-      {/* Modal de Corrida Manual (Maçaneta) */}
+      {/* --- MODAL MAÇANETA (DESIGN ABSURDO) --- */}
       <Dialog open={showManualRideModal} onOpenChange={setShowManualRideModal}>
-          <DialogContent className="sm:max-w-md bg-white rounded-[32px] border-0 p-0 overflow-hidden">
-              <div className="bg-yellow-500 p-6 relative">
-                  <div className="absolute top-4 right-4 bg-white/20 p-2 rounded-full cursor-pointer hover:bg-white/40" onClick={() => setShowManualRideModal(false)}><XCircle className="w-6 h-6 text-black" /></div>
-                  <h2 className="text-2xl font-black text-slate-900 flex items-center gap-2"><UserPlus className="w-6 h-6" /> Corrida Avulsa</h2>
-                  <p className="text-slate-800 font-medium opacity-80">Registre um passageiro manual.</p>
-              </div>
-              <div className="p-6 space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                          <Label>Nome</Label>
-                          <Input placeholder="Nome do pax" className="h-12 rounded-xl" value={manualForm.name} onChange={e => setManualForm({...manualForm, name: e.target.value})} />
-                      </div>
-                      <div className="space-y-1">
-                          <Label>Telefone</Label>
-                          <Input placeholder="(00) 00000-0000" className="h-12 rounded-xl" value={manualForm.phone} onChange={e => setManualForm({...manualForm, phone: e.target.value})} />
-                      </div>
-                  </div>
+          <DialogContent className="sm:max-w-md bg-white rounded-[40px] border-0 p-0 overflow-hidden shadow-2xl">
+              
+              {/* Header Visual */}
+              <div className="bg-gradient-to-r from-slate-900 to-black p-8 relative overflow-hidden text-white">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-500 rounded-full blur-[60px] opacity-30 pointer-events-none"></div>
                   
-                  <div className="space-y-1">
-                      <Label>Partida</Label>
-                      <LocationSearch 
-                          placeholder="Local de embarque" 
-                          icon={MapPin}
-                          onSelect={(val) => setManualForm({...manualForm, pickup: val})}
-                      />
+                  <div className="absolute top-6 right-6">
+                      <div className="p-2 bg-white/10 rounded-full cursor-pointer hover:bg-white/20 transition-colors backdrop-blur-sm" onClick={() => setShowManualRideModal(false)}>
+                          <XCircle className="w-6 h-6 text-white" />
+                      </div>
                   </div>
 
-                  <div className="space-y-1">
-                      <Label>Destino</Label>
-                      <LocationSearch 
-                          placeholder="Para onde vão?" 
-                          icon={Navigation}
-                          onSelect={(val) => setManualForm({...manualForm, dest: val})}
-                      />
+                  <div className="relative z-10">
+                      <div className="w-14 h-14 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-2xl flex items-center justify-center shadow-lg shadow-yellow-500/20 mb-4">
+                          <UserPlus className="w-7 h-7 text-black" />
+                      </div>
+                      <h2 className="text-3xl font-black tracking-tight text-white mb-1">Nova Corrida</h2>
+                      <p className="text-slate-400 font-medium text-sm flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                          Modo Maçaneta Ativo
+                      </p>
+                  </div>
+              </div>
+
+              <div className="p-8 space-y-6">
+                  {/* Dados do Passageiro */}
+                  <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                              <Label className="text-xs font-bold uppercase text-slate-500 ml-1">Passageiro</Label>
+                              <div className="relative">
+                                  <User className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
+                                  <Input placeholder="Nome" className="h-12 pl-9 bg-slate-50 border-slate-200 rounded-xl font-bold" value={manualForm.name} onChange={e => setManualForm({...manualForm, name: e.target.value})} />
+                              </div>
+                          </div>
+                          <div className="space-y-2">
+                              <Label className="text-xs font-bold uppercase text-slate-500 ml-1">Contato</Label>
+                              <div className="relative">
+                                  <Phone className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
+                                  <Input placeholder="(34) 9..." className="h-12 pl-9 bg-slate-50 border-slate-200 rounded-xl font-bold" value={manualForm.phone} onChange={e => setManualForm({...manualForm, phone: e.target.value})} />
+                              </div>
+                          </div>
+                      </div>
                   </div>
 
-                  {manualRoute && (
-                      <div className="bg-slate-50 p-4 rounded-xl flex items-center justify-between border border-slate-100">
-                          <div>
-                              <p className="text-xs font-bold text-gray-500 uppercase">Estimativa</p>
-                              <p className="font-bold text-slate-900">{manualRoute.distance.toFixed(1)} km</p>
+                  {/* Endereços */}
+                  <div className="space-y-4">
+                      <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                              <Label className="text-xs font-bold uppercase text-slate-500 ml-1">Ponto de Partida</Label>
+                              <button onClick={getManualGPS} className="text-[10px] font-bold bg-blue-50 text-blue-600 px-2 py-1 rounded-md hover:bg-blue-100 flex items-center gap-1 transition-colors" disabled={gpsLoadingManual}>
+                                  {gpsLoadingManual ? <Clock className="w-3 h-3 animate-spin"/> : <MousePointer2 className="w-3 h-3" />}
+                                  Usar GPS
+                              </button>
                           </div>
-                          <div className="text-right">
-                              <p className="text-xs font-bold text-gray-500 uppercase">Preço Sugerido</p>
-                              <p className="font-black text-2xl text-green-600">R$ {manualRoute.price.toFixed(2)}</p>
+                          <div className="relative group">
+                              <div className="absolute left-3 top-3.5 z-20 pointer-events-none"><div className="w-2 h-2 bg-slate-900 rounded-full ring-2 ring-slate-100"></div></div>
+                              <LocationSearch 
+                                  placeholder="Onde o passageiro está?" 
+                                  icon={() => null} // Icone customizado acima
+                                  onSelect={(val) => setManualForm({...manualForm, pickup: val})}
+                                  initialValue={manualForm.pickup?.display_name}
+                                  className="pl-2"
+                              />
                           </div>
+                      </div>
+
+                      <div className="space-y-2">
+                          <Label className="text-xs font-bold uppercase text-slate-500 ml-1">Destino Final</Label>
+                          <div className="relative group">
+                              <div className="absolute left-3 top-3.5 z-20 pointer-events-none"><div className="w-2 h-2 bg-green-500 rounded-full ring-2 ring-green-100"></div></div>
+                              <LocationSearch 
+                                  placeholder="Para onde vamos?" 
+                                  icon={() => null}
+                                  onSelect={(val) => setManualForm({...manualForm, dest: val})}
+                                  className="pl-2"
+                              />
+                          </div>
+                      </div>
+                  </div>
+
+                  {/* Card Estimativa */}
+                  {manualRoute ? (
+                      <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-lg relative overflow-hidden animate-in zoom-in-95 duration-300 border border-slate-800">
+                          <div className="absolute top-0 right-0 w-32 h-32 bg-green-500 rounded-full blur-[50px] opacity-20"></div>
+                          <div className="relative z-10 flex justify-between items-center">
+                              <div>
+                                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Distância</p>
+                                  <p className="text-2xl font-bold">{manualRoute.distance.toFixed(1)} <span className="text-sm font-normal text-slate-500">km</span></p>
+                              </div>
+                              <div className="h-8 w-px bg-white/10"></div>
+                              <div className="text-right">
+                                  <p className="text-xs font-bold text-green-400 uppercase tracking-wider mb-1">Total a Cobrar</p>
+                                  <p className="text-3xl font-black text-white">R$ {manualRoute.price.toFixed(2)}</p>
+                              </div>
+                          </div>
+                      </div>
+                  ) : (
+                      <div className="bg-gray-50 border border-dashed border-gray-200 rounded-2xl p-6 text-center">
+                          <p className="text-gray-400 text-sm font-medium">Preencha os endereços para calcular o valor.</p>
                       </div>
                   )}
 
-                  <Button className="w-full h-14 bg-black text-white rounded-xl font-bold text-lg hover:bg-zinc-800" onClick={handleStartManualRide} disabled={calculatingManual || submittingManual}>
-                      {calculatingManual ? "Calculando..." : submittingManual ? "Iniciando..." : "INICIAR CORRIDA AGORA"}
+                  {/* Botão de Ação */}
+                  <Button 
+                      className="w-full h-16 rounded-2xl font-black text-lg bg-yellow-500 hover:bg-yellow-400 text-black shadow-xl shadow-yellow-500/20 transition-all hover:scale-[1.01] active:scale-[0.98]"
+                      onClick={handleStartManualRide} 
+                      disabled={calculatingManual || submittingManual || !manualForm.pickup || !manualForm.dest}
+                  >
+                      {calculatingManual ? (
+                          <span className="flex items-center gap-2"><Clock className="w-5 h-5 animate-spin" /> Calculando...</span>
+                      ) : submittingManual ? (
+                          <span className="flex items-center gap-2"><Clock className="w-5 h-5 animate-spin" /> Iniciando...</span>
+                      ) : (
+                          <span className="flex items-center gap-2">INICIAR CORRIDA <ArrowRight className="w-6 h-6" /></span>
+                      )}
                   </Button>
               </div>
           </DialogContent>
@@ -593,8 +716,8 @@ const DriverDashboard = () => {
                   <div className="bg-gray-50 p-4 rounded-2xl flex items-center gap-4 border border-gray-100">
                       <Avatar className="h-12 w-12 border-2 border-white shadow-sm"><AvatarImage src={selectedHistoryItem?.customer?.avatar_url} /><AvatarFallback className="bg-slate-200 text-slate-600 font-bold">{selectedHistoryItem?.customer?.first_name?.[0]}</AvatarFallback></Avatar>
                       <div>
-                          <p className="font-bold text-slate-900">{selectedHistoryItem?.customer?.first_name || (selectedHistoryItem?.guest_name ? selectedHistoryItem.guest_name : 'Passageiro')} {selectedHistoryItem?.customer?.last_name}</p>
-                          <p className="text-xs text-gray-500">{selectedHistoryItem?.customer?.phone || selectedHistoryItem?.guest_phone || 'Sem telefone'}</p>
+                          <p className="font-bold text-slate-900">{selectedHistoryItem?.customer?.first_name} {selectedHistoryItem?.customer?.last_name}</p>
+                          <p className="text-xs text-gray-500">{selectedHistoryItem?.customer?.phone || 'Sem telefone'}</p>
                       </div>
                   </div>
 
