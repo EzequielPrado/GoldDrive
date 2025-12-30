@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Wallet, MapPin, Navigation, Shield, DollarSign, Star, Menu, History, CheckCircle, Car, Calendar, ArrowRight, AlertTriangle, ChevronRight, TrendingUp, MessageCircle, Phone, XCircle, UserPlus, Clock, MousePointer2, User, X, Hand } from "lucide-react";
+import { Wallet, MapPin, Navigation, Shield, DollarSign, Star, Menu, History, CheckCircle, Car, Calendar, ArrowRight, AlertTriangle, ChevronRight, TrendingUp, MessageCircle, Phone, XCircle, UserPlus, Clock, MousePointer2, User, X, Hand, Map } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -28,7 +28,7 @@ const DriverDashboard = () => {
   const [activeTab, setActiveTab] = useState('home');
   const [isOnline, setIsOnline] = useState(false);
   const [incomingRide, setIncomingRide] = useState<any | null>(null);
-  const [timer, setTimer] = useState(30);
+  const [timer, setTimer] = useState(60); // RESTAURADO PARA 60 SEGUNDOS
   const [driverProfile, setDriverProfile] = useState<any>(null);
   const [showChat, setShowChat] = useState(false);
   
@@ -281,7 +281,7 @@ const DriverDashboard = () => {
         if (nextRide) {
             if (!incomingRide || incomingRide.id !== nextRide.id) {
                 setIncomingRide(nextRide);
-                setTimer(30); 
+                setTimer(60); // RESTAURADO PARA 60 SEGUNDOS
             }
         } else {
             if (incomingRide) setIncomingRide(null);
@@ -369,6 +369,32 @@ const DriverDashboard = () => {
       if (!r) return "0.00";
       const val = (r.driver_earnings && Number(r.driver_earnings) > 0) ? Number(r.driver_earnings) : Number(r.price);
       return val.toFixed(2);
+  };
+
+  // --- FUNÇÃO PARA ABRIR MAPAS ---
+  const openMap = (lat: number, lng: number, app: 'waze' | 'google') => {
+      if (!lat || !lng) return;
+      const url = app === 'waze' 
+          ? `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`
+          : `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+      window.open(url, '_blank');
+  };
+
+  const openRideNavigation = (app: 'waze' | 'google', currentRide: any) => {
+      if (!currentRide) return;
+      
+      // Lógica de destino: Se aceitou (indo buscar) -> Pickup. Se em viagem -> Destino.
+      let targetLat, targetLng;
+      
+      if (currentRide.status === 'ACCEPTED' || currentRide.status === 'ARRIVED') {
+          targetLat = currentRide.pickup_lat;
+          targetLng = currentRide.pickup_lng;
+      } else {
+          targetLat = currentRide.destination_lat;
+          targetLng = currentRide.destination_lng;
+      }
+      
+      openMap(targetLat, targetLng, app);
   };
 
   const cardBaseClasses = "bg-white/90 backdrop-blur-xl border border-white/40 p-6 rounded-[32px] shadow-2xl animate-in slide-in-from-bottom duration-500 w-full";
@@ -480,9 +506,19 @@ const DriverDashboard = () => {
                             <div className="flex justify-center gap-3 mt-4"><Badge variant="outline" className="border-white/20 text-slate-300">{incomingRide.distance}</Badge><Badge variant="outline" className="border-white/20 text-slate-300">{incomingRide.category}</Badge></div>
                         </div>
 
-                        <div className="space-y-4 mb-8 bg-white/5 p-4 rounded-2xl border border-white/10">
+                        <div className="space-y-4 mb-6 bg-white/5 p-4 rounded-2xl border border-white/10">
                              <div className="flex items-start gap-3"><div className="w-2 h-2 mt-2 bg-white rounded-full"/><div><p className="text-xs text-slate-400 font-bold uppercase">Embarque</p><p className="font-medium text-sm leading-tight">{incomingRide.pickup_address}</p></div></div>
                              <div className="flex items-start gap-3"><div className="w-2 h-2 mt-2 bg-green-500 rounded-full"/><div><p className="text-xs text-slate-400 font-bold uppercase">Destino</p><p className="font-medium text-sm leading-tight">{incomingRide.destination_address}</p></div></div>
+                        </div>
+
+                        {/* BOTÕES DE VER NO MAPA (ANTES DE ACEITAR) */}
+                        <div className="flex gap-2 mb-6">
+                            <Button size="sm" variant="outline" className="flex-1 bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white" onClick={() => openMap(incomingRide.pickup_lat, incomingRide.pickup_lng, 'google')}>
+                                <MapPin className="w-3 h-3 mr-2" /> Ver Google
+                            </Button>
+                            <Button size="sm" variant="outline" className="flex-1 bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white" onClick={() => openMap(incomingRide.pickup_lat, incomingRide.pickup_lng, 'waze')}>
+                                <Navigation className="w-3 h-3 mr-2" /> Ver Waze
+                            </Button>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
@@ -505,6 +541,16 @@ const DriverDashboard = () => {
                         </div>
 
                         <div className="flex flex-col gap-3">
+                             {/* BOTÕES DE NAVEGAÇÃO RÁPIDA */}
+                             <div className="grid grid-cols-2 gap-2 mb-2">
+                                <Button className="bg-blue-100 hover:bg-blue-200 text-blue-700 border-0 font-bold shadow-sm" onClick={() => openRideNavigation('google', ride)}>
+                                    <MapPin className="w-4 h-4 mr-2" /> Google Maps
+                                </Button>
+                                <Button className="bg-blue-50 hover:bg-blue-100 text-blue-600 border-0 font-bold shadow-sm" onClick={() => openRideNavigation('waze', ride)}>
+                                    <Navigation className="w-4 h-4 mr-2" /> Waze
+                                </Button>
+                             </div>
+
                              <div 
                                 className="bg-gray-100 hover:bg-gray-200 p-3 rounded-2xl flex items-center gap-3 cursor-pointer transition-colors"
                                 onClick={() => setShowChat(true)}
