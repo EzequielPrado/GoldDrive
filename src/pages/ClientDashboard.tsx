@@ -99,8 +99,8 @@ const ClientDashboard = () => {
         if (activeTab === 'home') {
             const { data: cats } = await supabase.from('car_categories').select('*').eq('active', true).order('base_fare', { ascending: true });
             if (cats) {
-                // Filtra a categoria Gold Promo caso ela exista no banco
-                const filteredCats = cats.filter(c => c.name !== 'Gold Promo');
+                // Filtra qualquer categoria que contenha "Promo" no nome de forma agressiva
+                const filteredCats = cats.filter(c => !c.name.toLowerCase().includes('promo'));
                 setCategories(filteredCats); 
                 if (!selectedCategoryId && filteredCats.length > 0) setSelectedCategoryId(filteredCats[0].id);
             }
@@ -261,7 +261,7 @@ const ClientDashboard = () => {
                                                     </div>
                                                     <div>
                                                         <h4 className="font-black text-slate-900">{cat.name}</h4>
-                                                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">{cat.description || 'Corrida rápida'}</p>
+                                                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">{cat.description || 'Viagem premium'}</p>
                                                     </div>
                                                 </div>
                                                 <div className="text-right">
