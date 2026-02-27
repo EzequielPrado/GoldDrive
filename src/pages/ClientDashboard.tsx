@@ -99,8 +99,10 @@ const ClientDashboard = () => {
         if (activeTab === 'home') {
             const { data: cats } = await supabase.from('car_categories').select('*').eq('active', true).order('base_fare', { ascending: true });
             if (cats) {
-                setCategories(cats); 
-                if (!selectedCategoryId && cats.length > 0) setSelectedCategoryId(cats[0].id);
+                // Filtra a categoria Gold Promo caso ela exista no banco
+                const filteredCats = cats.filter(c => c.name !== 'Gold Promo');
+                setCategories(filteredCats); 
+                if (!selectedCategoryId && filteredCats.length > 0) setSelectedCategoryId(filteredCats[0].id);
             }
             const { data: tiers } = await supabase.from('pricing_tiers').select('*').order('max_distance', { ascending: true });
             if (tiers) setPricingTiers(tiers);
@@ -212,7 +214,7 @@ const ClientDashboard = () => {
                             <GoogleLocationSearch placeholder="Digite o destino..." onSelect={(l) => setDestLocation(l)} initialValue={destLocation?.display_name} />
                         </div>
                         <Button className="w-full mt-6 h-14 text-lg font-bold rounded-2xl bg-black text-white hover:bg-zinc-800 transition-all shadow-xl" onClick={() => { if(!pickupLocation || !destLocation) showError("Selecione os endereços."); else setStep('confirm'); }}>
-                            Ver Preços <ChevronRight className="ml-1 w-5 h-5" />
+                            Solicitar Corrida <ChevronRight className="ml-1 w-5 h-5" />
                         </Button>
                     </div>
                 )}
@@ -222,7 +224,7 @@ const ClientDashboard = () => {
                     <div className="bg-white/95 backdrop-blur-xl p-6 rounded-[32px] shadow-2xl border border-white/40 flex flex-col max-h-[80vh]">
                         <div className="flex items-center gap-3 mb-6 cursor-pointer" onClick={() => setStep('search')}>
                             <div className="bg-gray-100 p-2 rounded-full"><ArrowLeft className="w-5 h-5" /></div>
-                            <h2 className="text-xl font-black text-slate-900">Confirmar Viagem</h2>
+                            <h2 className="text-xl font-black text-slate-900">Escolha seu Gold</h2>
                         </div>
                         
                         <div className="bg-gray-50 rounded-2xl p-4 mb-6 border border-gray-100 space-y-3">
@@ -289,7 +291,7 @@ const ClientDashboard = () => {
                                 </div>
 
                                 <Button className="w-full h-14 text-lg font-black rounded-2xl bg-yellow-500 hover:bg-yellow-400 text-black shadow-xl shadow-yellow-500/20" onClick={confirmRide} disabled={isRequesting}>
-                                    {isRequesting ? <Loader2 className="animate-spin" /> : "PEDIR CORRIDA AGORA"}
+                                    {isRequesting ? <Loader2 className="animate-spin" /> : "CONFIRMAR SOLICITAÇÃO"}
                                 </Button>
                             </>
                         )}
