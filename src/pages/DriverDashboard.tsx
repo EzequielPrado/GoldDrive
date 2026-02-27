@@ -54,7 +54,6 @@ const DriverDashboard = () => {
   const [showManualRide, setShowManualRide] = useState(false);
   
   // Estados para Corrida Manual
-  const [manualStep, setManualStep] = useState<'info' | 'route'>('info');
   const [passengerName, setPassengerName] = useState("");
   const [passengerPhone, setPassengerPhone] = useState("");
   const [pickupLocation, setPickupLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
@@ -68,7 +67,6 @@ const DriverDashboard = () => {
   const [pickupCoord, setPickupCoord] = useState<{lat: number, lon: number} | null>(null);
   const [destCoord, setDestCoord] = useState<{lat: number, lon: number} | null>(null);
 
-  // Sincroniza coordenadas do mapa
   useEffect(() => {
     if (ride) {
         setPickupCoord({ lat: Number(ride.pickup_lat), lon: Number(ride.pickup_lng) });
@@ -130,12 +128,11 @@ const DriverDashboard = () => {
       });
   }, [pickupLocation, destLocation]);
 
-  // Gatilho automático de cálculo para corrida manual
   useEffect(() => {
-      if (pickupLocation && destLocation && showManualRide && manualStep === 'route') {
+      if (pickupLocation && destLocation && showManualRide) {
           calculateRouteDistance();
       }
-  }, [pickupLocation, destLocation, showManualRide, manualStep, calculateRouteDistance]);
+  }, [pickupLocation, destLocation, showManualRide, calculateRouteDistance]);
 
   const calculatePrice = useCallback(() => {
       if (routeDistance <= 0) return 0;
@@ -172,7 +169,6 @@ const DriverDashboard = () => {
               price, `${routeDistance.toFixed(1)} km`, 'Manual'
           );
           setShowManualRide(false);
-          setManualStep('info');
           setPassengerName("");
           setPassengerPhone("");
           setPickupLocation(null);
@@ -303,41 +299,85 @@ const DriverDashboard = () => {
          )}
       </div>
 
+      {/* MODAL DE CORRIDA MANUAL CORRIGIDO */}
       <Dialog open={showManualRide} onOpenChange={setShowManualRide}>
           <DialogContent className="max-w-md bg-white rounded-[32px] border-0 shadow-2xl p-0 overflow-hidden">
               <DialogHeader className="p-6 bg-slate-900 text-white">
                   <DialogTitle className="text-2xl font-black">Lançar Viagem</DialogTitle>
-                  <DialogDescription className="text-slate-400">Preencha os dados da corrida manual.</DialogDescription>
+                  <DialogDescription className="text-slate-400">Preencha os dados da corrida manual abaixo.</DialogDescription>
               </DialogHeader>
-              <div className="p-6 space-y-4">
-                  {manualStep === 'info' ? (
-                      <div className="space-y-4 animate-in slide-in-from-right">
-                          <div className="space-y-2"><Label>Nome do Passageiro</Label><Input placeholder="Ex: João Silva" value={passengerName} onChange={e => setPassengerName(e.target.value)} className="h-12" /></div>
-                          <div className="space-y-2"><Label>Celular (Opcional)</Label><Input placeholder="(00) 00000-0000" value={passengerPhone} onChange={e => setPassengerPhone(e.target.value)} className="h-12" /></div>
-                          <Button className="w-full h-14 bg-black text-white font-bold rounded-2xl" onClick={() => setManualStep('route')} disabled={!passengerName}>Próximo <ChevronRight className="ml-1 w-5 h-5" /></Button>
+              
+              <div className="p-6 space-y-6 bg-white">
+                  {/* Dados do Passageiro */}
+                  <div className="space-y-4">
+                      <div className="space-y-1.5">
+                          <Label className="text-xs font-black uppercase text-slate-400 ml-1">Nome do Passageiro</Label>
+                          <Input 
+                            placeholder="Ex: João Silva" 
+                            value={passengerName} 
+                            onChange={e => setPassengerName(e.target.value)} 
+                            className="h-12 rounded-xl bg-slate-50 border-slate-200 text-slate-900 focus:bg-white transition-all font-bold placeholder:text-slate-300" 
+                          />
                       </div>
-                  ) : (
-                      <div className="space-y-4 animate-in slide-in-from-right">
-                          <GoogleLocationSearch placeholder="Local de embarque" onSelect={setPickupLocation} initialValue={pickupLocation?.display_name} />
-                          <GoogleLocationSearch placeholder="Para onde?" onSelect={setDestLocation} initialValue={destLocation?.display_name} />
-                          {pickupLocation && destLocation && (
-                              <div className="bg-yellow-50 p-4 rounded-2xl border border-yellow-200 text-center">
-                                  {manualLoading ? <Loader2 className="animate-spin mx-auto text-yellow-600" /> : (
-                                      <>
-                                          <p className="text-xs font-bold text-yellow-700 uppercase mb-1">Valor Estimado</p>
-                                          <h3 className="text-3xl font-black text-black">R$ {calculatePrice().toFixed(2)}</h3>
-                                      </>
-                                  )}
-                              </div>
-                          )}
-                          <div className="flex gap-2">
-                              <Button variant="ghost" className="h-12 font-bold" onClick={() => setManualStep('info')}>Voltar</Button>
-                              <Button className="flex-1 h-14 bg-yellow-500 hover:bg-yellow-400 text-black font-black rounded-2xl" onClick={handleCreateManual} disabled={manualLoading || !destLocation}>
-                                  {manualLoading ? <Loader2 className="animate-spin" /> : "INICIAR AGORA"}
-                              </Button>
+                      <div className="space-y-1.5">
+                          <Label className="text-xs font-black uppercase text-slate-400 ml-1">Celular (Opcional)</Label>
+                          <Input 
+                            placeholder="(00) 00000-0000" 
+                            value={passengerPhone} 
+                            onChange={e => setPassengerPhone(e.target.value)} 
+                            className="h-12 rounded-xl bg-slate-50 border-slate-200 text-slate-900 focus:bg-white transition-all font-bold placeholder:text-slate-300" 
+                          />
+                      </div>
+                  </div>
+
+                  {/* Rota */}
+                  <div className="space-y-4 pt-2">
+                      <div className="space-y-1.5">
+                          <Label className="text-xs font-black uppercase text-slate-400 ml-1">Local de Embarque</Label>
+                          <GoogleLocationSearch placeholder="Onde o passageiro está?" onSelect={setPickupLocation} initialValue={pickupLocation?.display_name} />
+                      </div>
+                      <div className="space-y-1.5">
+                          <Label className="text-xs font-black uppercase text-slate-400 ml-1">Para onde ele vai?</Label>
+                          <GoogleLocationSearch placeholder="Destino final" onSelect={setDestLocation} initialValue={destLocation?.display_name} />
+                      </div>
+                  </div>
+
+                  {/* Resumo e Botão */}
+                  <div className="pt-4 space-y-4">
+                      {pickupLocation && destLocation && (
+                          <div className="bg-yellow-50 p-4 rounded-2xl border border-yellow-200 text-center animate-in zoom-in-95">
+                              {manualLoading ? (
+                                  <div className="flex flex-col items-center gap-2">
+                                      <Loader2 className="animate-spin text-yellow-600 w-6 h-6" />
+                                      <p className="text-[10px] font-bold text-yellow-700 uppercase">Calculando...</p>
+                                  </div>
+                              ) : (
+                                  <>
+                                      <p className="text-[10px] font-bold text-yellow-700 uppercase mb-1 tracking-widest">Valor da Corrida</p>
+                                      <h3 className="text-4xl font-black text-black tracking-tighter">R$ {calculatePrice().toFixed(2)}</h3>
+                                      <p className="text-[10px] text-yellow-600 font-bold mt-1">Distância: {routeDistance.toFixed(1)} km</p>
+                                  </>
+                              )}
                           </div>
+                      )}
+                      
+                      <div className="flex gap-3">
+                          <Button 
+                            variant="ghost" 
+                            className="flex-1 h-14 rounded-2xl font-bold text-slate-400" 
+                            onClick={() => setShowManualRide(false)}
+                          >
+                            Cancelar
+                          </Button>
+                          <Button 
+                            className="flex-[2] h-14 bg-black hover:bg-zinc-800 text-white font-black rounded-2xl shadow-xl transition-all active:scale-95 disabled:opacity-50" 
+                            onClick={handleCreateManual} 
+                            disabled={manualLoading || !destLocation || !passengerName || !pickupLocation}
+                          >
+                              {manualLoading ? <Loader2 className="animate-spin" /> : "INICIAR CORRIDA"}
+                          </Button>
                       </div>
-                  )}
+                  </div>
               </div>
           </DialogContent>
       </Dialog>
