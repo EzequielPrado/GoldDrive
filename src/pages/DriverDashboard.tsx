@@ -52,6 +52,7 @@ const DriverDashboard = () => {
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [rating, setRating] = useState(0);
   const [showManualRide, setShowManualRide] = useState(false);
+  const [gpsLoading, setGpsLoading] = useState(false);
   
   // Estados para Corrida Manual
   const [passengerName, setPassengerName] = useState("");
@@ -179,6 +180,27 @@ const DriverDashboard = () => {
       } finally {
           setManualLoading(false);
       }
+  };
+
+  const getCurrentLocation = () => {
+      setGpsLoading(true);
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+          const geocoder = new google.maps.Geocoder();
+          geocoder.geocode({ location: { lat: pos.coords.latitude, lng: pos.coords.longitude } }, (results, status) => {
+              if (status === 'OK' && results?.[0]) {
+                  setPickupLocation({ 
+                      lat: pos.coords.latitude, 
+                      lon: pos.coords.longitude, 
+                      display_name: results[0].formatted_address 
+                  });
+                  showSuccess("Sua localização atualizada!");
+              }
+              setGpsLoading(false);
+          });
+      }, () => { 
+          setGpsLoading(false); 
+          showError("Ative o GPS do celular."); 
+      });
   };
 
   const isOnTrip = !!ride && ['ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(ride?.status || '');
@@ -334,7 +356,23 @@ const DriverDashboard = () => {
                   <div className="space-y-4 pt-2">
                       <div className="space-y-1.5">
                           <Label className="text-xs font-black uppercase text-slate-400 ml-1">Local de Embarque</Label>
-                          <GoogleLocationSearch placeholder="Onde o passageiro está?" onSelect={setPickupLocation} initialValue={pickupLocation?.display_name} />
+                          <div className="flex gap-2">
+                              <GoogleLocationSearch 
+                                placeholder="Onde o passageiro está?" 
+                                onSelect={setPickupLocation} 
+                                initialValue={pickupLocation?.display_name} 
+                                className="flex-1"
+                              />
+                              <Button 
+                                size="icon" 
+                                variant="outline" 
+                                className="h-14 w-14 rounded-2xl shrink-0 border-slate-200 bg-slate-50" 
+                                onClick={getCurrentLocation} 
+                                disabled={gpsLoading}
+                              >
+                                {gpsLoading ? <Loader2 className="animate-spin text-slate-400" /> : <MapPin className="w-5 h-5 text-slate-600" />}
+                              </Button>
+                          </div>
                       </div>
                       <div className="space-y-1.5">
                           <Label className="text-xs font-black uppercase text-slate-400 ml-1">Para onde ele vai?</Label>
