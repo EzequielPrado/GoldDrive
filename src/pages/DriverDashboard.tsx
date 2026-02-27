@@ -48,7 +48,8 @@ const DriverDashboard = () => {
   const [isOnline, setIsOnline] = useState(false);
   const [driverProfile, setDriverProfile] = useState<any>(null);
   const [showChat, setShowChat] = useState(false);
-  const [showManualRideModal, setShowManualRideModal] = useState(false);
+  const [historyItems, setHistoryItems] = useState<any[]>([]);
+  const [rating, setRating] = useState(0);
   
   // Localização para Google Maps
   const [pickupCoord, setPickupCoord] = useState<{lat: number, lon: number} | null>(null);
@@ -71,6 +72,20 @@ const DriverDashboard = () => {
 
   useEffect(() => { checkProfile(); }, [activeTab]);
 
+  // Carrega histórico quando a aba muda
+  useEffect(() => {
+      if (activeTab === 'history' && driverProfile?.id) {
+          const fetchHistory = async () => {
+               const { data } = await supabase.from('rides')
+                  .select('*, client_details:profiles!public_rides_customer_id_fkey(*)')
+                  .eq('driver_id', driverProfile.id)
+                  .order('created_at', { ascending: false });
+               if (data) setHistoryItems(data);
+          };
+          fetchHistory();
+      }
+  }, [activeTab, driverProfile?.id]);
+
   const checkProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if(user) {
@@ -88,6 +103,7 @@ const DriverDashboard = () => {
   };
 
   const isOnTrip = !!ride && ['ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(ride?.status || '');
+  const isCompleted = ride?.status === 'COMPLETED';
 
   return (
     <div className="h-screen flex flex-col bg-slate-50 relative overflow-hidden font-sans">
@@ -100,7 +116,7 @@ const DriverDashboard = () => {
 
       {/* Header Motorista */}
       <div className="absolute top-0 left-0 right-0 p-6 z-20 flex justify-between items-start pointer-events-none mt-4">
-          {!isOnTrip && (
+          {!isOnTrip && !isCompleted && (
               <div className={`pointer-events-auto backdrop-blur-xl border border-white/20 p-2 pr-4 rounded-full flex items-center gap-3 shadow-lg ${isOnline ? 'bg-black/80' : 'bg-white/80'}`}>
                  <Switch checked={isOnline} onCheckedChange={toggleOnline} />
                  <span className={`text-xs font-bold uppercase ${isOnline ? 'text-white' : 'text-slate-500'}`}>{isOnline ? 'Online' : 'Offline'}</span>
@@ -156,6 +172,24 @@ const DriverDashboard = () => {
                     </div>
                 )}
 
+                {/* Corrida Finalizada (Avaliação) */}
+                {isCompleted && (
+                    <div className="bg-white p-8 rounded-[32px] shadow-2xl text-center animate-in zoom-in-95 duration-300 border border-gray-100">
+                        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"><DollarSign className="w-10 h-10 text-green-600" /></div>
+                        <h2 className="text-3xl font-black text-slate-900 mb-2">R$ {Number(ride.price).toFixed(2)}</h2>
+                        <p className="text-gray-500 mb-6 font-medium">Corrida finalizada com sucesso!</p>
+                        
+                        <div className="bg-slate-50 p-4 rounded-2xl mb-6">
+                            <p className="text-xs font-bold text-gray-400 uppercase mb-3">Avalie o Passageiro</p>
+                            <div className="flex justify-center gap-3">{[1,2,3,4,5].map(star => (<button key={star} onClick={() => setRating(star)} className="transition-transform active:scale-90"><Star className={`w-10 h-10 ${rating >= star ? 'fill-yellow-500 text-yellow-500' : 'text-gray-200'}`} /></button>))}</div>
+                        </div>
+
+                        <Button className="w-full h-14 bg-black text-white font-bold rounded-2xl shadow-xl" onClick={async () => { await rateRide(ride.id, rating || 5, true); clearRide(); setRating(0); }}>
+                            LIBERAR PARA NOVAS CORRIDAS
+                        </Button>
+                    </div>
+                )}
+
                 {/* Corrida Ativa (Passos da Viagem) */}
                 {isOnTrip && (
                     <div className="bg-white p-6 rounded-[32px] shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-300">
@@ -204,9 +238,19 @@ const DriverDashboard = () => {
                 )}
             </div>
          )}
+
+         {/* Aba Histórico */}
+         {activeTab === 'history' && (
+             <div className="w-full max-w-md mx-auto pointer-events-auto bg-white/95 backdrop-blur-xl p-6 rounded-[32px] shadow-2xl border border-white/40 h-[60vh] flex flex-col">
+                <h2 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-2"><History className="w-6 h-6" /> Histórico de Corridas</h2>
+                <ScrollArea className="flex-1 -mr-2 pr-4 custom-scrollbar">
+                    {historyItems.length === 0 ? (<div className="py-12 text-center text-gray-400"><Clock className="w-10 h-10 mx-auto mb-2 opacity-20" /><p>Nenhuma viagem realizada.</p></div>) : historyItems.map(item => (<div key={item.id} className="mb-3 p-4 bg-gray-50 rounded-2xl border border-gray-100"><div className="flex justify-between items-start mb-2"><div><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{new Date(item.created_at).toLocaleDateString()}</p><p className="font-black text-slate-900 text-sm mt-0.5">{item.client_details?.first_name || 'Passageiro'}</p></div><span className="font-black text-green-600">R$ {Number(item.price).toFixed(2)}</span></div><div className="flex items-center gap-2 mt-3 text-xs text-gray-500"><MapPin className="w-3 h-3 shrink-0" /><p className="truncate">{item.destination_address}</p></div></div>))}
+                </ScrollArea>
+             </div>
+         )}
       </div>
 
-      <FloatingDock activeTab={activeTab} onTabChange={tab => { if(tab === 'profile') navigate('/profile'); else setActiveTab(tab); }} role="driver" />
+      <FloatingDock activeTab={activeTab} onTabChange={tab => { if(tab === 'profile') navigate('/profile'); else if(tab === 'wallet') navigate('/wallet'); else setActiveTab(tab); }} role="driver" />
       {showChat && ride && currentUserId && (<RideChat rideId={ride.id} currentUserId={currentUserId} role="driver" otherUserName={ride.client_details?.first_name || 'Passageiro'} otherUserAvatar={ride.client_details?.avatar_url} onClose={() => setShowChat(false)} />)}
     </div>
   );
