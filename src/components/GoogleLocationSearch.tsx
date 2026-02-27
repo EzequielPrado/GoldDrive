@@ -23,7 +23,7 @@ const GoogleLocationSearch = ({
   className = "",
   error = false
 }: LocationSearchProps) => {
-  const [inputValue, setInputValue] = useState(initialValue);
+  const [inputValue, setInputValue] = useState(initialValue || "");
   const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -35,13 +35,18 @@ const GoogleLocationSearch = ({
 
   useEffect(() => {
     if (!placesLibrary) return;
-    setAutocompleteService(new placesLibrary.AutocompleteService());
-    // O PlacesService precisa de um elemento HTML fantasma
-    setPlacesService(new placesLibrary.PlacesService(document.createElement('div')));
+    try {
+      setAutocompleteService(new placesLibrary.AutocompleteService());
+      setPlacesService(new placesLibrary.PlacesService(document.createElement('div')));
+    } catch (e) {
+      console.error("Erro ao inicializar serviços do Google:", e);
+    }
   }, [placesLibrary]);
 
   useEffect(() => {
-    setInputValue(initialValue || "");
+    if (initialValue !== undefined) {
+      setInputValue(initialValue);
+    }
   }, [initialValue]);
 
   useEffect(() => {
@@ -55,7 +60,7 @@ const GoogleLocationSearch = ({
   }, []);
 
   useEffect(() => {
-    if (!autocompleteService || inputValue.length < 3 || !isOpen) {
+    if (!autocompleteService || inputValue.length < 2 || !isOpen) {
         setPredictions([]);
         return;
     }
@@ -67,10 +72,15 @@ const GoogleLocationSearch = ({
         componentRestrictions: { country: 'br' },
         types: ['address', 'establishment']
       }, (results, status) => {
-        if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-          setPredictions(results);
-        }
         setLoading(false);
+        if (status === 'OK' && results) {
+          setPredictions(results);
+        } else {
+          setPredictions([]);
+          if (status !== 'ZERO_RESULTS' && status !== 'OK') {
+              console.warn("Google Maps Autocomplete Status:", status);
+          }
+        }
       });
     }, 300);
 
@@ -81,40 +91,49 @@ const GoogleLocationSearch = ({
     if (!placesService) return;
 
     setLoading(true);
+    setIsOpen(false);
+    
     placesService.getDetails({
       placeId: prediction.place_id,
       fields: ['geometry', 'formatted_address']
     }, (place, status) => {
       setLoading(false);
-      if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
+      if (status === 'OK' && place?.geometry?.location) {
         const lat = place.geometry.location.lat();
         const lng = place.geometry.location.lng();
         const address = place.formatted_address || prediction.description;
 
         setInputValue(address);
-        setIsOpen(false);
         onSelect({ lat, lon: lng, display_name: address });
       }
     });
   };
 
   return (
-    <div className={`relative group ${className}`} ref={containerRef}>
-      <div className={`absolute left-4 top-4 z-10 transition-colors ${error ? "text-red-500" : "text-gray-400"}`}>
+    <div className={`relative w-full ${className}`} ref={containerRef}>
+      <div className={`absolute left-4 top-4 z-20 transition-colors ${error ? "text-red-500" : "text-gray-400"}`}>
         <Icon className="w-5 h-5" />
       </div>
       
       <Input
         value={inputValue}
-        onChange={(e) => { setInputValue(e.target.value); setIsOpen(true); }}
+        onChange={(e) => { 
+            setInputValue(e.target.value); 
+            setIsOpen(true); 
+        }}
         onFocus={() => setIsOpen(true)}
         placeholder={placeholder}
-        className={`pl-12 pr-10 h-14 bg-white text-slate-900 rounded-2xl transition-all shadow-sm font-medium placeholder:text-gray-400 
-            ${error ? "border-red-500 ring-1 ring-red-500" : "border-gray-200"}`}
+        className={`pl-12 pr-10 h-14 bg-white text-slate-900 rounded-2xl transition-all shadow-sm font-medium placeholder:text-gray-400 border-gray-200 focus:border-black focus:ring-0
+            ${error ? "border-red-500 ring-1 ring-red-500" : ""}`}
       />
 
       {inputValue && (
-          <Button size="icon" variant="ghost" onClick={() => { setInputValue(""); onSelect(null); }} className="absolute right-2 top-2 text-gray-400 h-10 w-10">
+          <Button 
+            size="icon" 
+            variant="ghost" 
+            onClick={() => { setInputValue(""); onSelect(null); setPredictions([]); }} 
+            className="absolute right-2 top-2 text-gray-400 hover:text-black h-10 w-10 z-20"
+          >
               <X className="w-4 h-4" />
           </Button>
       )}
@@ -129,12 +148,14 @@ const GoogleLocationSearch = ({
           
           {!loading && predictions.map((item, index) => (
             <button
-              key={index}
+              key={item.place_id || index}
               onClick={() => handleSelect(item)}
-              className="w-full text-left p-4 hover:bg-gray-50 border-b border-gray-50 last:border-0 flex items-start gap-3"
+              className="w-full text-left p-4 hover:bg-gray-50 border-b border-gray-50 last:border-0 flex items-start gap-3 transition-colors"
               type="button"
             >
-                <MapPin className="w-4 h-4 text-slate-400 mt-1" />
+                <div className="bg-slate-100 p-2 rounded-full shrink-0">
+                    <MapPin className="w-4 h-4 text-slate-500" />
+                </div>
                 <div className="min-w-0 flex-1">
                     <p className="font-bold text-sm text-slate-900 truncate">{item.structured_formatting.main_text}</p>
                     <p className="text-xs text-gray-500 truncate">{item.structured_formatting.secondary_text}</p>
