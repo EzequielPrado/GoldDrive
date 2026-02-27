@@ -8,12 +8,10 @@ import { supabase } from "@/integrations/supabase/client";
 const Index = () => {
   const navigate = useNavigate();
 
-  // Verificação silenciosa de sessão
   useEffect(() => {
     const checkUser = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        
         if (session) {
           const { data: profile } = await supabase
             .from('profiles')
@@ -31,37 +29,29 @@ const Index = () => {
         console.error("Check user error", error);
       }
     };
-
     checkUser();
   }, [navigate]);
 
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col relative overflow-hidden font-sans">
-      
-      {/* Background Decorativo */}
       <div className="absolute inset-0 pointer-events-none">
           <div className="absolute -top-[20%] -left-[20%] w-[150%] h-[80%] bg-gradient-to-b from-yellow-600/10 to-transparent rounded-full blur-[100px]" />
           <div className="absolute bottom-0 w-full h-1/2 bg-gradient-to-t from-black via-black/80 to-transparent" />
       </div>
 
       <div className="flex-1 flex flex-col px-6 pt-12 pb-6 relative z-10 max-w-md mx-auto w-full justify-between">
-        
-        {/* Header / Logo */}
         <div className="text-center space-y-4 mt-12 animate-in slide-in-from-top-10 duration-700 flex flex-col items-center">
             <img 
-              src="/logo-goldmobile-2.png" 
+              src="/app-logo.jpg" 
               alt="Gold Mobile" 
-              className="w-64 h-auto drop-shadow-2xl"
+              className="w-64 h-auto drop-shadow-2xl rounded-2xl"
             />
             <p className="text-zinc-400 text-lg font-medium leading-relaxed max-w-[260px]">
               Mobilidade premium <br/> na palma da sua mão.
             </p>
         </div>
 
-        {/* Action Area */}
         <div className="space-y-6 w-full mb-8 animate-in slide-in-from-bottom-10 duration-700 delay-150">
-            
-            {/* PASSAGEIRO - BOTÃO PRINCIPAL */}
             <div className="relative group">
                 <div className="absolute -inset-1 bg-gradient-to-r from-yellow-600 to-yellow-400 rounded-[35px] blur opacity-30 group-hover:opacity-60 transition duration-500"></div>
                 <Button 
@@ -76,15 +66,11 @@ const Index = () => {
                     </span>
                 </Button>
             </div>
-
-            {/* DIVISOR */}
             <div className="flex items-center gap-4 px-8">
                 <div className="h-px bg-zinc-800 flex-1"></div>
                 <span className="text-xs text-zinc-600 font-bold uppercase tracking-widest">Parceiros</span>
                 <div className="h-px bg-zinc-800 flex-1"></div>
             </div>
-
-            {/* MOTORISTA - BOTÃO SECUNDÁRIO */}
             <Button 
                 onClick={() => navigate('/login/driver')}
                 variant="outline"
@@ -96,12 +82,9 @@ const Index = () => {
                 </span>
                 <ArrowRight className="w-5 h-5 opacity-30 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
             </Button>
-
         </div>
-
       </div>
 
-      {/* Footer / Admin Link */}
       <div className="pb-6 text-center space-y-4 relative z-10">
           <div 
             onClick={() => navigate('/login/admin')}
@@ -109,12 +92,10 @@ const Index = () => {
           >
              <ShieldCheck className="w-3 h-3" /> Acesso Administrativo
           </div>
-          
           <div className="opacity-40 scale-75">
             <MadeWithDyad />
           </div>
       </div>
-
     </div>
   );
 };
