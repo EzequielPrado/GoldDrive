@@ -68,15 +68,19 @@ const DriverDashboard = () => {
   const [pickupCoord, setPickupCoord] = useState<{lat: number, lon: number} | null>(null);
   const [destCoord, setDestCoord] = useState<{lat: number, lon: number} | null>(null);
 
+  // Sincroniza coordenadas do mapa
   useEffect(() => {
     if (ride) {
         setPickupCoord({ lat: Number(ride.pickup_lat), lon: Number(ride.pickup_lng) });
         setDestCoord({ lat: Number(ride.destination_lat), lon: Number(ride.destination_lng) });
+    } else if (pickupLocation && destLocation && showManualRide) {
+        setPickupCoord({ lat: pickupLocation.lat, lon: pickupLocation.lon });
+        setDestCoord({ lat: destLocation.lat, lon: destLocation.lon });
     } else {
-        setPickupCoord(pickupLocation ? { lat: pickupLocation.lat, lon: pickupLocation.lon } : null);
-        setDestCoord(destLocation ? { lat: destLocation.lat, lon: destLocation.lon } : null);
+        setPickupCoord(null);
+        setDestCoord(null);
     }
-  }, [ride, pickupLocation, destLocation]);
+  }, [ride, pickupLocation, destLocation, showManualRide]);
 
   useEffect(() => {
       const tabParam = searchParams.get('tab');
@@ -109,6 +113,29 @@ const DriverDashboard = () => {
       };
       fetchPricing();
   }, []);
+
+  const calculateRouteDistance = useCallback(() => {
+      if (!pickupLocation || !destLocation) return;
+      setManualLoading(true);
+      const service = new google.maps.DistanceMatrixService();
+      service.getDistanceMatrix({
+          origins: [{ lat: pickupLocation.lat, lng: pickupLocation.lon }],
+          destinations: [{ lat: destLocation.lat, lng: destLocation.lon }],
+          travelMode: google.maps.TravelMode.DRIVING
+      }, (response, status) => {
+          if (status === 'OK' && response?.rows[0].elements[0].distance) {
+              setRouteDistance(response.rows[0].elements[0].distance.value / 1000);
+          }
+          setManualLoading(false);
+      });
+  }, [pickupLocation, destLocation]);
+
+  // Gatilho automático de cálculo para corrida manual
+  useEffect(() => {
+      if (pickupLocation && destLocation && showManualRide && manualStep === 'route') {
+          calculateRouteDistance();
+      }
+  }, [pickupLocation, destLocation, showManualRide, manualStep, calculateRouteDistance]);
 
   const calculatePrice = useCallback(() => {
       if (routeDistance <= 0) return 0;
@@ -150,27 +177,12 @@ const DriverDashboard = () => {
           setPassengerPhone("");
           setPickupLocation(null);
           setDestLocation(null);
+          setRouteDistance(0);
       } catch (e: any) {
           showError("Erro ao lançar corrida.");
       } finally {
           setManualLoading(false);
       }
-  };
-
-  const calculateRouteDistance = () => {
-      if (!pickupLocation || !destLocation) return;
-      setManualLoading(true);
-      const service = new google.maps.DistanceMatrixService();
-      service.getDistanceMatrix({
-          origins: [{ lat: pickupLocation.lat, lng: pickupLocation.lon }],
-          destinations: [{ lat: destLocation.lat, lng: destLocation.lon }],
-          travelMode: google.maps.TravelMode.DRIVING
-      }, (response, status) => {
-          if (status === 'OK' && response?.rows[0].elements[0].distance) {
-              setRouteDistance(response.rows[0].elements[0].distance.value / 1000);
-          }
-          setManualLoading(false);
-      });
   };
 
   const isOnTrip = !!ride && ['ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(ride?.status || '');
@@ -196,9 +208,9 @@ const DriverDashboard = () => {
           </div>
       </div>
 
-      <div className="absolute inset-0 z-10 flex flex-col justify-end pb-32 md:pb-10 md:justify-center items-center pointer-events-none p-4">
+      <div className="absolute inset-0 z-10 flex flex-col justify-end pb-32 pointer-events-none p-4">
          {activeTab === 'home' && (
-            <div className="w-full max-w-md pointer-events-auto">
+            <div className="w-full max-w-md mx-auto pointer-events-auto">
                 {!ride && !isOnline && (
                     <div className="bg-white/95 backdrop-blur-xl p-8 rounded-[32px] shadow-2xl text-center border border-white/40">
                         <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-6 text-slate-400"><Car className="w-8 h-8" /></div>
