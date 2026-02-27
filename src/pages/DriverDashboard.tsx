@@ -1,12 +1,13 @@
+"use client";
+
 import React, { useState, useEffect, useRef } from "react";
-import { Wallet, MapPin, Navigation, Shield, DollarSign, Star, Menu, History, CheckCircle, Car, Calendar, ArrowRight, AlertTriangle, ChevronRight, TrendingUp, MessageCircle, Phone, XCircle, UserPlus, Clock, MousePointer2, User, X, Hand, Map, Flag, CheckCircle2 } from "lucide-react";
+import { Wallet, MapPin, Navigation, DollarSign, Star, History, Car, ArrowRight, MessageCircle, Phone, Smartphone, Map, Flag, CheckCircle2, UserPlus, Clock, X, MousePointer2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import MapComponent from "@/components/MapComponent";
+import GoogleMapComponent from "@/components/GoogleMapComponent";
 import { useRide } from "@/context/RideContext";
 import { showSuccess, showError } from "@/utils/toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -16,8 +17,7 @@ import FloatingDock from "@/components/FloatingDock";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import RideChat from "@/components/RideChat";
 import { Input } from "@/components/ui/input";
-import LocationSearch from "@/components/LocationSearch";
-import { Label } from "@/components/ui/label";
+import GoogleLocationSearch from "@/components/GoogleLocationSearch";
 
 const NavigationBlock = ({ label, lat, lng, address, icon: Icon = MapPin }: any) => {
     const openMap = (app: 'waze' | 'google') => {
@@ -43,31 +43,26 @@ const DriverDashboard = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { ride, availableRides, acceptRide, rejectRide, confirmArrival, finishRide, startRide, cancelRide, rateRide, clearRide, currentUserId, createManualRide } = useRide();
+  
   const [activeTab, setActiveTab] = useState('home');
   const [isOnline, setIsOnline] = useState(false);
-  const [incomingRide, setIncomingRide] = useState<any | null>(null);
-  const [timer, setTimer] = useState(60); 
   const [driverProfile, setDriverProfile] = useState<any>(null);
   const [showChat, setShowChat] = useState(false);
   const [showManualRideModal, setShowManualRideModal] = useState(false);
-  const [manualForm, setManualForm] = useState({ name: "", phone: "", pickup: null as any, dest: null as any });
-  const [manualRoute, setManualRoute] = useState<{distance: number, price: number} | null>(null);
-  const [calculatingManual, setCalculatingManual] = useState(false);
-  const [submittingManual, setSubmittingManual] = useState(false);
-  const [gpsLoadingManual, setGpsLoadingManual] = useState(false);
-  const [driverGps, setDriverGps] = useState<{lat: number, lon: number} | null>(null);
-  const [showCancelAlert, setShowCancelAlert] = useState(false);
-  const [showFinishConfirm, setShowFinishConfirm] = useState(false);
-  const [showFinishScreen, setShowFinishScreen] = useState(false);
-  const [finishedRideData, setFinishedRideData] = useState<any>(null);
-  const [showHistoryDetail, setShowHistoryDetail] = useState(false);
-  const [rating, setRating] = useState(0);
-  const [history, setHistory] = useState<any[]>([]);
-  const [selectedHistoryItem, setSelectedHistoryItem] = useState<any>(null);
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [pricingTiers, setPricingTiers] = useState<any[]>([]);
+  
+  // Localização para Google Maps
+  const [pickupCoord, setPickupCoord] = useState<{lat: number, lon: number} | null>(null);
+  const [destCoord, setDestCoord] = useState<{lat: number, lon: number} | null>(null);
 
-  const isOnTrip = !!ride && ['ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(ride?.status || '');
+  useEffect(() => {
+    if (ride) {
+        setPickupCoord({ lat: Number(ride.pickup_lat), lon: Number(ride.pickup_lng) });
+        setDestCoord({ lat: Number(ride.destination_lat), lon: Number(ride.destination_lng) });
+    } else {
+        setPickupCoord(null);
+        setDestCoord(null);
+    }
+  }, [ride]);
 
   useEffect(() => {
       const tabParam = searchParams.get('tab');
@@ -84,14 +79,6 @@ const DriverDashboard = () => {
           if (data?.driver_status === 'PENDING') { navigate('/driver-pending'); return; }
           setDriverProfile(data);
           if (data.is_online !== undefined) setIsOnline(data.is_online);
-          if (activeTab === 'history') {
-               const { data: rides } = await supabase.from('rides').select(`*, customer:profiles!public_rides_customer_id_fkey(*)`).eq('driver_id', user.id).order('created_at', { ascending: false });
-               setHistory(rides || []);
-          }
-          if (activeTab === 'wallet') {
-               const { data: trans } = await supabase.from('transactions').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
-               setTransactions(trans || []);
-          }
       }
   };
 
@@ -100,15 +87,18 @@ const DriverDashboard = () => {
       if (driverProfile?.id) await supabase.from('profiles').update({ is_online: val, last_active: new Date().toISOString() }).eq('id', driverProfile.id);
   };
 
-  const handleTabChange = (tab: string) => {
-      if (tab === 'profile') navigate('/profile');
-      else setActiveTab(tab);
-  };
+  const isOnTrip = !!ride && ['ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(ride?.status || '');
 
   return (
     <div className="h-screen flex flex-col bg-slate-50 relative overflow-hidden font-sans">
       <img src="/app-logo.jpg" alt="Logo" className="fixed top-4 left-1/2 -translate-x-1/2 h-8 opacity-90 z-50 pointer-events-none drop-shadow-md rounded-lg" />
-      <div className="absolute inset-0 z-0"><MapComponent className="h-full w-full" /></div>
+      
+      {/* MAPA GOOGLE */}
+      <div className="absolute inset-0 z-0">
+          <GoogleMapComponent className="h-full w-full" pickupLocation={pickupCoord} destinationLocation={destCoord} />
+      </div>
+
+      {/* Header Motorista */}
       <div className="absolute top-0 left-0 right-0 p-6 z-20 flex justify-between items-start pointer-events-none mt-4">
           {!isOnTrip && (
               <div className={`pointer-events-auto backdrop-blur-xl border border-white/20 p-2 pr-4 rounded-full flex items-center gap-3 shadow-lg ${isOnline ? 'bg-black/80' : 'bg-white/80'}`}>
@@ -120,15 +110,104 @@ const DriverDashboard = () => {
              <Avatar className="h-10 w-10 border-2 border-white"><AvatarImage src={driverProfile?.avatar_url} /><AvatarFallback className="bg-slate-900 text-white font-bold">{driverProfile?.first_name?.[0]}</AvatarFallback></Avatar>
           </div>
       </div>
+
+      {/* Interface Inferior / Cards de Corrida */}
       <div className="absolute inset-0 z-10 flex flex-col justify-end pb-32 md:pb-10 md:justify-center items-center pointer-events-none p-4">
          {activeTab === 'home' && (
             <div className="w-full max-w-md pointer-events-auto">
-                {!ride && !isOnline && (<div className="bg-white/90 backdrop-blur-xl p-8 rounded-[32px] shadow-2xl text-center"><Car className="w-10 h-10 mx-auto mb-6 text-slate-400" /><h2 className="text-3xl font-black text-slate-900 mb-2">Vamos rodar?</h2><Button size="lg" className="w-full h-14 bg-slate-900 text-white font-bold rounded-2xl" onClick={() => toggleOnline(true)}>FICAR ONLINE</Button></div>)}
-                {!ride && isOnline && !incomingRide && (<div className="flex flex-col gap-4 animate-in fade-in"><div className="bg-black/60 backdrop-blur-xl px-6 py-4 rounded-full shadow-2xl flex items-center justify-center gap-3"><div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" /><p className="text-white font-bold">Procurando passageiros...</p></div></div>)}
+                {/* Visualização quando Offline */}
+                {!ride && !isOnline && (
+                    <div className="bg-white/95 backdrop-blur-xl p-8 rounded-[32px] shadow-2xl text-center border border-white/40">
+                        <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-6 text-slate-400"><Car className="w-8 h-8" /></div>
+                        <h2 className="text-3xl font-black text-slate-900 mb-2">Bora rodar hoje?</h2>
+                        <p className="text-gray-500 mb-8">Fique online para começar a receber pedidos de corridas próximas.</p>
+                        <Button size="lg" className="w-full h-14 bg-slate-900 text-white font-bold rounded-2xl shadow-xl" onClick={() => toggleOnline(true)}>FICAR ONLINE</Button>
+                    </div>
+                )}
+
+                {/* Visualização quando Online (Procurando) */}
+                {!ride && isOnline && (
+                    <div className="flex flex-col gap-4 items-center">
+                        <div className="bg-black/80 backdrop-blur-xl px-8 py-4 rounded-full shadow-2xl flex items-center gap-4 animate-pulse border border-white/10">
+                            <div className="w-3 h-3 bg-green-500 rounded-full" />
+                            <p className="text-white font-black uppercase tracking-widest text-xs">Aguardando solicitações...</p>
+                        </div>
+                        {/* Lista de Corridas Disponíveis (Se houver) */}
+                        {availableRides.length > 0 && (
+                            <div className="w-full bg-white p-6 rounded-[32px] shadow-2xl mt-4 border border-gray-100 animate-in slide-in-from-bottom-4">
+                                <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Nova Corrida Disponível!</h4>
+                                {availableRides.map(r => (
+                                    <div key={r.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col gap-4">
+                                        <div className="flex justify-between items-center">
+                                            <div className="flex items-center gap-3">
+                                                <Avatar className="w-10 h-10 border-2 border-white"><AvatarImage src={r.client_details?.avatar_url} /><AvatarFallback>{r.client_details?.first_name?.[0]}</AvatarFallback></Avatar>
+                                                <div><p className="font-bold text-slate-900">{r.client_details?.first_name}</p><p className="text-[10px] text-gray-500 font-bold uppercase">{r.distance}</p></div>
+                                            </div>
+                                            <span className="text-xl font-black text-green-600">R$ {Number(r.price).toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <Button variant="ghost" className="flex-1 text-red-500 font-bold" onClick={() => rejectRide(r.id)}>Ignorar</Button>
+                                            <Button className="flex-[2] bg-slate-900 text-white font-bold h-12 rounded-xl" onClick={() => acceptRide(r.id)}>Aceitar</Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Corrida Ativa (Passos da Viagem) */}
+                {isOnTrip && (
+                    <div className="bg-white p-6 rounded-[32px] shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-300">
+                        <div className="flex items-center justify-between mb-6">
+                            <Badge className="bg-yellow-500 text-black font-black uppercase tracking-widest text-[10px] px-3 py-1">{ride?.status === 'ACCEPTED' ? 'A CAMINHO' : ride?.status === 'ARRIVED' ? 'NO LOCAL' : 'EM VIAGEM'}</Badge>
+                            <span className="font-black text-lg">R$ {Number(ride?.price).toFixed(2)}</span>
+                        </div>
+                        
+                        {/* Blocos de Navegação */}
+                        {ride?.status === 'ACCEPTED' && (
+                            <NavigationBlock label="Buscar Passageiro" lat={ride.pickup_lat} lng={ride.pickup_lng} address={ride.pickup_address} />
+                        )}
+                        {ride?.status === 'ARRIVED' && (
+                            <div className="bg-green-50 p-6 rounded-2xl text-center mb-4 border border-green-100 animate-pulse">
+                                <p className="font-black text-green-800">Aguardando passageiro embarcar...</p>
+                                <p className="text-xs text-green-600 mt-1">Avise que você chegou.</p>
+                            </div>
+                        )}
+                        {ride?.status === 'IN_PROGRESS' && (
+                            <NavigationBlock label="Destino Final" lat={ride.destination_lat} lng={ride.destination_lng} address={ride.destination_address} icon={Flag} />
+                        )}
+
+                        <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100 mb-6">
+                             <Avatar className="w-12 h-12 border-2 border-white shadow-sm"><AvatarImage src={ride?.client_details?.avatar_url} /><AvatarFallback className="bg-slate-200 font-bold">{ride?.client_details?.first_name?.[0]}</AvatarFallback></Avatar>
+                             <div className="flex-1">
+                                 <h3 className="font-black text-slate-900 leading-tight">{ride?.client_details?.first_name} {ride?.client_details?.last_name}</h3>
+                                 <p className="text-[10px] text-gray-500 font-bold uppercase mt-0.5">Nota: 5.0 ⭐</p>
+                             </div>
+                             <Button size="icon" variant="outline" className="h-10 w-10 rounded-xl" onClick={() => setShowChat(true)}><MessageCircle className="w-4 h-4" /></Button>
+                             {ride?.client_details?.phone && (
+                                <Button size="icon" variant="outline" className="h-10 w-10 rounded-xl" onClick={() => window.open(`tel:${ride.client_details.phone}`)}><Phone className="w-4 h-4" /></Button>
+                             )}
+                        </div>
+
+                        {/* Botões de Ação Dinâmicos */}
+                        {ride?.status === 'ACCEPTED' && (
+                            <Button className="w-full h-16 bg-slate-900 text-white font-black text-lg rounded-2xl shadow-xl" onClick={() => confirmArrival(ride.id)}>CHEGUEI NO LOCAL</Button>
+                        )}
+                        {ride?.status === 'ARRIVED' && (
+                            <Button className="w-full h-16 bg-green-600 hover:bg-green-700 text-white font-black text-lg rounded-2xl shadow-xl" onClick={() => startRide(ride.id)}>INICIAR VIAGEM</Button>
+                        )}
+                        {ride?.status === 'IN_PROGRESS' && (
+                            <Button className="w-full h-16 bg-blue-600 hover:bg-blue-700 text-white font-black text-lg rounded-2xl shadow-xl" onClick={() => finishRide(ride.id)}>FINALIZAR CORRIDA</Button>
+                        )}
+                    </div>
+                )}
             </div>
          )}
       </div>
-      <div className="relative z-[100]"><FloatingDock activeTab={activeTab} onTabChange={handleTabChange} role="driver" /></div>
+
+      <FloatingDock activeTab={activeTab} onTabChange={tab => { if(tab === 'profile') navigate('/profile'); else setActiveTab(tab); }} role="driver" />
+      {showChat && ride && currentUserId && (<RideChat rideId={ride.id} currentUserId={currentUserId} role="driver" otherUserName={ride.client_details?.first_name || 'Passageiro'} otherUserAvatar={ride.client_details?.avatar_url} onClose={() => setShowChat(false)} />)}
     </div>
   );
 };
