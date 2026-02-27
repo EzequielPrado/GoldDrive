@@ -32,7 +32,7 @@ const Directions = ({ pickup, destination }: { pickup: any, destination: any }) 
 
   useEffect(() => {
     if (!directionsService || !directionsRenderer || !pickup || !destination) {
-        if (directionsRenderer) directionsRenderer.setDirections({ routes: [] });
+        if (directionsRenderer) directionsRenderer.setDirections(null as any);
         return;
     }
 
