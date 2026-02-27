@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { showError } from '@/utils/toast';
+import { showError, showSuccess } from '@/utils/toast';
 
 export const useAuth = () => {
   const [loading, setLoading] = useState(false);
@@ -71,5 +71,41 @@ export const useAuth = () => {
     }
   };
 
-  return { loading, handleSignIn };
+  const handleSignUp = async (email: string, password: string, fullName: string, phone: string, role: 'client' | 'driver' = 'client') => {
+    if (!email || !password || !fullName) {
+      showError("Preencha todos os campos obrigatórios.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const [firstName, ...lastNameParts] = fullName.split(' ');
+      const lastName = lastNameParts.join(' ');
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            first_name: firstName,
+            last_name: lastName,
+            phone: phone,
+            role: role
+          }
+        }
+      });
+
+      if (error) throw error;
+      
+      showSuccess("Conta criada com sucesso! Faça login para entrar.");
+      return true;
+    } catch (error: any) {
+      showError(error.message || "Erro ao criar conta.");
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { loading, handleSignIn, handleSignUp };
 };
