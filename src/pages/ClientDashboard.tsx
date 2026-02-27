@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import GoogleMapComponent from "@/components/GoogleMapComponent";
 import { 
-  MapPin, Car, Loader2, Star, ChevronRight, Clock, Wallet, ArrowLeft, History, MessageCircle, CheckCircle2
+  MapPin, Car, Loader2, Star, ChevronRight, Clock, Wallet, ArrowLeft, History, MessageCircle, CheckCircle2, AlertTriangle, Banknote, CreditCard
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRide } from "@/context/RideContext";
@@ -245,7 +245,7 @@ const ClientDashboard = () => {
                                     })}
                                 </div>
                                 <div className="grid grid-cols-2 gap-3 mb-6">
-                                    {appSettings.enableWallet && <button onClick={() => setPaymentMethod('WALLET')} className={`h-14 rounded-2xl border-2 flex items-center justify-center gap-2 font-bold transition-all ${paymentMethod === 'WALLET' ? 'border-slate-900 bg-slate-900 text-white' : 'border-gray-200 text-slate-500'}`}><Wallet className="w-4 h-4" /> Carteira</button>}
+                                    {appSettings.enableWallet && <button onClick={() => setPaymentMethod('WALLET')} className={`h-14 rounded-2xl border-2 flex items-center justify-center gap-2 font-bold transition-all ${paymentMethod === 'WALLET' ? 'border-slate-900 bg-slate-900 text-white' : 'border-gray-200 text-slate-500'}`}><CreditCard className="w-4 h-4" /> Carteira</button>}
                                     <button onClick={() => setPaymentMethod('CASH')} className={`h-14 rounded-2xl border-2 flex items-center justify-center gap-2 font-bold transition-all ${paymentMethod === 'CASH' ? 'border-slate-900 bg-slate-900 text-white' : 'border-gray-200 text-slate-500'}`}><Banknote className="w-4 h-4" /> Dinheiro</button>
                                 </div>
                                 <Button className="w-full h-14 text-lg font-black rounded-2xl bg-yellow-500 hover:bg-yellow-400 text-black shadow-xl shadow-yellow-500/20" onClick={confirmRide} disabled={isRequesting}>{isRequesting ? <Loader2 className="animate-spin" /> : "CONFIRMAR SOLICITAÇÃO"}</Button>
