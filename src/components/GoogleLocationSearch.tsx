@@ -77,9 +77,6 @@ const GoogleLocationSearch = ({
           setPredictions(results);
         } else {
           setPredictions([]);
-          if (status !== 'ZERO_RESULTS' && status !== 'OK') {
-              console.warn("Google Maps Autocomplete Status:", status);
-          }
         }
       });
     }, 300);

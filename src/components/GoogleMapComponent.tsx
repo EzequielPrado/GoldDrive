@@ -41,7 +41,7 @@ const Directions = ({ pickup, destination }: { pickup: any, destination: any }) 
       destination: destination,
       travelMode: google.maps.TravelMode.DRIVING
     }, (result, status) => {
-      if (status === 'OK') {
+      if (status === 'OK' && result) {
         directionsRenderer.setDirections(result);
       }
     });
@@ -55,7 +55,6 @@ const GoogleMapComponent = ({
     pickupLocation, 
     destinationLocation 
 }: MapProps) => {
-  // Patrocínio - MG como centro padrão
   const defaultCenter = { lat: -18.9469, lng: -46.9928 };
 
   return (
@@ -65,26 +64,8 @@ const GoogleMapComponent = ({
         defaultZoom={14}
         gestureHandling={'greedy'}
         disableDefaultUI={true}
-        mapId="bf50a63493f06e40" // ID opcional para mapas customizados
+        mapId="bf50a63493f06e40"
       >
-        {/* Marcador de Origem */}
-        {pickupLocation && (
-            <MarkerWithLabel 
-                position={{ lat: pickupLocation.lat, lng: pickupLocation.lon }} 
-                label="A"
-                color="#22c55e"
-            />
-        )}
-
-        {/* Marcador de Destino */}
-        {destinationLocation && (
-            <MarkerWithLabel 
-                position={{ lat: destinationLocation.lat, lng: destinationLocation.lon }} 
-                label="B"
-                color="#ef4444"
-            />
-        )}
-
         <Directions 
             pickup={pickupLocation ? { lat: pickupLocation.lat, lng: pickupLocation.lon } : null}
             destination={destinationLocation ? { lat: destinationLocation.lat, lng: destinationLocation.lon } : null}
@@ -92,16 +73,6 @@ const GoogleMapComponent = ({
       </Map>
     </div>
   );
-};
-
-// Componente simples de Marcador customizado
-const MarkerWithLabel = ({ position, label, color }: { position: any, label: string, color: string }) => {
-    return (
-        <div style={{ position: 'absolute', transform: 'translate(-50%, -100%)' }}>
-            {/* O marcador real é renderizado pelo Google Maps via biblioteca avançada, 
-                mas para simplicidade usaremos apenas a lógica de Directions que já desenha a rota */}
-        </div>
-    );
 };
 
 export default GoogleMapComponent;

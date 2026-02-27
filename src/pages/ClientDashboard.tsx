@@ -26,8 +26,8 @@ const ClientDashboard = () => {
   const [activeTab, setActiveTab] = useState("home");
   const [step, setStep] = useState<'search' | 'confirm' | 'waiting' | 'rating' | 'cancelled'>('search');
   
-  const [pickupLocation, setPickupLocation] = useState<{ lat: number, lon: number, address: string } | null>(null);
-  const [destLocation, setDestLocation] = useState<{ lat: number, lon: number, address: string } | null>(null);
+  const [pickupLocation, setPickupLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
+  const [destLocation, setDestLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
   const [routeDistance, setRouteDistance] = useState<number>(0); 
   
   const [formErrors, setFormErrors] = useState({ pickup: false, dest: false });
@@ -73,8 +73,6 @@ const ClientDashboard = () => {
   useEffect(() => {
     if (pickupLocation && destLocation) {
         setCalculatingRoute(true);
-        // O Google Maps no componente GoogleMapComponent já calculará a rota visualmente.
-        // Aqui usamos apenas para pegar a distância para cálculo de preço se necessário.
         const service = new google.maps.DistanceMatrixService();
         service.getDistanceMatrix({
             origins: [{ lat: pickupLocation.lat, lng: pickupLocation.lon }],
@@ -157,7 +155,7 @@ const ClientDashboard = () => {
     if (paymentMethod === 'WALLET' && (userProfile?.balance || 0) < price) { setMissingAmount(price - userProfile.balance); setShowBalanceAlert(true); return; }
     setIsRequesting(true);
     try { 
-        await requestRide(pickupLocation.address, destLocation.address, { lat: pickupLocation.lat, lng: pickupLocation.lon }, { lat: destLocation.lat, lng: destLocation.lon }, price, `${routeDistance.toFixed(1)} km`, categories.find(c => c.id === selectedCategoryId).name, paymentMethod); 
+        await requestRide(pickupLocation.display_name, destLocation.display_name, { lat: pickupLocation.lat, lng: pickupLocation.lon }, { lat: destLocation.lat, lng: destLocation.lon }, price, `${routeDistance.toFixed(1)} km`, categories.find(c => c.id === selectedCategoryId).name, paymentMethod); 
     } catch (e: any) { showError(e.message); } finally { setIsRequesting(false); }
   };
 
@@ -167,7 +165,7 @@ const ClientDashboard = () => {
           const geocoder = new google.maps.Geocoder();
           geocoder.geocode({ location: { lat: pos.coords.latitude, lng: pos.coords.longitude } }, (results, status) => {
               if (status === 'OK' && results?.[0]) {
-                  setPickupLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude, address: results[0].formatted_address });
+                  setPickupLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude, display_name: results[0].formatted_address });
                   showSuccess("Localização encontrada!");
               }
               setGpsLoading(false);
@@ -196,10 +194,10 @@ const ClientDashboard = () => {
                         <h2 className="text-2xl font-black text-slate-900 mb-6 text-center">Para onde vamos?</h2>
                         <div className="space-y-4">
                             <div className="flex gap-2">
-                                <GoogleLocationSearch placeholder="Local de embarque" onSelect={(l) => setPickupLocation(l)} initialValue={pickupLocation?.address} className="flex-1" error={formErrors.pickup} />
+                                <GoogleLocationSearch placeholder="Local de embarque" onSelect={(l) => setPickupLocation(l)} initialValue={pickupLocation?.display_name} className="flex-1" error={formErrors.pickup} />
                                 <Button size="icon" variant="outline" className="h-14 w-14 rounded-2xl shrink-0" onClick={getCurrentLocation} disabled={gpsLoading}>{gpsLoading ? <Loader2 className="animate-spin" /> : <MapPin className="w-5 h-5" />}</Button>
                             </div>
-                            <GoogleLocationSearch placeholder="Digite o destino..." onSelect={(l) => setDestLocation(l)} initialValue={destLocation?.address} error={formErrors.dest} />
+                            <GoogleLocationSearch placeholder="Digite o destino..." onSelect={(l) => setDestLocation(l)} initialValue={destLocation?.display_name} error={formErrors.dest} />
                         </div>
                         <Button className="w-full mt-6 h-14 text-lg font-bold rounded-2xl bg-black text-white" onClick={() => { if(!pickupLocation || !destLocation) showError("Selecione os endereços."); else setStep('confirm'); }} disabled={calculatingRoute}>Continuar <ChevronRight className="ml-2 w-5 h-5" /></Button>
                     </div>
