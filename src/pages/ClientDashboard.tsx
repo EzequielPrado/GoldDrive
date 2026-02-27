@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import GoogleMapComponent from "@/components/GoogleMapComponent";
 import { 
-  MapPin, Car, Loader2, Star, ChevronRight, Clock, Wallet, ArrowLeft, History, MessageCircle, CheckCircle2, AlertTriangle, Banknote, CreditCard
+  MapPin, Car, Loader2, Star, ChevronRight, Clock, Wallet, ArrowLeft, History, MessageCircle, CheckCircle2, AlertTriangle, Banknote, CreditCard, XCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRide } from "@/context/RideContext";
@@ -131,7 +131,10 @@ const ClientDashboard = () => {
           setStep('cancelled');
       } else if (ride.status === 'COMPLETED') {
         if (!ride.driver_rating) setStep('rating');
-        else setStep('search');
+        else {
+            clearRide(); // Se já avaliou ou passou do tempo, limpa
+            setStep('search');
+        }
       } else {
         setStep('waiting');
       }
@@ -360,6 +363,15 @@ const ClientDashboard = () => {
                         <p className="text-gray-500 mb-8">Avalie sua experiência com o motorista:</p>
                         <div className="flex justify-center gap-3 mb-8">{[1,2,3,4,5].map(star => (<button key={star} onClick={() => setRating(star)} className="transition-transform active:scale-90"><Star className={`w-10 h-10 ${rating >= star ? 'fill-yellow-500 text-yellow-500' : 'text-gray-200'}`} /></button>))}</div>
                         <Button className="w-full h-14 bg-black text-white font-bold rounded-2xl shadow-xl" onClick={async () => { if (ride) await rateRide(ride.id, rating || 5, false); clearRide(); setStep('search'); }}>Finalizar e Voltar</Button>
+                    </div>
+                )}
+                
+                {step === 'cancelled' && (
+                    <div className="bg-white p-8 rounded-[32px] shadow-2xl text-center animate-in zoom-in-95 duration-300">
+                        <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6"><XCircle className="w-10 h-10 text-red-600" /></div>
+                        <h2 className="text-3xl font-black text-slate-900 mb-2">Corrida Cancelada</h2>
+                        <p className="text-gray-500 mb-8">Esta viagem foi cancelada recentemente.</p>
+                        <Button className="w-full h-14 bg-slate-900 text-white font-bold rounded-2xl shadow-xl" onClick={() => { clearRide(); setStep('search'); }}>Fazer Nova Busca</Button>
                     </div>
                 )}
             </div>
