@@ -22,20 +22,25 @@ const ClientDashboard = () => {
   const [searchParams] = useSearchParams();
   const { ride, requestRide, cancelRide, rateRide, clearRide, currentUserId } = useRide();
   
+  // Estados de navegação e fluxo
   const [activeTab, setActiveTab] = useState("home");
   const [step, setStep] = useState<'search' | 'confirm' | 'waiting' | 'rating' | 'cancelled'>('search');
   
+  // Localizações
   const [pickupLocation, setPickupLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
   const [destLocation, setDestLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
   const [routeDistance, setRouteDistance] = useState<number>(0); 
   
+  // Configurações de corrida
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
   const [paymentMethod, setPaymentMethod] = useState<'WALLET' | 'CASH'>('CASH');
   
+  // Estados de carregamento
   const [isRequesting, setIsRequesting] = useState(false);
   const [calculatingRoute, setCalculatingRoute] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
 
+  // Dados do usuário e app
   const [rating, setRating] = useState(0);
   const [categories, setCategories] = useState<any[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
@@ -49,54 +54,74 @@ const ClientDashboard = () => {
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [showChat, setShowChat] = useState(false);
 
-  // Sincroniza o Step com o estado da corrida do Contexto
+  // 1. Sincronização inicial e monitoramento de URL
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam && ['home', 'history', 'wallet', 'profile'].includes(tabParam)) {
+        setActiveTab(tabParam);
+    }
+    fetchInitialData();
+  }, [activeTab, searchParams]);
+
+  // 2. Sincronização de Estado com a Corrida Ativa (RideContext)
+  // Esta lógica garante que se houver uma corrida, a tela mude para 'waiting' ou 'rating'
   useEffect(() => {
     if (ride) {
       if (ride.status === 'CANCELLED') setStep('cancelled');
-      else if (ride.status === 'COMPLETED') setStep('rating');
-      else if (['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(ride.status)) setStep('waiting');
+      else if (ride.status === 'COMPLETED') {
+          // Só vai para rating se ainda não avaliou
+          const hasRated = !!ride.driver_rating;
+          if (!hasRated) setStep('rating');
+          else setStep('search');
+      }
+      else if (['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(ride.status)) {
+          setStep('waiting');
+      }
     } else {
-      // Se não tem corrida ativa, garante que está na busca ou confirmação
-      if (step === 'waiting' || step === 'rating' || step === 'cancelled') {
+      // Importante: Se não tem corrida, e estávamos esperando ou avaliando, volta para busca
+      if (step === 'waiting' || step === 'rating') {
           setStep('search');
       }
     }
-  }, [ride?.status, ride?.id]);
-
-  useEffect(() => {
-    const tabParam = searchParams.get('tab');
-    if (tabParam && ['home', 'history', 'wallet', 'profile'].includes(tabParam)) setActiveTab(tabParam);
-    fetchInitialData();
-  }, [activeTab]);
+  }, [ride?.status, ride?.id, ride?.driver_rating]);
 
   const fetchInitialData = async () => {
     try {
         const { data: { user } } = await supabase.auth.getUser();
         if(!user) return;
+        
         const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(); 
         if (profile) setUserProfile(profile); 
 
         if (activeTab === 'home') {
-            const { data: cats } = await supabase.from('car_categories').select('*').eq('active', true).order('base_fare', { ascending: true });
-            if (cats) {
-                const filteredCats = cats.filter(c => !c.name.toLowerCase().includes('promo'));
+            const [catsRes, tiersRes, settingsRes] = await Promise.all([
+                supabase.from('car_categories').select('*').eq('active', true).order('base_fare', { ascending: true }),
+                supabase.from('pricing_tiers').select('*').order('max_distance', { ascending: true }),
+                supabase.from('app_settings').select('*')
+            ]);
+
+            if (catsRes.data) {
+                const filteredCats = catsRes.data.filter(c => !c.name.toLowerCase().includes('promo'));
                 setCategories(filteredCats); 
                 if (!selectedCategoryId && filteredCats.length > 0) setSelectedCategoryId(filteredCats[0].id);
             }
-            const { data: tiers } = await supabase.from('pricing_tiers').select('*').order('max_distance', { ascending: true });
-            if (tiers) setPricingTiers(tiers);
-            const { data: settings } = await supabase.from('app_settings').select('*');
-            const cash = settings?.find((s: any) => s.key === 'enable_cash');
-            const wallet = settings?.find((s: any) => s.key === 'enable_wallet');
+            if (tiersRes.data) setPricingTiers(tiersRes.data);
+            
+            const cash = settingsRes.data?.find((s: any) => s.key === 'enable_cash');
+            const wallet = settingsRes.data?.find((s: any) => s.key === 'enable_wallet');
             setAppSettings({ enableCash: cash?.value ?? true, enableWallet: wallet?.value ?? true });
         } 
+
         if (activeTab === 'history') {
             const { data: history } = await supabase.from('rides').select(`*, driver:profiles!public_rides_driver_id_fkey(*)`).eq('customer_id', user.id).order('created_at', { ascending: false });
             setHistoryItems(history || []);
         }
-    } catch (error) { console.error(error); }
+    } catch (error) { 
+        console.error("Erro ao carregar dados iniciais:", error); 
+    }
   };
 
+  // Cálculo de Rota (Distância)
   useEffect(() => {
     if (pickupLocation && destLocation && step === 'confirm') {
         setCalculatingRoute(true);
@@ -109,7 +134,7 @@ const ClientDashboard = () => {
             if (status === 'OK' && response?.rows[0].elements[0].distance) {
                 setRouteDistance(response.rows[0].elements[0].distance.value / 1000);
             } else {
-                showError("Não foi possível calcular a rota.");
+                showError("Erro ao calcular distância.");
                 setStep('search');
             }
             setCalculatingRoute(false);
@@ -154,9 +179,13 @@ const ClientDashboard = () => {
             category.name, 
             paymentMethod
         ); 
-        showSuccess("Solicitação enviada!");
-        setStep('waiting');
-    } catch (e: any) { showError(e.message); } finally { setIsRequesting(false); }
+        showSuccess("Pedido enviado com sucesso!");
+        // O useEffect da corrida vai cuidar de mudar para 'waiting' assim que o banco responder
+    } catch (e: any) { 
+        showError(e.message); 
+    } finally { 
+        setIsRequesting(false); 
+    }
   };
 
   const getCurrentLocation = () => {
@@ -166,23 +195,27 @@ const ClientDashboard = () => {
           geocoder.geocode({ location: { lat: pos.coords.latitude, lng: pos.coords.longitude } }, (results, status) => {
               if (status === 'OK' && results?.[0]) {
                   setPickupLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude, display_name: results[0].formatted_address });
-                  showSuccess("Localização encontrada!");
+                  showSuccess("Localização detectada!");
               }
               setGpsLoading(false);
           });
-      }, () => { setGpsLoading(false); showError("Ative o GPS."); });
+      }, () => { 
+          setGpsLoading(false); 
+          showError("Ative o GPS para localizar sua posição."); 
+      });
   };
 
   return (
     <div className="h-screen w-full overflow-hidden bg-gray-100 font-sans text-slate-900 relative">
       <img src="/app-logo.jpg" alt="Gold Mobile" className="fixed top-4 left-1/2 -translate-x-1/2 h-8 opacity-90 z-[100] drop-shadow-md rounded-lg" />
       
+      {/* MAPA FUNDO (Z-0) */}
       <div className="absolute inset-0 z-0">
         <GoogleMapComponent pickupLocation={pickupLocation} destinationLocation={destLocation} />
       </div>
 
-      {/* Header Profile Info */}
-      <div className="absolute top-0 left-0 right-0 p-6 z-20 flex justify-between items-start pointer-events-none mt-4">
+      {/* HEADER (Z-50) */}
+      <div className="absolute top-0 left-0 right-0 p-6 z-50 flex justify-between items-start pointer-events-none mt-4">
           <div className="pointer-events-auto bg-white/95 backdrop-blur-xl p-2 pr-4 rounded-full flex items-center gap-3 shadow-lg border border-white/20 cursor-pointer" onClick={() => navigate('/profile')}>
              <Avatar className="h-10 w-10 border-2 border-white shadow-sm"><AvatarImage src={userProfile?.avatar_url} /><AvatarFallback className="bg-yellow-500 text-black font-bold">{userProfile?.first_name?.[0]}</AvatarFallback></Avatar>
              <div className="hidden sm:block">
@@ -198,10 +231,11 @@ const ClientDashboard = () => {
           )}
       </div>
 
-      {/* Main UI Layer */}
-      <div className="absolute inset-0 z-40 pointer-events-none flex flex-col justify-end pb-32 md:justify-center p-4">
+      {/* ÁREA DE CONTEÚDO PRINCIPAL (Z-50) */}
+      <div className="absolute inset-0 z-50 pointer-events-none flex flex-col justify-end pb-32 md:justify-center p-4">
         {activeTab === 'home' && (
             <div className="w-full max-w-md mx-auto pointer-events-auto">
+                {/* PASSO 1: BUSCA */}
                 {step === 'search' && (
                     <div className="bg-white/95 backdrop-blur-xl p-6 rounded-[32px] shadow-2xl border border-white/40 animate-in fade-in zoom-in-95 duration-300">
                         <h2 className="text-2xl font-black text-slate-900 mb-6 text-center">Para onde vamos?</h2>
@@ -212,22 +246,31 @@ const ClientDashboard = () => {
                             </div>
                             <GoogleLocationSearch placeholder="Digite o destino..." onSelect={(l) => setDestLocation(l)} initialValue={destLocation?.display_name} />
                         </div>
-                        <Button className="w-full mt-6 h-14 text-lg font-bold rounded-2xl bg-black text-white hover:bg-zinc-800 shadow-xl" onClick={() => { if(!pickupLocation || !destLocation) showError("Preencha os endereços."); else setStep('confirm'); }}>
+                        <Button 
+                            className="w-full mt-6 h-14 text-lg font-bold rounded-2xl bg-black text-white hover:bg-zinc-800 shadow-xl transition-all active:scale-95" 
+                            onClick={() => { 
+                                if(!pickupLocation || !destLocation) showError("Preencha origem e destino."); 
+                                else setStep('confirm'); 
+                            }}
+                        >
                             Solicitar Corrida <ChevronRight className="ml-1 w-5 h-5" />
                         </Button>
                     </div>
                 )}
 
+                {/* PASSO 2: CONFIRMAÇÃO DE CATEGORIA */}
                 {step === 'confirm' && (
                     <div className="bg-white/95 backdrop-blur-xl p-6 rounded-[32px] shadow-2xl border border-white/40 flex flex-col max-h-[70vh] animate-in slide-in-from-bottom duration-300">
                         <div className="flex items-center gap-3 mb-6 cursor-pointer" onClick={() => setStep('search')}>
                             <div className="bg-gray-100 p-2 rounded-full"><ArrowLeft className="w-5 h-5" /></div>
                             <h2 className="text-xl font-black text-slate-900">Escolha seu Gold</h2>
                         </div>
+                        
                         <div className="bg-gray-50 rounded-2xl p-4 mb-6 border border-gray-100 space-y-2 text-[13px]">
                             <p className="font-medium text-slate-600 line-clamp-1 flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-slate-400" /> {pickupLocation?.display_name}</p>
                             <p className="font-bold text-slate-900 line-clamp-1 flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-yellow-500" /> {destLocation?.display_name}</p>
                         </div>
+
                         {calculatingRoute ? (
                             <div className="py-12 flex flex-col items-center gap-3">
                                 <Loader2 className="animate-spin text-yellow-500 w-8 h-8" />
@@ -254,12 +297,13 @@ const ClientDashboard = () => {
                                     {appSettings.enableWallet && <button onClick={() => setPaymentMethod('WALLET')} className={`h-14 rounded-2xl border-2 flex items-center justify-center gap-2 font-bold transition-all ${paymentMethod === 'WALLET' ? 'border-slate-900 bg-slate-900 text-white shadow-lg' : 'border-gray-200 text-slate-500'}`}><Wallet className="w-4 h-4" /> Carteira</button>}
                                     <button onClick={() => setPaymentMethod('CASH')} className={`h-14 rounded-2xl border-2 flex items-center justify-center gap-2 font-bold transition-all ${paymentMethod === 'CASH' ? 'border-slate-900 bg-slate-900 text-white shadow-lg' : 'border-gray-200 text-slate-500'}`}><Banknote className="w-4 h-4" /> Dinheiro</button>
                                 </div>
-                                <Button className="w-full h-14 text-lg font-black rounded-2xl bg-yellow-500 hover:bg-yellow-400 text-black shadow-xl shadow-yellow-500/20" onClick={confirmRide} disabled={isRequesting}>{isRequesting ? <Loader2 className="animate-spin" /> : "CONFIRMAR SOLICITAÇÃO"}</Button>
+                                <Button className="w-full h-14 text-lg font-black rounded-2xl bg-yellow-500 hover:bg-yellow-400 text-black shadow-xl shadow-yellow-500/20 active:scale-95 transition-transform" onClick={confirmRide} disabled={isRequesting}>{isRequesting ? <Loader2 className="animate-spin" /> : "CONFIRMAR SOLICITAÇÃO"}</Button>
                             </>
                         )}
                     </div>
                 )}
 
+                {/* PASSO 3: AGUARDANDO OU VIAGEM ATIVA */}
                 {step === 'waiting' && (
                      <div className="bg-white p-6 rounded-[32px] shadow-2xl border border-gray-100 flex flex-col gap-6 animate-in zoom-in-95 duration-300">
                          {ride?.status === 'SEARCHING' ? (
@@ -269,7 +313,7 @@ const ClientDashboard = () => {
                                     <div className="relative w-24 h-24 bg-yellow-500 rounded-full flex items-center justify-center text-black shadow-lg"><Car className="w-10 h-10" /></div>
                                  </div>
                                  <h3 className="text-2xl font-black text-slate-900">Buscando motorista...</h3>
-                                 <p className="text-gray-500 text-sm mt-2">Aguarde, estamos enviando seu pedido.</p>
+                                 <p className="text-gray-500 text-sm mt-2">Aguarde, enviando seu pedido aos parceiros próximos.</p>
                                  <Button variant="ghost" className="mt-8 text-red-500 font-bold" onClick={() => setShowCancelAlert(true)}>CANCELAR PEDIDO</Button>
                              </div>
                          ) : (
@@ -292,19 +336,20 @@ const ClientDashboard = () => {
                      </div>
                 )}
 
+                {/* PASSO 4: AVALIAÇÃO */}
                 {step === 'rating' && (
                     <div className="bg-white p-8 rounded-[32px] shadow-2xl text-center animate-in zoom-in-95 duration-300">
                         <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"><CheckCircle2 className="w-10 h-10 text-green-600" /></div>
                         <h2 className="text-3xl font-black text-slate-900 mb-2">Você Chegou!</h2>
-                        <p className="text-gray-500 mb-8">Como foi sua viagem?</p>
+                        <p className="text-gray-500 mb-8">Como foi sua experiência com a Gold Mobile?</p>
                         <div className="flex justify-center gap-3 mb-8">{[1,2,3,4,5].map(star => (<button key={star} onClick={() => setRating(star)} className="transition-transform active:scale-90"><Star className={`w-10 h-10 ${rating >= star ? 'fill-yellow-500 text-yellow-500' : 'text-gray-200'}`} /></button>))}</div>
-                        <Button className="w-full h-14 bg-black text-white font-bold rounded-2xl text-lg shadow-xl" onClick={async () => { if (ride) await rateRide(ride.id, rating || 5, false); clearRide(); setStep('search'); }}>Finalizar</Button>
+                        <Button className="w-full h-14 bg-black text-white font-bold rounded-2xl text-lg shadow-xl" onClick={async () => { if (ride) await rateRide(ride.id, rating || 5, false); clearRide(); setStep('search'); }}>Finalizar e Voltar</Button>
                     </div>
                 )}
             </div>
         )}
 
-        {/* Historico */}
+        {/* ABA HISTÓRICO */}
         {activeTab === 'history' && (
             <div className="w-full max-w-md mx-auto bg-white/95 backdrop-blur-xl p-6 rounded-[32px] shadow-2xl border border-white/40 pointer-events-auto h-[60vh] flex flex-col animate-in fade-in duration-300">
                 <h2 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-2"><History className="w-6 h-6" /> Suas Viagens</h2>
@@ -315,9 +360,13 @@ const ClientDashboard = () => {
         )}
       </div>
 
+      {/* FOOTER NAVEGAÇÃO */}
       <FloatingDock activeTab={activeTab} onTabChange={tab => { if(tab === 'profile') navigate('/profile'); else if(tab === 'wallet') navigate('/wallet'); else setActiveTab(tab); }} role="client" />
+      
+      {/* CHAT */}
       {showChat && ride && currentUserId && (<RideChat rideId={ride.id} currentUserId={currentUserId} role="client" otherUserName={ride.driver_details?.first_name || 'Motorista'} otherUserAvatar={ride.driver_details?.avatar_url} onClose={() => setShowChat(false)} />)}
       
+      {/* ALERTS E MODAIS */}
       <AlertDialog open={showCancelAlert} onOpenChange={setShowCancelAlert}>
           <AlertDialogContent className="rounded-3xl border-0 shadow-2xl">
               <AlertDialogHeader><AlertDialogTitle className="text-2xl font-black text-slate-900">Cancelar Viagem?</AlertDialogTitle><AlertDialogDescription className="text-gray-500">O cancelamento frequente pode gerar taxas na sua próxima corrida.</AlertDialogDescription></AlertDialogHeader>
