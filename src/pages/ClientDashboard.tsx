@@ -20,11 +20,10 @@ import GoogleLocationSearch from "@/components/GoogleLocationSearch";
 const ClientDashboard = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { ride, loading: contextLoading, requestRide, cancelRide, rateRide, clearRide, currentUserId } = useRide();
+  const { ride, requestRide, cancelRide, rateRide, clearRide, currentUserId } = useRide();
   
   const [activeTab, setActiveTab] = useState("home");
   const [step, setStep] = useState<'search' | 'confirm' | 'waiting' | 'rating' | 'cancelled'>('search');
-  const [isSyncing, setIsSyncing] = useState(true);
   
   const [pickupLocation, setPickupLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
   const [destLocation, setDestLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
@@ -50,71 +49,54 @@ const ClientDashboard = () => {
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [showChat, setShowChat] = useState(false);
 
-  // 1. Carregamento inicial de dados (Perfil e Configurações)
+  // Sincroniza o Step com o estado da corrida do Contexto
   useEffect(() => {
-    const fetchInitialData = async () => {
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if(!user) {
-                navigate('/login');
-                return;
-            }
-            
-            const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(); 
-            if (profile) setUserProfile(profile); 
-
-            // Se estiver na home, carrega configs de corrida
-            if (activeTab === 'home') {
-                const [catsRes, tiersRes, settingsRes] = await Promise.all([
-                    supabase.from('car_categories').select('*').eq('active', true).order('base_fare', { ascending: true }),
-                    supabase.from('pricing_tiers').select('*').order('max_distance', { ascending: true }),
-                    supabase.from('app_settings').select('*')
-                ]);
-
-                if (catsRes.data) {
-                    const filteredCats = catsRes.data.filter(c => !c.name.toLowerCase().includes('promo'));
-                    setCategories(filteredCats); 
-                    if (filteredCats.length > 0) setSelectedCategoryId(filteredCats[0].id);
-                }
-                if (tiersRes.data) setPricingTiers(tiersRes.data);
-                
-                const cash = settingsRes.data?.find((s: any) => s.key === 'enable_cash');
-                const wallet = settingsRes.data?.find((s: any) => s.key === 'enable_wallet');
-                setAppSettings({ enableCash: cash?.value ?? true, enableWallet: wallet?.value ?? true });
-            } 
-            
-            if (activeTab === 'history') {
-                const { data: history } = await supabase.from('rides').select(`*, driver:profiles!public_rides_driver_id_fkey(*)`).eq('customer_id', user.id).order('created_at', { ascending: false });
-                setHistoryItems(history || []);
-            }
-        } catch (error) { 
-            console.error("Erro no fetch inicial:", error); 
-        } finally {
-            // Pequeno delay para garantir que o contexto do RideContext também sincronizou
-            setTimeout(() => setIsSyncing(false), 500);
-        }
-    };
-
-    fetchInitialData();
-  }, [activeTab, navigate]);
-
-  // 2. Sincronização do estado da corrida (Step) baseada no RideContext
-  useEffect(() => {
-    if (isSyncing || contextLoading) return;
-
     if (ride) {
       if (ride.status === 'CANCELLED') setStep('cancelled');
       else if (ride.status === 'COMPLETED') setStep('rating');
       else if (['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(ride.status)) setStep('waiting');
     } else {
-      // Se não há corrida ativa e não estamos no fluxo de criação, volta para busca
-      if (step !== 'search' && step !== 'confirm') {
+      // Se não tem corrida ativa, garante que está na busca ou confirmação
+      if (step === 'waiting' || step === 'rating' || step === 'cancelled') {
           setStep('search');
       }
     }
-  }, [ride?.status, ride?.id, isSyncing, contextLoading]);
+  }, [ride?.status, ride?.id]);
 
-  // 3. Cálculo de Distância Google Maps
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam && ['home', 'history', 'wallet', 'profile'].includes(tabParam)) setActiveTab(tabParam);
+    fetchInitialData();
+  }, [activeTab]);
+
+  const fetchInitialData = async () => {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if(!user) return;
+        const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(); 
+        if (profile) setUserProfile(profile); 
+
+        if (activeTab === 'home') {
+            const { data: cats } = await supabase.from('car_categories').select('*').eq('active', true).order('base_fare', { ascending: true });
+            if (cats) {
+                const filteredCats = cats.filter(c => !c.name.toLowerCase().includes('promo'));
+                setCategories(filteredCats); 
+                if (!selectedCategoryId && filteredCats.length > 0) setSelectedCategoryId(filteredCats[0].id);
+            }
+            const { data: tiers } = await supabase.from('pricing_tiers').select('*').order('max_distance', { ascending: true });
+            if (tiers) setPricingTiers(tiers);
+            const { data: settings } = await supabase.from('app_settings').select('*');
+            const cash = settings?.find((s: any) => s.key === 'enable_cash');
+            const wallet = settings?.find((s: any) => s.key === 'enable_wallet');
+            setAppSettings({ enableCash: cash?.value ?? true, enableWallet: wallet?.value ?? true });
+        } 
+        if (activeTab === 'history') {
+            const { data: history } = await supabase.from('rides').select(`*, driver:profiles!public_rides_driver_id_fkey(*)`).eq('customer_id', user.id).order('created_at', { ascending: false });
+            setHistoryItems(history || []);
+        }
+    } catch (error) { console.error(error); }
+  };
+
   useEffect(() => {
     if (pickupLocation && destLocation && step === 'confirm') {
         setCalculatingRoute(true);
@@ -127,7 +109,7 @@ const ClientDashboard = () => {
             if (status === 'OK' && response?.rows[0].elements[0].distance) {
                 setRouteDistance(response.rows[0].elements[0].distance.value / 1000);
             } else {
-                showError("Não foi possível calcular a rota entre os pontos.");
+                showError("Não foi possível calcular a rota.");
                 setStep('search');
             }
             setCalculatingRoute(false);
@@ -138,7 +120,6 @@ const ClientDashboard = () => {
   const calculatePrice = useCallback((catId?: string) => {
       const category = categories.find(c => c.id === (catId || selectedCategoryId));
       if (!category || routeDistance <= 0) return 0;
-      
       let price = 0;
       if (category.name === 'Gold Driver') {
           const tier = pricingTiers.find(t => routeDistance <= Number(t.max_distance)) || pricingTiers[pricingTiers.length - 1];
@@ -173,13 +154,9 @@ const ClientDashboard = () => {
             category.name, 
             paymentMethod
         ); 
-        showSuccess("Pedido enviado!");
+        showSuccess("Solicitação enviada!");
         setStep('waiting');
-    } catch (e: any) { 
-        showError(e.message); 
-    } finally { 
-        setIsRequesting(false); 
-    }
+    } catch (e: any) { showError(e.message); } finally { setIsRequesting(false); }
   };
 
   const getCurrentLocation = () => {
@@ -189,27 +166,12 @@ const ClientDashboard = () => {
           geocoder.geocode({ location: { lat: pos.coords.latitude, lng: pos.coords.longitude } }, (results, status) => {
               if (status === 'OK' && results?.[0]) {
                   setPickupLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude, display_name: results[0].formatted_address });
-                  showSuccess("Localização detectada!");
+                  showSuccess("Localização encontrada!");
               }
               setGpsLoading(false);
           });
-      }, () => { 
-          setGpsLoading(false); 
-          showError("Por favor, ative o GPS."); 
-      });
+      }, () => { setGpsLoading(false); showError("Ative o GPS."); });
   };
-
-  if (isSyncing) {
-      return (
-          <div className="h-screen w-full bg-white flex flex-col items-center justify-center gap-4">
-              <img src="/app-logo.jpg" alt="Logo" className="w-48 rounded-2xl animate-pulse" />
-              <div className="flex items-center gap-2 text-slate-400">
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span className="font-medium">Sincronizando sistema...</span>
-              </div>
-          </div>
-      );
-  }
 
   return (
     <div className="h-screen w-full overflow-hidden bg-gray-100 font-sans text-slate-900 relative">
@@ -236,7 +198,7 @@ const ClientDashboard = () => {
           )}
       </div>
 
-      {/* Main UI Layer - Always centered at bottom for mobile */}
+      {/* Main UI Layer */}
       <div className="absolute inset-0 z-40 pointer-events-none flex flex-col justify-end pb-32 md:justify-center p-4">
         {activeTab === 'home' && (
             <div className="w-full max-w-md mx-auto pointer-events-auto">
@@ -250,13 +212,7 @@ const ClientDashboard = () => {
                             </div>
                             <GoogleLocationSearch placeholder="Digite o destino..." onSelect={(l) => setDestLocation(l)} initialValue={destLocation?.display_name} />
                         </div>
-                        <Button 
-                            className="w-full mt-6 h-14 text-lg font-bold rounded-2xl bg-black text-white hover:bg-zinc-800 shadow-xl transition-all" 
-                            onClick={() => { 
-                                if(!pickupLocation || !destLocation) showError("Preencha origem e destino."); 
-                                else setStep('confirm'); 
-                            }}
-                        >
+                        <Button className="w-full mt-6 h-14 text-lg font-bold rounded-2xl bg-black text-white hover:bg-zinc-800 shadow-xl" onClick={() => { if(!pickupLocation || !destLocation) showError("Preencha os endereços."); else setStep('confirm'); }}>
                             Solicitar Corrida <ChevronRight className="ml-1 w-5 h-5" />
                         </Button>
                     </div>
@@ -268,12 +224,10 @@ const ClientDashboard = () => {
                             <div className="bg-gray-100 p-2 rounded-full"><ArrowLeft className="w-5 h-5" /></div>
                             <h2 className="text-xl font-black text-slate-900">Escolha seu Gold</h2>
                         </div>
-                        
                         <div className="bg-gray-50 rounded-2xl p-4 mb-6 border border-gray-100 space-y-2 text-[13px]">
                             <p className="font-medium text-slate-600 line-clamp-1 flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-slate-400" /> {pickupLocation?.display_name}</p>
                             <p className="font-bold text-slate-900 line-clamp-1 flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-yellow-500" /> {destLocation?.display_name}</p>
                         </div>
-
                         {calculatingRoute ? (
                             <div className="py-12 flex flex-col items-center gap-3">
                                 <Loader2 className="animate-spin text-yellow-500 w-8 h-8" />
@@ -300,7 +254,7 @@ const ClientDashboard = () => {
                                     {appSettings.enableWallet && <button onClick={() => setPaymentMethod('WALLET')} className={`h-14 rounded-2xl border-2 flex items-center justify-center gap-2 font-bold transition-all ${paymentMethod === 'WALLET' ? 'border-slate-900 bg-slate-900 text-white shadow-lg' : 'border-gray-200 text-slate-500'}`}><Wallet className="w-4 h-4" /> Carteira</button>}
                                     <button onClick={() => setPaymentMethod('CASH')} className={`h-14 rounded-2xl border-2 flex items-center justify-center gap-2 font-bold transition-all ${paymentMethod === 'CASH' ? 'border-slate-900 bg-slate-900 text-white shadow-lg' : 'border-gray-200 text-slate-500'}`}><Banknote className="w-4 h-4" /> Dinheiro</button>
                                 </div>
-                                <Button className="w-full h-14 text-lg font-black rounded-2xl bg-yellow-500 hover:bg-yellow-400 text-black shadow-xl shadow-yellow-500/20 active:scale-95 transition-transform" onClick={confirmRide} disabled={isRequesting}>{isRequesting ? <Loader2 className="animate-spin" /> : "CONFIRMAR SOLICITAÇÃO"}</Button>
+                                <Button className="w-full h-14 text-lg font-black rounded-2xl bg-yellow-500 hover:bg-yellow-400 text-black shadow-xl shadow-yellow-500/20" onClick={confirmRide} disabled={isRequesting}>{isRequesting ? <Loader2 className="animate-spin" /> : "CONFIRMAR SOLICITAÇÃO"}</Button>
                             </>
                         )}
                     </div>
@@ -315,7 +269,7 @@ const ClientDashboard = () => {
                                     <div className="relative w-24 h-24 bg-yellow-500 rounded-full flex items-center justify-center text-black shadow-lg"><Car className="w-10 h-10" /></div>
                                  </div>
                                  <h3 className="text-2xl font-black text-slate-900">Buscando motorista...</h3>
-                                 <p className="text-gray-500 text-sm mt-2">Aguarde, estamos enviando seu pedido aos parceiros próximos.</p>
+                                 <p className="text-gray-500 text-sm mt-2">Aguarde, estamos enviando seu pedido.</p>
                                  <Button variant="ghost" className="mt-8 text-red-500 font-bold" onClick={() => setShowCancelAlert(true)}>CANCELAR PEDIDO</Button>
                              </div>
                          ) : (
