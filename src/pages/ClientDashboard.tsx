@@ -276,7 +276,15 @@ const ClientDashboard = () => {
                         <div className="space-y-4">
                             <div className="flex gap-2">
                                 <GoogleLocationSearch placeholder="Local de embarque" onSelect={(l) => setPickupLocation(l)} initialValue={pickupLocation?.display_name} className="flex-1" />
-                                <Button size="icon" variant="outline" className="h-14 w-14 rounded-2xl shrink-0 border-gray-200" onClick={getCurrentLocation} disabled={gpsLoading}>{gpsLoading ? <Loader2 className="animate-spin" /> : <MapPin className="w-5 h-5" />}</Button>
+                                <Button 
+                                    size="icon" 
+                                    variant="outline" 
+                                    className="h-14 w-14 rounded-2xl shrink-0 border-slate-200 bg-slate-50 hover:bg-slate-100" 
+                                    onClick={getCurrentLocation} 
+                                    disabled={gpsLoading}
+                                >
+                                    {gpsLoading ? <Loader2 className="animate-spin text-slate-400" /> : <MapPin className="w-5 h-5 text-slate-600" />}
+                                </Button>
                             </div>
                             <GoogleLocationSearch placeholder="Para onde você vai?" onSelect={(l) => setDestLocation(l)} initialValue={destLocation?.display_name} />
                         </div>
