@@ -195,7 +195,7 @@ const ClientDashboard = () => {
     
     setIsRequesting(true);
     try { 
-        await requestRide(
+        const success = await requestRide(
             pickupLocation.display_name, 
             destLocation.display_name, 
             { lat: pickupLocation.lat, lng: pickupLocation.lon }, 
@@ -205,7 +205,11 @@ const ClientDashboard = () => {
             category.name, 
             paymentMethod
         ); 
-        showSuccess("Motorista solicitado!");
+        
+        if (success) {
+            showSuccess("Motorista solicitado!");
+            setStep('waiting'); // Força a transição imediata
+        }
     } catch (e: any) { 
         showError(e.message); 
     } finally { 

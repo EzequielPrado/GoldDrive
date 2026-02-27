@@ -15,7 +15,7 @@ interface RideContextType {
       distance: string, 
       category: string, 
       paymentMethod: string
-  ) => Promise<void>;
+  ) => Promise<boolean>; // Alterado para retornar boolean
   createManualRide: (
       passengerName: string,
       passengerPhone: string,
@@ -54,8 +54,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   const userRoleRef = useRef(userRole);
   const currentUserIdRef = useRef(currentUserId);
   const rejectedIdsRef = useRef<string[]>([]);
-  
-  // Lista de IDs de corridas que o usuário já "limpou" da tela
   const dismissedRidesRef = useRef<string[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   
@@ -68,6 +66,11 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           audioRef.current = new Audio(NOTIFICATION_SOUND);
       }
   }, [userRole, currentUserId]);
+
+  useEffect(() => {
+    const forceStopLoading = setTimeout(() => setLoading(false), 1000);
+    return () => clearTimeout(forceStopLoading);
+  }, []);
 
   const playNotification = () => {
       if (audioRef.current) {
@@ -96,7 +99,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
         .maybeSingle();
 
       if (data) {
-          // SE A CORRIDA JÁ FOI DESCARTADA PELO USUÁRIO, IGNORA
           if (dismissedRidesRef.current.includes(data.id)) {
               setRide(null);
               return;
@@ -114,16 +116,14 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           const isFinished = ['CANCELLED', 'COMPLETED'].includes(data.status);
           if (isFinished) {
               const hasRated = role === 'driver' ? !!data.customer_rating : !!data.driver_rating;
-              // Se já avaliou, descarta automaticamente
               if (hasRated) {
-                  dismissedRidesRef.current.push(data.id);
                   setRide(null); 
                   return;
               }
               
-              // Se foi há mais de 30 minutos, descarta
               const updatedAt = new Date(data.created_at).getTime();
               const now = new Date().getTime();
+              // Se foi finalizada/cancelada há mais de 30min, ignora
               if ((now - updatedAt) / 1000 / 60 > 30) {
                   dismissedRidesRef.current.push(data.id);
                   setRide(null);
@@ -148,12 +148,14 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       if (role !== 'driver' || !uid) return;
 
       try {
-          const { data: ridesData } = await supabase
+          const { data: ridesData, error } = await supabase
             .from('rides')
             .select('*')
             .eq('status', 'SEARCHING')
             .is('driver_id', null)
             .order('created_at', { ascending: false });
+            
+          if (error) throw error;
 
           if (ridesData && ridesData.length > 0) {
               const clientIds = ridesData.map(r => r.customer_id);
@@ -173,7 +175,11 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
               });
               
               setAvailableRides(prev => {
-                  if (shouldPlaySound && validRides.length > prev.length) playNotification();
+                  if (shouldPlaySound && validRides.length > prev.length) {
+                      const newIds = validRides.map(v => v.id);
+                      const oldIds = prev.map(p => p.id);
+                      if (newIds.some(id => !oldIds.includes(id))) playNotification();
+                  }
                   return validRides;
               });
           } else {
@@ -182,6 +188,45 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       } catch (err) { console.error(err); }
   };
 
+  // Realtime Subscription
+  useEffect(() => {
+    const channel = supabase
+      .channel('global_ride_sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'rides' },
+        async (payload) => {
+            const newRecord = payload.new as any;
+            const uid = currentUserIdRef.current;
+            const role = userRoleRef.current;
+
+            // Se sou motorista e houve nova corrida ou atualização para SEARCHING
+            if (role === 'driver') {
+                if ((payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') && 
+                    newRecord.status === 'SEARCHING' && !newRecord.driver_id) {
+                    await fetchAvailableRides(true);
+                }
+                // Se a corrida não está mais disponível
+                if (payload.eventType === 'UPDATE' && (newRecord.status !== 'SEARCHING' || newRecord.driver_id)) {
+                    setAvailableRides(prev => prev.filter(r => r.id !== newRecord.id));
+                }
+            }
+            
+            // Se sou participante da corrida (motorista ou passageiro), atualizo meu estado ativo
+            const isRelatedToMe = (newRecord?.customer_id === uid) || (newRecord?.driver_id === uid);
+            if (isRelatedToMe && uid) {
+                await fetchActiveRide(uid);
+            }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Polling de segurança
   useEffect(() => {
     const init = async () => {
         const { data: { session } } = await supabase.auth.getSession();
@@ -210,22 +255,23 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
       let interval: NodeJS.Timeout;
       if (currentUserId) {
-          interval = setInterval(() => fetchActiveRide(currentUserId), 4000);
+          // Polling para garantir atualização mesmo se realtime falhar
+          interval = setInterval(() => fetchActiveRide(currentUserId), 3000);
       }
       return () => { if (interval) clearInterval(interval); };
   }, [currentUserId]); 
 
   useEffect(() => {
       let interval: NodeJS.Timeout;
-      if (currentUserId && userRole === 'driver' && !ride) {
+      if (currentUserId && userRole === 'driver') {
           fetchAvailableRides(); 
-          interval = setInterval(() => fetchAvailableRides(true), 5000); 
+          interval = setInterval(() => fetchAvailableRides(false), 5000); 
       }
       return () => { if (interval) clearInterval(interval); };
-  }, [currentUserId, userRole, ride]); 
+  }, [currentUserId, userRole]); 
 
-  const requestRide = async (pickup: string, destination: string, pickupCoords: any, destCoords: any, price: number, distance: string, category: string, paymentMethod: string) => {
-    if (!currentUserId) return;
+  const requestRide = async (pickup: string, destination: string, pickupCoords: any, destCoords: any, price: number, distance: string, category: string, paymentMethod: string): Promise<boolean> => {
+    if (!currentUserId) return false;
     try {
       const { data, error } = await supabase.from('rides').insert({
           customer_id: currentUserId,
@@ -234,9 +280,19 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           destination_lat: destCoords.lat, destination_lng: destCoords.lng,
           price, distance, status: 'SEARCHING', category, payment_method: paymentMethod
         }).select().single();
+      
       if (error) throw error;
+      
+      // Atualiza estado local imediatamente para feedback visual
       setRide(data);
-    } catch (e: any) { toast({ title: "Erro na solicitação", variant: "destructive" }); }
+      // Força busca completa para trazer detalhes
+      fetchActiveRide(currentUserId);
+      
+      return true;
+    } catch (e: any) { 
+        toast({ title: "Erro na solicitação", description: e.message, variant: "destructive" }); 
+        return false;
+    }
   };
 
   const createManualRide = async (passengerName: string, passengerPhone: string, pickup: string, destination: string, pickupCoords: any, destCoords: any, price: number, distance: string, category: string) => {
@@ -253,6 +309,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           }).select().single();
           if (error) throw error;
           setRide(data);
+          fetchActiveRide(currentUserId);
           toast({ title: "Corrida Iniciada" });
       } catch (e: any) { toast({ title: "Erro ao criar", variant: "destructive" }); }
   };
