@@ -44,7 +44,12 @@ const App = () => {
 
   return (
     <GlobalErrorBoundary>
-      <APIProvider apiKey={GOOGLE_MAPS_API_KEY} language="pt-BR" region="BR">
+      <APIProvider 
+        apiKey={GOOGLE_MAPS_API_KEY} 
+        language="pt-BR" 
+        region="BR"
+        libraries={['places', 'routes', 'marker', 'geometry']}
+      >
         <QueryClientProvider client={queryClient}>
           <TooltipProvider>
             <Toaster />

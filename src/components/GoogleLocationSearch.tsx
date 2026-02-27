@@ -36,8 +36,8 @@ const GoogleLocationSearch = ({
   useEffect(() => {
     if (!placesLibrary) return;
     try {
-      setAutocompleteService(new placesLibrary.AutocompleteService());
-      setPlacesService(new placesLibrary.PlacesService(document.createElement('div')));
+      if (!autocompleteService) setAutocompleteService(new placesLibrary.AutocompleteService());
+      if (!placesService) setPlacesService(new placesLibrary.PlacesService(document.createElement('div')));
     } catch (e) {
       console.error("Erro ao inicializar serviços do Google:", e);
     }
@@ -70,16 +70,19 @@ const GoogleLocationSearch = ({
       autocompleteService.getPlacePredictions({
         input: inputValue,
         componentRestrictions: { country: 'br' },
-        types: ['address', 'establishment']
+        types: ['geocode', 'establishment']
       }, (results, status) => {
         setLoading(false);
         if (status === 'OK' && results) {
           setPredictions(results);
         } else {
           setPredictions([]);
+          if (status !== 'ZERO_RESULTS') {
+              console.warn(`Google Maps Status: ${status}. Verifique se a 'Places API' está ativada no seu console do Google Cloud.`);
+          }
         }
       });
-    }, 300);
+    }, 400);
 
     return () => clearTimeout(timer);
   }, [inputValue, autocompleteService, isOpen]);
