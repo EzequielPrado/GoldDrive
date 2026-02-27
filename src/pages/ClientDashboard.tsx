@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import GoogleMapComponent from "@/components/GoogleMapComponent";
 import { 
-  MapPin, Car, Navigation, Loader2, Star, AlertTriangle, XCircle, ChevronRight, Clock, Wallet, User, ArrowLeft, BellRing, History, X, Flag, CreditCard, Banknote, MessageCircle, CheckCircle2, Calendar
+  MapPin, Car, Loader2, Star, ChevronRight, Clock, Wallet, ArrowLeft, History, MessageCircle, CheckCircle2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRide } from "@/context/RideContext";
@@ -9,7 +9,7 @@ import { showSuccess, showError } from "@/utils/toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogClose } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -41,7 +41,6 @@ const ClientDashboard = () => {
   const [userProfile, setUserProfile] = useState<any>(null);
   const [showBalanceAlert, setShowBalanceAlert] = useState(false);
   const [missingAmount, setMissingAmount] = useState(0);
-  const [loadingCats, setLoadingCats] = useState(true);
   const [showCancelAlert, setShowCancelAlert] = useState(false);
   
   const [pricingTiers, setPricingTiers] = useState<any[]>([]);
@@ -83,7 +82,6 @@ const ClientDashboard = () => {
       else if (ride.status === 'COMPLETED') setStep('rating');
       else if (['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(ride.status)) setStep('waiting');
     } else {
-      // Se não tem corrida, garante que volta para a busca
       if (step !== 'search' && step !== 'confirm') setStep('search');
     }
   }, [ride?.status]);
@@ -98,7 +96,6 @@ const ClientDashboard = () => {
         if (activeTab === 'home') {
             const { data: cats } = await supabase.from('car_categories').select('*').eq('active', true).order('base_fare', { ascending: true });
             if (cats) {
-                // Filtro agressivo para tirar qualquer menção a Promo
                 const filteredCats = cats.filter(c => !c.name.toLowerCase().includes('promo'));
                 setCategories(filteredCats); 
                 if (!selectedCategoryId && filteredCats.length > 0) setSelectedCategoryId(filteredCats[0].id);
@@ -115,7 +112,7 @@ const ClientDashboard = () => {
             const { data: history } = await supabase.from('rides').select(`*, driver:profiles!public_rides_driver_id_fkey(*)`).eq('customer_id', user.id).order('created_at', { ascending: false });
             setHistoryItems(history || []);
         }
-    } catch (error) { console.error(error); } finally { setLoadingCats(false); }
+    } catch (error) { console.error(error); }
   };
 
   const calculatePrice = (catId?: string) => {
@@ -174,17 +171,15 @@ const ClientDashboard = () => {
   };
 
   return (
-    <div className="h-screen w-full overflow-hidden bg-gray-100 font-sans text-slate-900">
-      {/* LOGO CENTRALIZADA NO TOPO */}
+    <div className="h-screen w-full overflow-hidden bg-gray-100 font-sans text-slate-900 relative">
       <img src="/app-logo.jpg" alt="Gold Mobile" className="fixed top-4 left-1/2 -translate-x-1/2 h-8 opacity-90 z-50 drop-shadow-md rounded-lg" />
       
       <div className="absolute inset-0 z-0">
         <GoogleMapComponent pickupLocation={pickupLocation} destinationLocation={destLocation} />
       </div>
 
-      {/* HEADER DE USUÁRIO */}
       <div className="absolute top-0 left-0 right-0 p-6 z-20 flex justify-between items-start pointer-events-none mt-4">
-          <div className="pointer-events-auto bg-white/90 backdrop-blur-xl p-2 pr-4 rounded-full flex items-center gap-3 shadow-lg cursor-pointer" onClick={() => navigate('/profile')}>
+          <div className="pointer-events-auto bg-white/95 backdrop-blur-xl p-2 pr-4 rounded-full flex items-center gap-3 shadow-lg cursor-pointer" onClick={() => navigate('/profile')}>
              <Avatar className="h-10 w-10 border-2 border-white shadow-sm"><AvatarImage src={userProfile?.avatar_url} /><AvatarFallback className="bg-yellow-500 text-black font-bold">{userProfile?.first_name?.[0]}</AvatarFallback></Avatar>
              <div><p className="text-xs text-gray-500 font-bold">Olá,</p><p className="text-sm text-slate-900 font-black">{userProfile?.first_name}</p></div>
           </div>
@@ -196,10 +191,9 @@ const ClientDashboard = () => {
           )}
       </div>
 
-      {/* ÁREA DE CONTEÚDO PRINCIPAL */}
-      <div className={`absolute inset-0 z-10 flex flex-col items-center p-4 pointer-events-none ${step === 'search' ? 'justify-center bg-black/5 backdrop-blur-sm' : 'justify-end pb-32 md:justify-center'}`}>
+      <div className={`absolute inset-0 z-30 flex flex-col items-center p-4 pointer-events-none ${step === 'search' ? 'justify-center' : 'justify-end pb-32 md:justify-center'}`}>
         {activeTab === 'home' && (
-            <div className="w-full max-w-md pointer-events-auto animate-in slide-in-from-bottom duration-500">
+            <div className="w-full max-w-md pointer-events-auto">
                 {step === 'search' && (
                     <div className="bg-white/95 backdrop-blur-xl p-6 rounded-[32px] shadow-2xl border border-white/40">
                         <h2 className="text-2xl font-black text-slate-900 mb-6 text-center">Para onde vamos?</h2>
@@ -210,7 +204,7 @@ const ClientDashboard = () => {
                             </div>
                             <GoogleLocationSearch placeholder="Digite o destino..." onSelect={(l) => setDestLocation(l)} initialValue={destLocation?.display_name} />
                         </div>
-                        <Button className="w-full mt-6 h-14 text-lg font-bold rounded-2xl bg-black text-white hover:bg-zinc-800 transition-all shadow-xl" onClick={() => { if(!pickupLocation || !destLocation) showError("Selecione os endereços."); else setStep('confirm'); }}>
+                        <Button className="w-full mt-6 h-14 text-lg font-bold rounded-2xl bg-black text-white hover:bg-zinc-800 shadow-xl" onClick={() => { if(!pickupLocation || !destLocation) showError("Selecione os endereços."); else setStep('confirm'); }}>
                             Solicitar Corrida <ChevronRight className="ml-1 w-5 h-5" />
                         </Button>
                     </div>
@@ -220,12 +214,12 @@ const ClientDashboard = () => {
                     <div className="bg-white/95 backdrop-blur-xl p-6 rounded-[32px] shadow-2xl border border-white/40 flex flex-col max-h-[80vh]">
                         <div className="flex items-center gap-3 mb-6 cursor-pointer" onClick={() => setStep('search')}>
                             <div className="bg-gray-100 p-2 rounded-full"><ArrowLeft className="w-5 h-5" /></div>
-                            <h2 className="text-xl font-black text-slate-900">Escolha sua Categoria</h2>
+                            <h2 className="text-xl font-black text-slate-900">Escolha seu Gold</h2>
                         </div>
                         
-                        <div className="bg-gray-50 rounded-2xl p-4 mb-6 border border-gray-100 space-y-3">
-                            <p className="text-sm font-medium text-slate-600 line-clamp-1">📍 {pickupLocation?.display_name}</p>
-                            <p className="text-sm font-bold text-slate-900 line-clamp-1">🏁 {destLocation?.display_name}</p>
+                        <div className="bg-gray-50 rounded-2xl p-4 mb-6 border border-gray-100 space-y-3 text-sm">
+                            <p className="font-medium text-slate-600 line-clamp-1">📍 {pickupLocation?.display_name}</p>
+                            <p className="font-bold text-slate-900 line-clamp-1">🏁 {destLocation?.display_name}</p>
                         </div>
 
                         {calculatingRoute ? (
@@ -240,7 +234,7 @@ const ClientDashboard = () => {
                                         const price = calculatePrice(cat.id);
                                         const isSelected = selectedCategoryId === cat.id;
                                         return (
-                                            <div key={cat.id} onClick={() => setSelectedCategoryId(cat.id)} className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all cursor-pointer ${isSelected ? 'border-yellow-500 bg-yellow-50 shadow-md' : 'border-gray-100 bg-white'}`}>
+                                            <div key={cat.id} onClick={() => setSelectedCategoryId(cat.id)} className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all cursor-pointer ${isSelected ? 'border-yellow-500 bg-yellow-50 shadow-md' : 'border-gray-100 bg-white hover:border-gray-200'}`}>
                                                 <div className="flex items-center gap-4">
                                                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isSelected ? 'bg-yellow-500 text-black' : 'bg-gray-100 text-slate-400'}`}><Car className="w-6 h-6" /></div>
                                                     <div><h4 className="font-black text-slate-900">{cat.name}</h4><p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">{cat.description || 'Viagem premium'}</p></div>
@@ -251,7 +245,7 @@ const ClientDashboard = () => {
                                     })}
                                 </div>
                                 <div className="grid grid-cols-2 gap-3 mb-6">
-                                    {appSettings.enableWallet && <button onClick={() => setPaymentMethod('WALLET')} className={`h-14 rounded-2xl border-2 flex items-center justify-center gap-2 font-bold transition-all ${paymentMethod === 'WALLET' ? 'border-slate-900 bg-slate-900 text-white' : 'border-gray-200 text-slate-500'}`}><CreditCard className="w-4 h-4" /> Carteira</button>}
+                                    {appSettings.enableWallet && <button onClick={() => setPaymentMethod('WALLET')} className={`h-14 rounded-2xl border-2 flex items-center justify-center gap-2 font-bold transition-all ${paymentMethod === 'WALLET' ? 'border-slate-900 bg-slate-900 text-white' : 'border-gray-200 text-slate-500'}`}><Wallet className="w-4 h-4" /> Carteira</button>}
                                     <button onClick={() => setPaymentMethod('CASH')} className={`h-14 rounded-2xl border-2 flex items-center justify-center gap-2 font-bold transition-all ${paymentMethod === 'CASH' ? 'border-slate-900 bg-slate-900 text-white' : 'border-gray-200 text-slate-500'}`}><Banknote className="w-4 h-4" /> Dinheiro</button>
                                 </div>
                                 <Button className="w-full h-14 text-lg font-black rounded-2xl bg-yellow-500 hover:bg-yellow-400 text-black shadow-xl shadow-yellow-500/20" onClick={confirmRide} disabled={isRequesting}>{isRequesting ? <Loader2 className="animate-spin" /> : "CONFIRMAR SOLICITAÇÃO"}</Button>
@@ -298,7 +292,7 @@ const ClientDashboard = () => {
                 )}
 
                 {step === 'rating' && (
-                    <div className="bg-white p-8 rounded-[32px] shadow-2xl text-center animate-in zoom-in-95">
+                    <div className="bg-white p-8 rounded-[32px] shadow-2xl text-center">
                         <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"><CheckCircle2 className="w-10 h-10 text-green-600" /></div>
                         <h2 className="text-3xl font-black text-slate-900 mb-2">Você Chegou!</h2>
                         <p className="text-gray-500 mb-8">Como foi sua viagem com {ride?.driver_details?.first_name}?</p>
@@ -309,7 +303,6 @@ const ClientDashboard = () => {
             </div>
         )}
 
-        {/* VIEW: HISTÓRICO */}
         {activeTab === 'history' && (
             <div className="w-full max-w-md bg-white/95 backdrop-blur-xl p-6 rounded-[32px] shadow-2xl border border-white/40 pointer-events-auto h-[60vh] flex flex-col">
                 <h2 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-2"><History className="w-6 h-6" /> Suas Viagens</h2>
@@ -329,6 +322,18 @@ const ClientDashboard = () => {
               <AlertDialogFooter className="mt-4 flex gap-3"><AlertDialogCancel className="rounded-xl h-12 flex-1 font-bold">Voltar</AlertDialogCancel><AlertDialogAction className="bg-red-600 hover:bg-red-700 text-white rounded-xl h-12 flex-1 font-bold" onClick={async () => { if(ride) await cancelRide(ride.id, "Cancelado pelo passageiro"); setShowCancelAlert(false); setStep('search'); }}>Confirmar</AlertDialogAction></AlertDialogFooter>
           </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={showBalanceAlert} onOpenChange={setShowBalanceAlert}>
+          <DialogContent className="rounded-[32px] border-0 text-center p-8">
+              <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6 text-red-600"><AlertTriangle className="w-10 h-10" /></div>
+              <DialogTitle className="text-2xl font-black text-slate-900 mb-2">Saldo Insuficiente</DialogTitle>
+              <DialogDescription className="text-gray-500 mb-6">Você precisa de mais <span className="font-black text-red-600">R$ {missingAmount.toFixed(2)}</span> para realizar esta viagem usando a carteira.</DialogDescription>
+              <div className="flex flex-col gap-3">
+                  <Button className="w-full h-14 bg-black text-white font-bold rounded-2xl" onClick={() => navigate('/wallet')}>Adicionar Crédito</Button>
+                  <Button variant="ghost" className="w-full h-12 text-gray-500 font-bold" onClick={() => { setShowBalanceAlert(false); setPaymentMethod('CASH'); }}>Pagar com Dinheiro</Button>
+              </div>
+          </DialogContent>
+      </Dialog>
     </div>
   );
 };
