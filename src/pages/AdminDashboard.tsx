@@ -8,7 +8,7 @@ import {
   Menu, Banknote, FileText, Check, X, ExternalLink, Camera, User,
   Moon as MoonIcon, List, Plus, Power, Pencil, Star, Calendar, ArrowUpRight, ArrowDownLeft,
   Activity, BarChart3, PieChart, Coins, Lock, Unlock, Calculator, Info, MapPin, Zap, XCircle,
-  Ban, Percent, Navigation
+  Ban, Percent, Navigation, PlusCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -142,7 +142,7 @@ const AdminDashboard = () => {
             ridesQuery,
             supabase.from('profiles').select('*').order('created_at', { ascending: false }),
             supabase.from('app_settings').select('*'),
-            supabase.from('pricing_tiers').select('*').order('display_order', { ascending: true }),
+            supabase.from('pricing_tiers').select('*').order('max_distance', { ascending: true }),
             supabase.from('car_categories').select('*').order('base_fare', { ascending: true }),
             supabase.from('admin_config').select('*')
         ]);
@@ -315,12 +315,43 @@ const AdminDashboard = () => {
           const { error: adminConfigError } = await supabase.from('admin_config').upsert(adminConfigUpdates);
           if (adminConfigError) throw adminConfigError;
           
-          for (const tier of pricingTiers) { const { error: tierError } = await supabase.from('pricing_tiers').update({ price: tier.price, label: tier.label }).eq('id', tier.id); if (tierError) throw tierError; }
+          for (const tier of pricingTiers) { 
+              if (tier.id.startsWith('new-')) {
+                  const { error: tierError } = await supabase.from('pricing_tiers').insert({ 
+                      label: tier.label, 
+                      price: tier.price, 
+                      max_distance: parseFloat(tier.label.replace(/[^0-9.]/g, '')),
+                      display_order: pricingTiers.indexOf(tier) 
+                  });
+                  if (tierError) throw tierError;
+              } else {
+                  const { error: tierError } = await supabase.from('pricing_tiers').update({ price: tier.price, label: tier.label }).eq('id', tier.id);
+                  if (tierError) throw tierError;
+              }
+          }
           
           for (const cat of categories.filter(c => c.name !== 'Gold Driver')) { const { error: catError } = await supabase.from('car_categories').update({ base_fare: cat.base_fare, cost_per_km: cat.cost_per_km, min_fare: cat.min_fare, active: cat.active }).eq('id', cat.id); if (catError) throw catError; }
           
           showSuccess("Configurações salvas!"); await fetchData(false);
       } catch (e: any) { showError(e.message); } finally { setLoading(false); }
+  };
+
+  const handleAddPriceTier = () => {
+      const newId = `new-${Date.now()}`;
+      setPricingTiers(prev => [...prev, { id: newId, label: "0 km", price: "15" }]);
+  };
+
+  const handleDeletePriceTier = async (id: string) => {
+      if (id.startsWith('new-')) {
+          setPricingTiers(prev => prev.filter(t => t.id !== id));
+          return;
+      }
+      try {
+          const { error } = await supabase.from('pricing_tiers').delete().eq('id', id);
+          if (error) throw error;
+          setPricingTiers(prev => prev.filter(t => t.id !== id));
+          showSuccess("Faixa removida.");
+      } catch (e: any) { showError(e.message); }
   };
 
   const handleSaveGoldDriver = async () => {
@@ -594,7 +625,12 @@ const AdminDashboard = () => {
                               </TabsContent>
 
                               <TabsContent value="values">
-                                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8"><div className="lg:col-span-3 bg-yellow-500 rounded-[32px] p-8 text-black shadow-xl relative overflow-hidden"><div className="relative z-10"><h2 className="text-3xl font-black mb-2">Valores de Viagem - Gold Driver</h2><p className="font-medium opacity-90 max-w-2xl">As configurações abaixo aplicam-se exclusivamente à categoria <strong>Gold Driver</strong>. Para as outras categorias, configure os valores base na aba "Categorias".</p></div><div className="absolute top-0 right-0 p-8 opacity-20"><List className="w-48 h-48" /></div></div><div className="space-y-6"><Card className="border-0 shadow-xl bg-slate-900 text-white rounded-[32px] overflow-hidden"><CardHeader><div className="flex justify-between items-start"><div><CardTitle className="flex items-center gap-2 text-yellow-500"><MoonIcon className="w-5 h-5" /> Taxa Noturna</CardTitle><CardDescription className="text-slate-400">Adicional para horários especiais.</CardDescription></div><Switch checked={adminConfigs.night_active === 'true'} onCheckedChange={(val) => setAdminConfigs({...adminConfigs, night_active: val ? 'true' : 'false'})} className="data-[state=checked]:bg-yellow-500"/></div></CardHeader><CardContent className={`space-y-4 transition-all duration-300 ${adminConfigs.night_active !== 'true' ? 'opacity-50 pointer-events-none grayscale' : ''}`}><div className="grid grid-cols-2 gap-4"><div className="space-y-2"><Label className="text-slate-300">Início (21h)</Label><Input type="time" value={adminConfigs.night_start} onChange={e => setAdminConfigs({...adminConfigs, night_start: e.target.value})} className="bg-slate-800 border-0 text-white rounded-xl" /></div><div className="space-y-2"><Label className="text-slate-300">Fim (00h)</Label><Input type="time" value={adminConfigs.night_end} onChange={e => setAdminConfigs({...adminConfigs, night_end: e.target.value})} className="bg-slate-800 border-0 text-white rounded-xl" /></div></div><div className="space-y-2"><Label className="text-slate-300">Acréscimo no Valor (R$)</Label><Input type="number" value={adminConfigs.night_increase} onChange={e => setAdminConfigs({...adminConfigs, night_increase: e.target.value})} className="bg-slate-800 border-0 text-white rounded-xl font-bold text-lg" /><p className="text-xs text-slate-500">Valor somado à tabela normal neste horário.</p></div><div className="space-y-2"><Label className="text-slate-300">Mínima após 00h (R$)</Label><Input type="number" value={adminConfigs.midnight_min_price} onChange={e => setAdminConfigs({...adminConfigs, midnight_min_price: e.target.value})} className="bg-slate-800 border-0 text-white rounded-xl font-bold text-lg" /><p className="text-xs text-slate-500">Nenhuma corrida será menor que este valor na madrugada.</p></div></CardContent><CardFooter><Button onClick={() => setShowNightSaveAlert(true)} className="w-full bg-white text-black hover:bg-gray-200 font-bold h-12 rounded-xl">Salvar Taxa Noturna</Button></CardFooter></Card></div><div className="lg:col-span-2"><Card className="border-0 shadow-xl bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[32px] overflow-hidden"><CardHeader className="flex flex-row items-center justify-between"><div><CardTitle className="flex items-center gap-2"><List className="w-5 h-5" /> Configuração de Preços (Gold Driver)</CardTitle><CardDescription>Edite os valores por faixa de distância.</CardDescription></div><Button onClick={() => setShowTableSaveAlert(true)} disabled={loading} className="bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg"><Save className="w-4 h-4 mr-2" /> Salvar Alterações</Button></CardHeader><CardContent className="p-0"><div className="max-h-[600px] overflow-y-auto custom-scrollbar"><Table><TableHeader className="bg-slate-100 dark:bg-slate-800 sticky top-0 z-10"><TableRow><TableHead className="pl-6 w-1/2">Faixa de Distância</TableHead><TableHead className="w-1/4">Valor (R$)</TableHead><TableHead className="w-1/4"></TableHead></TableRow></TableHeader><TableBody>{pricingTiers.map((tier) => (<TableRow key={tier.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50"><TableCell className="pl-6"><Input value={tier.label} onChange={(e) => updatePriceTier(tier.id, 'label', e.target.value)} className="bg-transparent border-0 font-medium focus-visible:ring-0 px-0 h-auto"/></TableCell><TableCell><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-bold">R$</span><Input type="number" value={tier.price} onChange={(e) => updatePriceTier(tier.id, 'price', e.target.value)} className="pl-9 font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 rounded-xl"/></div></TableCell><TableCell className="text-xs text-muted-foreground text-right pr-6"><Pencil className="w-4 h-4 opacity-50" /></TableCell></TableRow>))}</TableBody></Table></div></CardContent></Card></div></div>
+                                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8"><div className="lg:col-span-3 bg-yellow-500 rounded-[32px] p-8 text-black shadow-xl relative overflow-hidden"><div className="relative z-10"><h2 className="text-3xl font-black mb-2">Valores de Viagem - Gold Driver</h2><p className="font-medium opacity-90 max-w-2xl">As configurações abaixo aplicam-se exclusivamente à categoria <strong>Gold Driver</strong>. Para as outras categorias, configure os valores base na aba "Categorias".</p></div><div className="absolute top-0 right-0 p-8 opacity-20"><List className="w-48 h-48" /></div></div><div className="space-y-6"><Card className="border-0 shadow-xl bg-slate-900 text-white rounded-[32px] overflow-hidden"><CardHeader><div className="flex justify-between items-start"><div><CardTitle className="flex items-center gap-2 text-yellow-500"><MoonIcon className="w-5 h-5" /> Taxa Noturna</CardTitle><CardDescription className="text-slate-400">Adicional para horários especiais.</CardDescription></div><Switch checked={adminConfigs.night_active === 'true'} onCheckedChange={(val) => setAdminConfigs({...adminConfigs, night_active: val ? 'true' : 'false'})} className="data-[state=checked]:bg-yellow-500"/></div></CardHeader><CardContent className={`space-y-4 transition-all duration-300 ${adminConfigs.night_active !== 'true' ? 'opacity-50 pointer-events-none grayscale' : ''}`}><div className="grid grid-cols-2 gap-4"><div className="space-y-2"><Label className="text-slate-300">Início (21h)</Label><Input type="time" value={adminConfigs.night_start} onChange={e => setAdminConfigs({...adminConfigs, night_start: e.target.value})} className="bg-slate-800 border-0 text-white rounded-xl" /></div><div className="space-y-2"><Label className="text-slate-300">Fim (00h)</Label><Input type="time" value={adminConfigs.night_end} onChange={e => setAdminConfigs({...adminConfigs, night_end: e.target.value})} className="bg-slate-800 border-0 text-white rounded-xl" /></div></div><div className="space-y-2"><Label className="text-slate-300">Acréscimo no Valor (R$)</Label><Input type="number" value={adminConfigs.night_increase} onChange={e => setAdminConfigs({...adminConfigs, night_increase: e.target.value})} className="bg-slate-800 border-0 text-white rounded-xl font-bold text-lg" /><p className="text-xs text-slate-500">Valor somado à tabela normal neste horário.</p></div><div className="space-y-2"><Label className="text-slate-300">Mínima após 00h (R$)</Label><Input type="number" value={adminConfigs.midnight_min_price} onChange={e => setAdminConfigs({...adminConfigs, midnight_min_price: e.target.value})} className="bg-slate-800 border-0 text-white rounded-xl font-bold text-lg" /><p className="text-xs text-slate-500">Nenhuma corrida será menor que este valor na madrugada.</p></div></CardContent><CardFooter><Button onClick={() => setShowNightSaveAlert(true)} className="w-full bg-white text-black hover:bg-gray-200 font-bold h-12 rounded-xl">Salvar Taxa Noturna</Button></CardFooter></Card></div><div className="lg:col-span-2"><Card className="border-0 shadow-xl bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[32px] overflow-hidden"><CardHeader className="flex flex-row items-center justify-between"><div><CardTitle className="flex items-center gap-2"><List className="w-5 h-5" /> Configuração de Preços (Gold Driver)</CardTitle><CardDescription>Edite os valores por faixa de distância.</CardDescription></div><div className="flex gap-2">
+                                      <Button onClick={handleAddPriceTier} variant="outline" className="border-slate-300 rounded-xl h-10 font-bold"><PlusCircle className="w-4 h-4 mr-2" /> Adicionar Faixa</Button>
+                                      <Button onClick={() => setShowTableSaveAlert(true)} disabled={loading} className="bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg"><Save className="w-4 h-4 mr-2" /> Salvar Alterações</Button>
+                                  </div></CardHeader><CardContent className="p-0"><div className="max-h-[600px] overflow-y-auto custom-scrollbar"><Table><TableHeader className="bg-slate-100 dark:bg-slate-800 sticky top-0 z-10"><TableRow><TableHead className="pl-6 w-1/3">Faixa de Distância</TableHead><TableHead className="w-1/3">Valor (R$)</TableHead><TableHead className="w-1/3 text-right pr-6">Ações</TableHead></TableRow></TableHeader><TableBody>{pricingTiers.map((tier) => (<TableRow key={tier.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50"><TableCell className="pl-6"><Input value={tier.label} onChange={(e) => updatePriceTier(tier.id, 'label', e.target.value)} className="bg-transparent border-0 font-medium focus-visible:ring-0 px-0 h-auto"/></TableCell><TableCell><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-bold">R$</span><Input type="number" value={tier.price} onChange={(e) => updatePriceTier(tier.id, 'price', e.target.value)} className="pl-9 font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 rounded-xl"/></div></TableCell><TableCell className="text-right pr-6">
+                                      <Button variant="ghost" size="icon" className="text-red-400 hover:text-red-600 hover:bg-red-50" onClick={() => handleDeletePriceTier(tier.id)}><Trash2 className="w-4 h-4" /></Button>
+                                  </TableCell></TableRow>))}</TableBody></Table></div></CardContent></Card></div></div>
                               </TabsContent>
                           </Tabs>
                       </div>
