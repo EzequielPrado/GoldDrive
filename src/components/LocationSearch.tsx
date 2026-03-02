@@ -23,8 +23,9 @@ const LocationSearch = ({
   initialValue = "", 
   className = "",
   error = false,
-  referenceLat,
-  referenceLon
+  // Coordenadas padrão para Patrocínio, MG
+  referenceLat = -18.9469,
+  referenceLon = -46.9928
 }: LocationSearchProps) => {
   const [query, setQuery] = useState(initialValue);
   const [results, setResults] = useState<any[]>([]);
@@ -51,16 +52,11 @@ const LocationSearch = ({
       if (query.length > 2 && isOpen) {
         setLoading(true);
         try {
-          // Lógica para melhorar a busca com números:
-          // Removemos vírgulas, pois a API Photon prefere espaços para separar o número da rua
           const cleanQuery = query.replace(/,/g, ' ').trim();
           
-          let url = `https://photon.komoot.io/api/?q=${encodeURIComponent(cleanQuery)}&limit=6&lang=pt`;
+          // Adicionando lat/lon na query do Photon para priorizar resultados locais
+          let url = `https://photon.komoot.io/api/?q=${encodeURIComponent(cleanQuery)}&limit=6&lang=pt&lat=${referenceLat}&lon=${referenceLon}`;
           
-          if (referenceLat && referenceLon) {
-              url += `&lat=${referenceLat}&lon=${referenceLon}`;
-          }
-
           const response = await fetch(url);
           const data = await response.json();
           
@@ -82,7 +78,6 @@ const LocationSearch = ({
       const p = feature.properties;
       const parts = [];
 
-      // Prioridade para o nome da rua e número
       const streetName = p.street || p.name;
       const houseNumber = p.housenumber;
 
@@ -94,7 +89,6 @@ const LocationSearch = ({
           parts.push(p.name);
       }
 
-      // Contexto geográfico (Bairro e Cidade)
       if (p.district) parts.push(p.district);
       if (p.city) parts.push(p.city);
       else if (p.town) parts.push(p.town);
@@ -165,8 +159,6 @@ const LocationSearch = ({
           {!loading && results.map((item, index) => {
             const p = item.properties;
             const fullLabel = formatPhotonAddress(item);
-            
-            // Lógica de exibição: Título em destaque e endereço abaixo
             const mainTitle = p.street && p.housenumber ? `${p.street}, ${p.housenumber}` : (p.name || p.street || fullLabel.split(',')[0]);
             const subTitle = fullLabel.replace(mainTitle, '').replace(/^,\s*/, '').trim();
 

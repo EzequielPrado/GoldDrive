@@ -33,6 +33,9 @@ const GoogleLocationSearch = ({
   const [autocompleteService, setAutocompleteService] = useState<google.maps.places.AutocompleteService | null>(null);
   const [placesService, setPlacesService] = useState<google.maps.places.PlacesService | null>(null);
 
+  // Coordenadas de Patrocínio - MG para priorizar buscas
+  const PATROCINIO_COORDS = { lat: -18.9469, lng: -46.9928 };
+
   useEffect(() => {
     if (!placesLibrary) return;
     try {
@@ -67,19 +70,19 @@ const GoogleLocationSearch = ({
 
     const timer = setTimeout(() => {
       setLoading(true);
+      // Priorizando Patrocínio, MG na busca
       autocompleteService.getPlacePredictions({
         input: inputValue,
         componentRestrictions: { country: 'br' },
-        types: ['geocode', 'establishment']
+        types: ['geocode', 'establishment'],
+        locationBias: new google.maps.LatLng(PATROCINIO_COORDS.lat, PATROCINIO_COORDS.lng),
+        radius: 10000 // 10km de raio de prioridade
       }, (results, status) => {
         setLoading(false);
         if (status === 'OK' && results) {
           setPredictions(results);
         } else {
           setPredictions([]);
-          if (status !== 'ZERO_RESULTS') {
-              console.warn(`Google Maps Status: ${status}. Verifique se a 'Places API' está ativada no seu console do Google Cloud.`);
-          }
         }
       });
     }, 400);
