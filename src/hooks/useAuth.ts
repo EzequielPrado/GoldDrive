@@ -71,7 +71,7 @@ export const useAuth = () => {
     }
   };
 
-  const handleSignUp = async (email: string, password: string, fullName: string, phone: string, role: 'client' | 'driver' = 'client') => {
+  const handleSignUp = async (email: string, password: string, fullName: string, phone: string, role: 'client' | 'driver' = 'client', extraMetadata: any = {}) => {
     if (!email || !password || !fullName) {
       showError("Preencha todos os campos obrigatórios.");
       return;
@@ -90,14 +90,15 @@ export const useAuth = () => {
             first_name: firstName,
             last_name: lastName,
             phone: phone,
-            role: role
+            role: role,
+            ...extraMetadata
           }
         }
       });
 
       if (error) throw error;
       
-      showSuccess("Conta criada com sucesso! Faça login para entrar.");
+      showSuccess(role === 'driver' ? "Cadastro enviado! Aguarde aprovação." : "Conta criada com sucesso! Faça login.");
       return true;
     } catch (error: any) {
       showError(error.message || "Erro ao criar conta.");
