@@ -56,7 +56,6 @@ const DriverDashboard = () => {
   
   // Estados para Corrida Manual
   const [passengerName, setPassengerName] = useState("");
-  const [passengerPhone, setPassengerPhone] = useState("");
   const [pickupLocation, setPickupLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
   const [destLocation, setDestLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
   const [routeDistance, setRouteDistance] = useState<number>(0);
@@ -163,7 +162,7 @@ const DriverDashboard = () => {
       try {
           const price = calculatePrice();
           await createManualRide(
-              passengerName, passengerPhone,
+              passengerName, "", // Telefone removido como solicitado
               pickupLocation.display_name, destLocation.display_name,
               { lat: pickupLocation.lat, lng: pickupLocation.lon },
               { lat: destLocation.lat, lng: destLocation.lon },
@@ -171,7 +170,6 @@ const DriverDashboard = () => {
           );
           setShowManualRide(false);
           setPassengerName("");
-          setPassengerPhone("");
           setPickupLocation(null);
           setDestLocation(null);
           setRouteDistance(0);
@@ -321,7 +319,7 @@ const DriverDashboard = () => {
          )}
       </div>
 
-      {/* MODAL DE CORRIDA MANUAL CORRIGIDO */}
+      {/* MODAL DE CORRIDA MANUAL - TELEFONE REMOVIDO */}
       <Dialog open={showManualRide} onOpenChange={setShowManualRide}>
           <DialogContent className="max-w-md bg-white rounded-[32px] border-0 shadow-2xl p-0 overflow-hidden">
               <DialogHeader className="p-6 bg-slate-900 text-white">
@@ -338,15 +336,6 @@ const DriverDashboard = () => {
                             placeholder="Ex: João Silva" 
                             value={passengerName} 
                             onChange={e => setPassengerName(e.target.value)} 
-                            className="h-12 rounded-xl bg-slate-50 border-slate-200 text-slate-900 focus:bg-white transition-all font-bold placeholder:text-slate-300" 
-                          />
-                      </div>
-                      <div className="space-y-1.5">
-                          <Label className="text-xs font-black uppercase text-slate-400 ml-1">Celular (Opcional)</Label>
-                          <Input 
-                            placeholder="(00) 00000-0000" 
-                            value={passengerPhone} 
-                            onChange={e => setPassengerPhone(e.target.value)} 
                             className="h-12 rounded-xl bg-slate-50 border-slate-200 text-slate-900 focus:bg-white transition-all font-bold placeholder:text-slate-300" 
                           />
                       </div>
