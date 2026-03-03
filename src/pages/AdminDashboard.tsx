@@ -316,24 +316,45 @@ const AdminDashboard = () => {
           if (adminConfigError) throw adminConfigError;
           
           for (const tier of pricingTiers) { 
+              const priceNum = Number(tier.price);
               if (tier.id.startsWith('new-')) {
+                  // Extraindo apenas os números da label (ex: "8.5 km" -> 8.5)
+                  const distStr = tier.label.replace(/[^0-9.]/g, '');
+                  const distNum = parseFloat(distStr);
+
                   const { error: tierError } = await supabase.from('pricing_tiers').insert({ 
                       label: tier.label, 
-                      price: tier.price, 
-                      max_distance: parseFloat(tier.label.replace(/[^0-9.]/g, '')),
+                      price: priceNum, 
+                      max_distance: isNaN(distNum) ? 0 : distNum,
                       display_order: pricingTiers.indexOf(tier) 
                   });
                   if (tierError) throw tierError;
               } else {
-                  const { error: tierError } = await supabase.from('pricing_tiers').update({ price: tier.price, label: tier.label }).eq('id', tier.id);
+                  const { error: tierError } = await supabase.from('pricing_tiers').update({ 
+                      price: priceNum, 
+                      label: tier.label 
+                  }).eq('id', tier.id);
                   if (tierError) throw tierError;
               }
           }
           
-          for (const cat of categories.filter(c => c.name !== 'Gold Driver')) { const { error: catError } = await supabase.from('car_categories').update({ base_fare: cat.base_fare, cost_per_km: cat.cost_per_km, min_fare: cat.min_fare, active: cat.active }).eq('id', cat.id); if (catError) throw catError; }
+          for (const cat of categories.filter(c => c.name !== 'Gold Driver')) { 
+              const { error: catError } = await supabase.from('car_categories').update({ 
+                  base_fare: Number(cat.base_fare), 
+                  cost_per_km: Number(cat.cost_per_km), 
+                  min_fare: Number(cat.min_fare), 
+                  active: cat.active 
+              }).eq('id', cat.id); 
+              if (catError) throw catError; 
+          }
           
           showSuccess("Configurações salvas!"); await fetchData(false);
-      } catch (e: any) { showError(e.message); } finally { setLoading(false); }
+      } catch (e: any) { 
+          console.error("Erro ao salvar:", e);
+          showError(e.message); 
+      } finally { 
+          setLoading(false); 
+      }
   };
 
   const handleAddPriceTier = () => {
