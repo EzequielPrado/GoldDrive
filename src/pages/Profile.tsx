@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ArrowLeft, Camera, Loader2, LogOut, Smartphone, Calendar, Star, History, Car, Mail, Phone, ShieldCheck, User } from "lucide-react";
+import { ArrowLeft, Camera, Loader2, LogOut, Smartphone, Calendar, Star, History, Car, Mail, Phone, ShieldCheck, User, Pencil, Check, X } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,11 @@ const Profile = () => {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [showPWA, setShowPWA] = useState(false);
+  
+  // Estados para edição do veículo
+  const [isEditingVehicle, setIsEditingVehicle] = useState(false);
+  const [savingVehicle, setSavingVehicle] = useState(false);
+  const [vehicleForm, setVehicleForm] = useState({ model: '', plate: '', color: '' });
   
   const [profile, setProfile] = useState<any>({
     id: "", first_name: "", last_name: "", email: "", phone: "", bio: "", avatar_url: "", role: "", created_at: "", car_model: "", car_plate: "", car_color: "", total_rides: 0, rating: 5.0
@@ -38,7 +43,6 @@ const Profile = () => {
       // Contagem REAL de viagens finalizadas
       const queryField = data.role === 'driver' ? 'driver_id' : 'customer_id';
       
-      // Usando count: 'exact' para pegar o número preciso do banco
       const { count, error: countError } = await supabase
         .from('rides')
         .select('*', { count: 'exact', head: true })
@@ -58,7 +62,7 @@ const Profile = () => {
       setProfile({ 
           ...data, 
           email: user.email || "",
-          total_rides: count || 0, // Garante que usa o count ou 0
+          total_rides: count || 0,
           rating: avgRating 
       });
     } catch (error: any) { 
@@ -95,6 +99,34 @@ const Profile = () => {
       showError(error.message);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleSaveVehicle = async () => {
+    setSavingVehicle(true);
+    try {
+      const { error } = await supabase.from('profiles')
+        .update({
+          car_model: vehicleForm.model,
+          car_plate: vehicleForm.plate,
+          car_color: vehicleForm.color
+        })
+        .eq('id', profile.id);
+
+      if (error) throw error;
+
+      setProfile({
+        ...profile,
+        car_model: vehicleForm.model,
+        car_plate: vehicleForm.plate,
+        car_color: vehicleForm.color
+      });
+      showSuccess("Informações do veículo atualizadas!");
+      setIsEditingVehicle(false);
+    } catch (error: any) {
+      showError("Erro ao atualizar veículo: " + error.message);
+    } finally {
+      setSavingVehicle(false);
     }
   };
 
@@ -225,19 +257,90 @@ const Profile = () => {
 
         {/* Card do Veículo (Apenas Motorista) */}
         {profile.role === 'driver' && (
-            <div className="bg-white rounded-[32px] shadow-lg p-6 mb-6 border border-gray-100">
-                <h3 className="font-black text-slate-900 mb-4 flex items-center gap-2 text-lg">
-                    <Car className="w-5 h-5 text-yellow-500" /> Meu Veículo
-                </h3>
-                <div className="bg-slate-50 rounded-2xl p-4 flex justify-between items-center">
-                    <div>
-                        <p className="text-sm font-bold text-slate-900">{profile.car_model}</p>
-                        <p className="text-xs text-gray-500">{profile.car_color}</p>
-                    </div>
-                    <Badge variant="outline" className="bg-white border-slate-200 text-slate-900 font-mono text-sm px-3 py-1">
-                        {profile.car_plate}
-                    </Badge>
+            <div className="bg-white rounded-[32px] shadow-lg p-6 mb-6 border border-gray-100 transition-all">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-black text-slate-900 flex items-center gap-2 text-lg">
+                        <Car className="w-5 h-5 text-yellow-500" /> Meu Veículo
+                    </h3>
+                    {!isEditingVehicle && (
+                        <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 rounded-xl font-bold h-8 px-3"
+                            onClick={() => {
+                                setVehicleForm({
+                                    model: profile.car_model || '',
+                                    plate: profile.car_plate || '',
+                                    color: profile.car_color || ''
+                                });
+                                setIsEditingVehicle(true);
+                            }}
+                        >
+                            <Pencil className="w-4 h-4 mr-2" /> Editar
+                        </Button>
+                    )}
                 </div>
+
+                {isEditingVehicle ? (
+                    <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
+                        <div>
+                            <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Modelo do Veículo</Label>
+                            <Input 
+                                value={vehicleForm.model} 
+                                onChange={e => setVehicleForm({...vehicleForm, model: e.target.value})} 
+                                className="bg-white h-12 rounded-xl border-gray-200 mt-1" 
+                                placeholder="Ex: Chevrolet Onix" 
+                            />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Cor</Label>
+                                <Input 
+                                    value={vehicleForm.color} 
+                                    onChange={e => setVehicleForm({...vehicleForm, color: e.target.value})} 
+                                    className="bg-white h-12 rounded-xl border-gray-200 mt-1" 
+                                    placeholder="Ex: Prata" 
+                                />
+                            </div>
+                            <div>
+                                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Placa</Label>
+                                <Input 
+                                    value={vehicleForm.plate} 
+                                    onChange={e => setVehicleForm({...vehicleForm, plate: e.target.value.toUpperCase()})} 
+                                    className="bg-white uppercase h-12 rounded-xl border-gray-200 mt-1" 
+                                    placeholder="ABC-1234" 
+                                />
+                            </div>
+                        </div>
+                        <div className="flex gap-2 pt-2">
+                            <Button 
+                                variant="outline" 
+                                className="flex-1 rounded-xl h-12 font-bold text-slate-500" 
+                                onClick={() => setIsEditingVehicle(false)} 
+                                disabled={savingVehicle}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button 
+                                className="flex-1 rounded-xl h-12 bg-yellow-500 text-black hover:bg-yellow-400 font-black shadow-md" 
+                                onClick={handleSaveVehicle} 
+                                disabled={savingVehicle}
+                            >
+                                {savingVehicle ? <Loader2 className="w-5 h-5 animate-spin" /> : "Salvar Veículo"}
+                            </Button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="bg-slate-50 rounded-2xl p-4 flex justify-between items-center border border-slate-100">
+                        <div>
+                            <p className="text-sm font-bold text-slate-900">{profile.car_model || 'Não informado'}</p>
+                            <p className="text-xs font-medium text-gray-500">{profile.car_color || 'Sem cor'}</p>
+                        </div>
+                        <Badge variant="outline" className="bg-white border-slate-200 text-slate-900 font-mono text-sm px-3 py-1 shadow-sm">
+                            {profile.car_plate || '---'}
+                        </Badge>
+                    </div>
+                )}
             </div>
         )}
 
