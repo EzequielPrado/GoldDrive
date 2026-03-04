@@ -33,13 +33,11 @@ const GoogleLocationSearch = ({
   const [sessionToken, setSessionToken] = useState<google.maps.places.AutocompleteSessionToken | null>(null);
   const [autocompleteService, setAutocompleteService] = useState<google.maps.places.AutocompleteService | null>(null);
 
-  // Coordenadas de Patrocínio - MG para priorizar buscas
+  // Coordenadas de Patrocínio - MG para priorizar buscas próximas
   const PATROCINIO_COORDS = { lat: -18.9469, lng: -46.9928 };
 
   useEffect(() => {
     if (!placesLibrary) return;
-    
-    // Inicializa o serviço e o token de sessão (abordagem recomendada para economia de custos)
     setAutocompleteService(new placesLibrary.AutocompleteService());
     setSessionToken(new placesLibrary.AutocompleteSessionToken());
   }, [placesLibrary]);
@@ -61,8 +59,8 @@ const GoogleLocationSearch = ({
   }, []);
 
   useEffect(() => {
-    if (!autocompleteService || !sessionToken || inputValue.length < 2 || !isOpen) {
-        setPredictions([]);
+    if (!autocompleteService || !sessionToken || inputValue.length < 3 || !isOpen) {
+        if (inputValue.length < 3) setPredictions([]);
         return;
     }
 
@@ -73,18 +71,24 @@ const GoogleLocationSearch = ({
         input: inputValue,
         sessionToken: sessionToken,
         componentRestrictions: { country: 'br' },
-        types: ['geocode', 'establishment'],
-        locationBias: new google.maps.LatLng(PATROCINIO_COORDS.lat, PATROCINIO_COORDS.lng),
-        radius: 10000 
+        // Removido o raio fixo para permitir buscas em qualquer lugar, 
+        // mas mantendo a "preferência" pela região de Patrocínio
+        locationBias: {
+            radius: 50000, // 50km de preferência, mas busca fora disso também
+            center: PATROCINIO_COORDS
+        }
       }, (results, status) => {
         setLoading(false);
         if (status === 'OK' && results) {
           setPredictions(results);
         } else {
           setPredictions([]);
+          if (status !== 'OK' && status !== 'ZERO_RESULTS') {
+              console.error("Erro na API de Places:", status);
+          }
         }
       });
-    }, 400);
+    }, 500);
 
     return () => clearTimeout(timer);
   }, [inputValue, autocompleteService, sessionToken, isOpen]);
@@ -94,19 +98,17 @@ const GoogleLocationSearch = ({
 
     setLoading(true);
     setIsOpen(false);
+    setPredictions([]);
     
     try {
-        // Nova abordagem recomendada (v3): Uso da classe Place em vez de PlacesService
-        // Isso remove o aviso de depreciação do console
         const { Place } = placesLibrary;
         const place = new Place({
             id: prediction.place_id,
             requestedLanguage: 'pt-BR'
         });
 
-        // Buscamos apenas os campos necessários para economizar na API
         await place.fetchFields({
-            fields: ['location', 'formattedAddress', 'displayName']
+            fields: ['location', 'formattedAddress']
         });
 
         if (place.location) {
@@ -117,11 +119,11 @@ const GoogleLocationSearch = ({
             setInputValue(address);
             onSelect({ lat, lon: lng, display_name: address });
             
-            // Geramos um novo token para a próxima busca
+            // Gera novo token para a próxima transação de busca
             setSessionToken(new placesLibrary.AutocompleteSessionToken());
         }
     } catch (err) {
-        console.error("Erro ao buscar detalhes do local:", err);
+        console.error("Erro ao detalhar local:", err);
     } finally {
         setLoading(false);
     }
@@ -129,7 +131,7 @@ const GoogleLocationSearch = ({
 
   return (
     <div className={`relative w-full ${className}`} ref={containerRef}>
-      <div className={`absolute left-4 top-4 z-20 transition-colors ${error ? "text-red-500" : "text-gray-400"}`}>
+      <div className={`absolute left-4 top-4 z-30 transition-colors pointer-events-none ${error ? "text-red-500" : "text-gray-400"}`}>
         <Icon className="w-5 h-5" />
       </div>
       
@@ -141,7 +143,7 @@ const GoogleLocationSearch = ({
         }}
         onFocus={() => setIsOpen(true)}
         placeholder={placeholder}
-        className={`pl-12 pr-10 h-14 bg-white text-slate-900 rounded-2xl transition-all shadow-sm font-medium placeholder:text-gray-400 border-gray-200 focus:border-black focus:ring-0
+        className={`pl-12 pr-10 h-14 bg-white text-slate-900 rounded-2xl transition-all shadow-sm font-medium placeholder:text-gray-400 border-gray-200 focus:border-black focus:ring-0 relative z-20
             ${error ? "border-red-500 ring-1 ring-red-500" : ""}`}
       />
 
@@ -150,7 +152,7 @@ const GoogleLocationSearch = ({
             size="icon" 
             variant="ghost" 
             onClick={() => { setInputValue(""); onSelect(null); setPredictions([]); }} 
-            className="absolute right-2 top-2 text-gray-400 hover:text-black h-10 w-10 z-20"
+            className="absolute right-2 top-2 text-gray-400 hover:text-black h-10 w-10 z-30"
           >
               <X className="w-4 h-4" />
           </Button>
@@ -168,15 +170,19 @@ const GoogleLocationSearch = ({
             <button
               key={item.place_id || index}
               onClick={() => handleSelect(item)}
-              className="w-full text-left p-4 hover:bg-gray-50 border-b border-gray-50 last:border-0 flex items-start gap-3 transition-colors"
+              className="w-full text-left p-4 hover:bg-gray-50 border-b border-gray-50 last:border-0 flex items-start gap-3 transition-colors cursor-pointer"
               type="button"
             >
                 <div className="bg-slate-100 p-2 rounded-full shrink-0">
                     <MapPin className="w-4 h-4 text-slate-500" />
                 </div>
                 <div className="min-w-0 flex-1">
-                    <p className="font-bold text-sm text-slate-900 truncate">{item.structured_formatting.main_text}</p>
-                    <p className="text-xs text-gray-500 truncate">{item.structured_formatting.secondary_text}</p>
+                    <p className="font-bold text-sm text-slate-900 truncate">
+                        {item.structured_formatting?.main_text || item.description.split(',')[0]}
+                    </p>
+                    <p className="text-xs text-gray-500 truncate">
+                        {item.structured_formatting?.secondary_text || item.description}
+                    </p>
                 </div>
             </button>
           ))}
