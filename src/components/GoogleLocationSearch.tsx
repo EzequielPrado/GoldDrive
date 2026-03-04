@@ -71,10 +71,8 @@ const GoogleLocationSearch = ({
         input: inputValue,
         sessionToken: sessionToken,
         componentRestrictions: { country: 'br' },
-        // Removido o raio fixo para permitir buscas em qualquer lugar, 
-        // mas mantendo a "preferência" pela região de Patrocínio
         locationBias: {
-            radius: 50000, // 50km de preferência, mas busca fora disso também
+            radius: 50000, 
             center: PATROCINIO_COORDS
         }
       }, (results, status) => {
@@ -83,9 +81,6 @@ const GoogleLocationSearch = ({
           setPredictions(results);
         } else {
           setPredictions([]);
-          if (status !== 'OK' && status !== 'ZERO_RESULTS') {
-              console.error("Erro na API de Places:", status);
-          }
         }
       });
     }, 500);
@@ -97,8 +92,8 @@ const GoogleLocationSearch = ({
     if (!placesLibrary || !sessionToken) return;
 
     setLoading(true);
-    setIsOpen(false);
     setPredictions([]);
+    setIsOpen(false);
     
     try {
         const { Place } = placesLibrary;
@@ -169,7 +164,11 @@ const GoogleLocationSearch = ({
           {!loading && predictions.map((item, index) => (
             <button
               key={item.place_id || index}
-              onClick={() => handleSelect(item)}
+              // IMPORTANTE: onMouseDown dispara antes do onBlur/ClickOutside fechar a lista
+              onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleSelect(item);
+              }}
               className="w-full text-left p-4 hover:bg-gray-50 border-b border-gray-50 last:border-0 flex items-start gap-3 transition-colors cursor-pointer"
               type="button"
             >
