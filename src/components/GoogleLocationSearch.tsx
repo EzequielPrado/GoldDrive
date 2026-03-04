@@ -30,20 +30,18 @@ const GoogleLocationSearch = ({
   const containerRef = useRef<HTMLDivElement>(null);
   
   const placesLibrary = useMapsLibrary("places");
+  const [sessionToken, setSessionToken] = useState<google.maps.places.AutocompleteSessionToken | null>(null);
   const [autocompleteService, setAutocompleteService] = useState<google.maps.places.AutocompleteService | null>(null);
-  const [placesService, setPlacesService] = useState<google.maps.places.PlacesService | null>(null);
 
   // Coordenadas de Patrocínio - MG para priorizar buscas
   const PATROCINIO_COORDS = { lat: -18.9469, lng: -46.9928 };
 
   useEffect(() => {
     if (!placesLibrary) return;
-    try {
-      if (!autocompleteService) setAutocompleteService(new placesLibrary.AutocompleteService());
-      if (!placesService) setPlacesService(new placesLibrary.PlacesService(document.createElement('div')));
-    } catch (e) {
-      console.error("Erro ao inicializar serviços do Google:", e);
-    }
+    
+    // Inicializa o serviço e o token de sessão (abordagem recomendada para economia de custos)
+    setAutocompleteService(new placesLibrary.AutocompleteService());
+    setSessionToken(new placesLibrary.AutocompleteSessionToken());
   }, [placesLibrary]);
 
   useEffect(() => {
@@ -63,20 +61,21 @@ const GoogleLocationSearch = ({
   }, []);
 
   useEffect(() => {
-    if (!autocompleteService || inputValue.length < 2 || !isOpen) {
+    if (!autocompleteService || !sessionToken || inputValue.length < 2 || !isOpen) {
         setPredictions([]);
         return;
     }
 
     const timer = setTimeout(() => {
       setLoading(true);
-      // Priorizando Patrocínio, MG na busca
+      
       autocompleteService.getPlacePredictions({
         input: inputValue,
+        sessionToken: sessionToken,
         componentRestrictions: { country: 'br' },
         types: ['geocode', 'establishment'],
         locationBias: new google.maps.LatLng(PATROCINIO_COORDS.lat, PATROCINIO_COORDS.lng),
-        radius: 10000 // 10km de raio de prioridade
+        radius: 10000 
       }, (results, status) => {
         setLoading(false);
         if (status === 'OK' && results) {
@@ -88,28 +87,44 @@ const GoogleLocationSearch = ({
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [inputValue, autocompleteService, isOpen]);
+  }, [inputValue, autocompleteService, sessionToken, isOpen]);
 
-  const handleSelect = (prediction: google.maps.places.AutocompletePrediction) => {
-    if (!placesService) return;
+  const handleSelect = async (prediction: google.maps.places.AutocompletePrediction) => {
+    if (!placesLibrary || !sessionToken) return;
 
     setLoading(true);
     setIsOpen(false);
     
-    placesService.getDetails({
-      placeId: prediction.place_id,
-      fields: ['geometry', 'formatted_address']
-    }, (place, status) => {
-      setLoading(false);
-      if (status === 'OK' && place?.geometry?.location) {
-        const lat = place.geometry.location.lat();
-        const lng = place.geometry.location.lng();
-        const address = place.formatted_address || prediction.description;
+    try {
+        // Nova abordagem recomendada (v3): Uso da classe Place em vez de PlacesService
+        // Isso remove o aviso de depreciação do console
+        const { Place } = placesLibrary;
+        const place = new Place({
+            id: prediction.place_id,
+            requestedLanguage: 'pt-BR'
+        });
 
-        setInputValue(address);
-        onSelect({ lat, lon: lng, display_name: address });
-      }
-    });
+        // Buscamos apenas os campos necessários para economizar na API
+        await place.fetchFields({
+            fields: ['location', 'formattedAddress', 'displayName']
+        });
+
+        if (place.location) {
+            const lat = place.location.lat();
+            const lng = place.location.lng();
+            const address = place.formattedAddress || prediction.description;
+
+            setInputValue(address);
+            onSelect({ lat, lon: lng, display_name: address });
+            
+            // Geramos um novo token para a próxima busca
+            setSessionToken(new placesLibrary.AutocompleteSessionToken());
+        }
+    } catch (err) {
+        console.error("Erro ao buscar detalhes do local:", err);
+    } finally {
+        setLoading(false);
+    }
   };
 
   return (
