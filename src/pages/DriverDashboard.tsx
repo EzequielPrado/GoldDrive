@@ -157,12 +157,15 @@ const DriverDashboard = () => {
   };
 
   const handleCreateManual = async () => {
-      if (!pickupLocation || !destLocation || !passengerName) return;
+      if (!pickupLocation || !destLocation || !passengerName) {
+          showError("Preencha todos os campos da viagem.");
+          return;
+      }
       setManualLoading(true);
       try {
           const price = calculatePrice();
           await createManualRide(
-              passengerName, "", // Telefone removido como solicitado
+              passengerName, "", 
               pickupLocation.display_name, destLocation.display_name,
               { lat: pickupLocation.lat, lng: pickupLocation.lon },
               { lat: destLocation.lat, lng: destLocation.lon },
@@ -173,6 +176,7 @@ const DriverDashboard = () => {
           setPickupLocation(null);
           setDestLocation(null);
           setRouteDistance(0);
+          showSuccess("Viagem manual iniciada!");
       } catch (e: any) {
           showError("Erro ao lançar corrida.");
       } finally {
@@ -319,15 +323,15 @@ const DriverDashboard = () => {
          )}
       </div>
 
-      {/* MODAL DE CORRIDA MANUAL - TELEFONE REMOVIDO */}
+      {/* MODAL DE CORRIDA MANUAL (MAÇANETA) */}
       <Dialog open={showManualRide} onOpenChange={setShowManualRide}>
-          <DialogContent className="max-w-md bg-white rounded-[32px] border-0 shadow-2xl p-0 overflow-hidden">
-              <DialogHeader className="p-6 bg-slate-900 text-white">
+          <DialogContent className="max-w-md bg-white rounded-[32px] border-0 shadow-2xl p-0 overflow-visible">
+              <DialogHeader className="p-6 bg-slate-900 text-white rounded-t-[32px]">
                   <DialogTitle className="text-2xl font-black">Lançar Viagem</DialogTitle>
                   <DialogDescription className="text-slate-400">Preencha os dados da corrida manual abaixo.</DialogDescription>
               </DialogHeader>
               
-              <div className="p-6 space-y-6 bg-white">
+              <div className="p-6 space-y-6 bg-white rounded-b-[32px]">
                   {/* Dados do Passageiro */}
                   <div className="space-y-4">
                       <div className="space-y-1.5">
