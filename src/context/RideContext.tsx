@@ -53,6 +53,9 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   
   const userRoleRef = useRef(userRole);
   const currentUserIdRef = useRef(currentUserId);
+  const driverCarYearRef = useRef<number>(0);
+  const categoryRulesRef = useRef<any>({});
+  
   const rejectedIdsRef = useRef<string[]>([]);
   const dismissedRidesRef = useRef<string[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -135,14 +138,36 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           if (ridesData && ridesData.length > 0) {
               const clientIds = [...new Set(ridesData.map(r => r.customer_id))];
               const { data: profilesData } = await supabase.from('profiles').select('*').in('id', clientIds);
+              
               const enrichedRides = ridesData.map(r => ({
                   ...r,
                   client_details: profilesData?.find(p => p.id === r.customer_id) || { first_name: 'Passageiro' }
-              })).filter(r => r.customer_id !== uid && !rejectedIdsRef.current.includes(r.id));
+              }));
+              
+              // Aplicar o filtro de regras de Categoria e Ano do Veículo
+              const rules = categoryRulesRef.current;
+              const driverYear = driverCarYearRef.current;
+              
+              const validRides = enrichedRides.filter(r => {
+                  // Rejeições locais
+                  if (r.customer_id === uid || rejectedIdsRef.current.includes(r.id)) return false;
+                  
+                  // Validação da categoria x ano do motorista
+                  const rule = rules[r.category];
+                  if (rule && driverYear > 0) {
+                      const min = parseInt(rule.min) || 0;
+                      const max = parseInt(rule.max) || 9999;
+                      if (driverYear < min || driverYear > max) {
+                          return false; // Veículo fora da regra desta categoria
+                      }
+                  }
+                  
+                  return true;
+              });
               
               setAvailableRides(prev => {
-                  if (shouldPlaySound && enrichedRides.length > prev.length) playNotification();
-                  return enrichedRides;
+                  if (shouldPlaySound && validRides.length > prev.length) playNotification();
+                  return validRides;
               });
           } else { setAvailableRides([]); }
       } catch (err) { console.error(err); }
@@ -168,8 +193,22 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
             setCurrentUserId(session.user.id);
-            const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
-            if (data) setUserRole(data.role);
+            
+            // Busca dados do Perfil (role, e o Ano do Carro do motorista)
+            const { data } = await supabase.from('profiles').select('role, car_year').eq('id', session.user.id).maybeSingle();
+            if (data) {
+                setUserRole(data.role);
+                driverCarYearRef.current = parseInt(data.car_year) || 0;
+            }
+            
+            // Busca as regras das categorias do admin_config (ano max/min)
+            const { data: configData } = await supabase.from('admin_config').select('value').eq('key', 'category_rules').maybeSingle();
+            if (configData?.value) {
+                try {
+                    categoryRulesRef.current = JSON.parse(configData.value);
+                } catch(e) {}
+            }
+
             fetchActiveRide(session.user.id);
         }
     };
@@ -213,13 +252,11 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
 
   const cancelRide = async (rideId: string) => {
     try {
-        // Usa a função RPC que você adicionou no banco de dados para tratar multas
         const { data, error } = await supabase.rpc('cancel_ride_as_user', { ride_id_to_cancel: rideId });
         if (error) throw error;
         if (currentUserId) await fetchActiveRide(currentUserId);
         toast({ title: data || "Cancelado" });
     } catch (e: any) { 
-        // Fallback caso a RPC falhe
         await supabase.from('rides').update({ status: 'CANCELLED' }).eq('id', rideId);
         if (currentUserId) await fetchActiveRide(currentUserId);
         toast({ title: "Cancelado" });

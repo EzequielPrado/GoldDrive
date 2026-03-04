@@ -39,8 +39,9 @@ const AdminDashboard = () => {
   
   // Configurações e Categorias (Taxas)
   const [carCategories, setCarCategories] = useState<any[]>([]);
+  const [categoryRules, setCategoryRules] = useState<Record<string, {min: string, max: string}>>({});
   const [appSettings, setAppSettings] = useState({ enable_cash: true, enable_wallet: true });
-  const [minCarYear, setMinCarYear] = useState("2010"); // Valor padrão
+  const [minCarYear, setMinCarYear] = useState("2010"); 
   const [savingYear, setSavingYear] = useState(false);
 
   // Estados de Gerenciamento
@@ -87,7 +88,7 @@ const AdminDashboard = () => {
         const { data: cats } = await supabase.from('car_categories').select('*').order('base_fare', { ascending: true });
         if (cats) setCarCategories(cats);
 
-        // 5. Buscar Configurações
+        // 5. Buscar Configurações App
         const { data: settings } = await supabase.from('app_settings').select('*');
         if (settings) {
             const cashObj = settings.find(s => s.key === 'enable_cash');
@@ -98,10 +99,20 @@ const AdminDashboard = () => {
             });
         }
 
-        // 6. Buscar Ano mínimo
-        const { data: adminConfig } = await supabase.from('admin_config').select('*').eq('key', 'min_car_year').maybeSingle();
-        if (adminConfig && adminConfig.value) {
-            setMinCarYear(adminConfig.value);
+        // 6. Buscar Admin Config (Ano mínimo e Regras de Categoria)
+        const { data: adminConfigs } = await supabase.from('admin_config').select('*');
+        if (adminConfigs) {
+            const minYearObj = adminConfigs.find(c => c.key === 'min_car_year');
+            if (minYearObj && minYearObj.value) setMinCarYear(minYearObj.value);
+
+            const rulesObj = adminConfigs.find(c => c.key === 'category_rules');
+            if (rulesObj && rulesObj.value) {
+                try {
+                    setCategoryRules(JSON.parse(rulesObj.value));
+                } catch (e) {
+                    setCategoryRules({});
+                }
+            }
         }
 
     } catch (e: any) { 
@@ -134,8 +145,19 @@ const AdminDashboard = () => {
       setCarCategories(prev => prev.map(c => c.id === id ? { ...c, [field]: val } : c));
   };
 
+  const handleRuleChange = (catName: string, field: string, val: string) => {
+      setCategoryRules(prev => ({
+          ...prev,
+          [catName]: {
+              ...(prev[catName] || { min: '', max: '' }),
+              [field]: val
+          }
+      }));
+  };
+
   const handleSaveCategory = async (cat: any) => {
       try {
+          // Salva os valores básicos da categoria
           const { error } = await supabase.from('car_categories')
               .update({ 
                   base_fare: cat.base_fare, 
@@ -145,7 +167,16 @@ const AdminDashboard = () => {
               })
               .eq('id', cat.id);
           if (error) throw error;
-          showSuccess("Categoria salva com sucesso!");
+
+          // Salva as regras de anos no admin_config
+          const { data } = await supabase.from('admin_config').select('key').eq('key', 'category_rules').maybeSingle();
+          if (data) {
+              await supabase.from('admin_config').update({ value: JSON.stringify(categoryRules) }).eq('key', 'category_rules');
+          } else {
+              await supabase.from('admin_config').insert({ key: 'category_rules', value: JSON.stringify(categoryRules) });
+          }
+
+          showSuccess("Categoria e regras salvas com sucesso!");
       } catch (e: any) {
           showError("Erro ao salvar categoria.");
       }
@@ -387,7 +418,7 @@ const AdminDashboard = () => {
                       <Card className="rounded-[32px] border border-slate-100 shadow-xl overflow-hidden bg-white">
                           <CardHeader className="p-8 border-b border-slate-100 bg-slate-900 text-white">
                               <CardTitle className="text-2xl font-black">Taxas e Valores por Categoria</CardTitle>
-                              <CardDescription className="text-slate-400">Ajuste os valores cobrados nas corridas para cada tipo de veículo.</CardDescription>
+                              <CardDescription className="text-slate-400">Ajuste os valores cobrados e o ano permitido para cada tipo de veículo.</CardDescription>
                           </CardHeader>
                           <CardContent className="p-8 space-y-6">
                               {carCategories.map(cat => (
@@ -404,22 +435,30 @@ const AdminDashboard = () => {
                                               <p className="text-xs font-medium text-slate-500">{cat.description || 'Categoria Premium'}</p>
                                           </div>
                                       </div>
-                                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
-                                          <div className="space-y-2">
-                                              <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Tarifa Base (R$)</Label>
+                                      <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mt-6">
+                                          <div className="space-y-2 col-span-2 md:col-span-1">
+                                              <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Base (R$)</Label>
                                               <Input type="number" step="0.01" value={cat.base_fare} onChange={e => handleCategoryChange(cat.id, 'base_fare', e.target.value)} className="font-black text-lg h-12 bg-white border-slate-200" />
                                           </div>
-                                          <div className="space-y-2">
-                                              <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Valor / KM (R$)</Label>
+                                          <div className="space-y-2 col-span-2 md:col-span-1">
+                                              <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">KM (R$)</Label>
                                               <Input type="number" step="0.01" value={cat.cost_per_km} onChange={e => handleCategoryChange(cat.id, 'cost_per_km', e.target.value)} className="font-black text-lg h-12 bg-white border-slate-200" />
                                           </div>
-                                          <div className="space-y-2">
-                                              <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Tarifa Mín. (R$)</Label>
+                                          <div className="space-y-2 col-span-2 md:col-span-1">
+                                              <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Mín. (R$)</Label>
                                               <Input type="number" step="0.01" value={cat.min_fare} onChange={e => handleCategoryChange(cat.id, 'min_fare', e.target.value)} className="font-black text-lg h-12 bg-white border-slate-200" />
                                           </div>
-                                          <div className="flex items-end">
+                                          <div className="space-y-2">
+                                              <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Ano Mín</Label>
+                                              <Input type="number" value={categoryRules[cat.name]?.min || ''} onChange={e => handleRuleChange(cat.name, 'min', e.target.value)} className="font-black text-lg h-12 bg-white border-slate-200 placeholder:text-slate-300" placeholder="Ex: 2010" />
+                                          </div>
+                                          <div className="space-y-2">
+                                              <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Ano Máx</Label>
+                                              <Input type="number" value={categoryRules[cat.name]?.max || ''} onChange={e => handleRuleChange(cat.name, 'max', e.target.value)} className="font-black text-lg h-12 bg-white border-slate-200 placeholder:text-slate-300" placeholder="Ex: 2016" />
+                                          </div>
+                                          <div className="flex items-end col-span-2 md:col-span-1">
                                               <Button onClick={() => handleSaveCategory(cat)} className="w-full bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl h-12 font-black shadow-md">
-                                                  SALVAR ALTERAÇÕES
+                                                  SALVAR
                                               </Button>
                                           </div>
                                       </div>
@@ -459,15 +498,15 @@ const AdminDashboard = () => {
                               </CardContent>
                           </Card>
 
-                          {/* Restrições de Veículo */}
+                          {/* Restrições de Veículo Genéricas */}
                           <Card className="rounded-[32px] border border-slate-100 shadow-xl overflow-hidden bg-white">
                               <CardHeader className="p-8 border-b border-slate-100 bg-yellow-50">
-                                  <CardTitle className="text-xl font-black text-slate-900 flex items-center gap-2"><Shield className="w-5 h-5 text-yellow-600" /> Restrições de Veículo</CardTitle>
-                                  <CardDescription className="text-slate-600">Defina regras para aprovação automática/alerta de novos motoristas.</CardDescription>
+                                  <CardTitle className="text-xl font-black text-slate-900 flex items-center gap-2"><Shield className="w-5 h-5 text-yellow-600" /> Padrão Global de Veículos</CardTitle>
+                                  <CardDescription className="text-slate-600">Alerta automático para novos motoristas durante aprovação.</CardDescription>
                               </CardHeader>
                               <CardContent className="p-8 space-y-6">
                                   <div className="space-y-3">
-                                      <Label className="text-sm font-bold text-slate-900">Ano Mínimo Permitido</Label>
+                                      <Label className="text-sm font-bold text-slate-900">Ano Mínimo Permitido na Plataforma</Label>
                                       <div className="flex gap-3">
                                           <Input 
                                               type="number" 
@@ -525,14 +564,14 @@ const AdminDashboard = () => {
                       <div className="bg-red-50 border border-red-200 p-6 rounded-3xl flex items-start gap-4 shadow-sm animate-in zoom-in-95">
                           <AlertTriangle className="w-6 h-6 text-red-600 shrink-0 mt-1" />
                           <div>
-                              <p className="font-black text-red-800">Veículo Fora do Padrão</p>
+                              <p className="font-black text-red-800">Veículo Fora do Padrão Global</p>
                               <p className="text-sm text-red-700 font-medium mt-1">O ano deste veículo ({selectedUser.car_year}) é inferior ao mínimo permitido ({minCarYear}) nas configurações.</p>
                           </div>
                       </div>
                   ) : (
                       <div className="bg-yellow-50 border border-yellow-200 p-6 rounded-3xl flex items-start gap-4 shadow-sm">
                           <CheckCircle className="w-6 h-6 text-yellow-600 shrink-0 mt-1" />
-                          <p className="text-sm text-yellow-800 font-medium">Veículo dentro dos padrões do aplicativo. Ao aprovar, o motorista receberá acesso imediato.</p>
+                          <p className="text-sm text-yellow-800 font-medium">Veículo dentro dos padrões mínimos do aplicativo. Ao aprovar, o motorista receberá acesso imediato.</p>
                       </div>
                   )}
 
