@@ -8,7 +8,7 @@ import {
   Menu, Banknote, FileText, Check, X, ExternalLink, Camera, User,
   List, Plus, Power, Pencil, Star, Calendar, ArrowUpRight, ArrowDownLeft,
   Activity, BarChart3, PieChart, Coins, Lock, Unlock, Calculator, Info, MapPin, Zap, XCircle,
-  Ban, Percent, Navigation, PlusCircle, CheckCircle2, UserPlus
+  Ban, Percent, Navigation, PlusCircle, CheckCircle2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -25,7 +25,6 @@ import { showSuccess, showError } from "@/utils/toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2 } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
