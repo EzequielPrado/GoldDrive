@@ -122,14 +122,19 @@ const AdminDashboard = () => {
       } catch (e: any) { showError(e.message); }
   };
 
-  const handleCategoryChange = (id: string, field: string, val: string) => {
+  const handleCategoryChange = (id: string, field: string, val: any) => {
       setCarCategories(prev => prev.map(c => c.id === id ? { ...c, [field]: val } : c));
   };
 
   const handleSaveCategory = async (cat: any) => {
       try {
           const { error } = await supabase.from('car_categories')
-              .update({ base_fare: cat.base_fare, cost_per_km: cat.cost_per_km, min_fare: cat.min_fare })
+              .update({ 
+                  base_fare: cat.base_fare, 
+                  cost_per_km: cat.cost_per_km, 
+                  min_fare: cat.min_fare,
+                  active: cat.active 
+              })
               .eq('id', cat.id);
           if (error) throw error;
           showSuccess("Categoria salva com sucesso!");
@@ -361,26 +366,38 @@ const AdminDashboard = () => {
                           </CardHeader>
                           <CardContent className="p-8 space-y-6">
                               {carCategories.map(cat => (
-                                  <div key={cat.id} className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col md:flex-row gap-6 items-end">
-                                      <div className="flex-1 w-full space-y-1 text-left">
-                                          <Label className="font-black text-slate-900 text-lg flex items-center gap-2"><Car className="w-5 h-5 text-yellow-500" /> {cat.name}</Label>
-                                          <p className="text-xs font-medium text-slate-500">{cat.description || 'Categoria Premium'}</p>
+                                  <div key={cat.id} className={`bg-slate-50 p-6 rounded-2xl border transition-all ${cat.active ? 'border-slate-200' : 'border-red-100 opacity-60 grayscale-[0.5]'}`}>
+                                      <div className="flex flex-col md:flex-row gap-6 items-start md:items-end">
+                                          <div className="flex-1 w-full space-y-1 text-left">
+                                              <div className="flex items-center justify-between mb-2">
+                                                  <Label className="font-black text-slate-900 text-lg flex items-center gap-2"><Car className={`w-5 h-5 ${cat.active ? 'text-yellow-500' : 'text-slate-300'}`} /> {cat.name}</Label>
+                                                  <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-full border border-slate-100 shadow-sm">
+                                                      <span className={`text-[10px] font-black uppercase tracking-wider ${cat.active ? 'text-green-600' : 'text-red-500'}`}>{cat.active ? 'Ativa' : 'Desativada'}</span>
+                                                      <Switch checked={cat.active} onCheckedChange={(val) => handleCategoryChange(cat.id, 'active', val)} />
+                                                  </div>
+                                              </div>
+                                              <p className="text-xs font-medium text-slate-500">{cat.description || 'Categoria Premium'}</p>
+                                          </div>
                                       </div>
-                                      <div className="w-full md:w-32 space-y-2">
-                                          <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Tarifa Base (R$)</Label>
-                                          <Input type="number" step="0.01" value={cat.base_fare} onChange={e => handleCategoryChange(cat.id, 'base_fare', e.target.value)} className="font-black text-lg h-12 bg-white border-slate-200" />
+                                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
+                                          <div className="space-y-2">
+                                              <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Tarifa Base (R$)</Label>
+                                              <Input type="number" step="0.01" value={cat.base_fare} onChange={e => handleCategoryChange(cat.id, 'base_fare', e.target.value)} className="font-black text-lg h-12 bg-white border-slate-200" />
+                                          </div>
+                                          <div className="space-y-2">
+                                              <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Valor / KM (R$)</Label>
+                                              <Input type="number" step="0.01" value={cat.cost_per_km} onChange={e => handleCategoryChange(cat.id, 'cost_per_km', e.target.value)} className="font-black text-lg h-12 bg-white border-slate-200" />
+                                          </div>
+                                          <div className="space-y-2">
+                                              <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Tarifa Mín. (R$)</Label>
+                                              <Input type="number" step="0.01" value={cat.min_fare} onChange={e => handleCategoryChange(cat.id, 'min_fare', e.target.value)} className="font-black text-lg h-12 bg-white border-slate-200" />
+                                          </div>
+                                          <div className="flex items-end">
+                                              <Button onClick={() => handleSaveCategory(cat)} className="w-full bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl h-12 font-black shadow-md">
+                                                  SALVAR ALTERAÇÕES
+                                              </Button>
+                                          </div>
                                       </div>
-                                      <div className="w-full md:w-32 space-y-2">
-                                          <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Valor / KM (R$)</Label>
-                                          <Input type="number" step="0.01" value={cat.cost_per_km} onChange={e => handleCategoryChange(cat.id, 'cost_per_km', e.target.value)} className="font-black text-lg h-12 bg-white border-slate-200" />
-                                      </div>
-                                      <div className="w-full md:w-32 space-y-2">
-                                          <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Tarifa Mín. (R$)</Label>
-                                          <Input type="number" step="0.01" value={cat.min_fare} onChange={e => handleCategoryChange(cat.id, 'min_fare', e.target.value)} className="font-black text-lg h-12 bg-white border-slate-200" />
-                                      </div>
-                                      <Button onClick={() => handleSaveCategory(cat)} className="w-full md:w-auto bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl h-12 px-8 font-black shadow-md">
-                                          SALVAR
-                                      </Button>
                                   </div>
                               ))}
                           </CardContent>
