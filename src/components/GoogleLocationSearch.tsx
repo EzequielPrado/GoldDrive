@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { MapPin, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMapsLibrary } from "@vis.gl/react-google-maps";
+import { showError } from "@/utils/toast";
 
 interface LocationSearchProps {
   placeholder: string;
@@ -88,7 +89,7 @@ const GoogleLocationSearch = ({
     return () => clearTimeout(timer);
   }, [inputValue, autocompleteService, sessionToken, isOpen]);
 
-  const handleSelect = async (prediction: google.maps.places.AutocompletePrediction) => {
+  const handleSelect = (prediction: google.maps.places.AutocompletePrediction) => {
     if (!placesLibrary || !sessionToken) return;
 
     setLoading(true);
@@ -96,31 +97,34 @@ const GoogleLocationSearch = ({
     setIsOpen(false);
     
     try {
-        const { Place } = placesLibrary;
-        const place = new Place({
-            id: prediction.place_id,
-            requestedLanguage: 'pt-BR'
+        // Usando o PlacesService Legado para evitar erros de permissão da API "Nova"
+        const dummyElement = document.createElement('div');
+        const service = new google.maps.places.PlacesService(dummyElement);
+
+        service.getDetails({
+            placeId: prediction.place_id,
+            fields: ['geometry', 'formatted_address'],
+            sessionToken: sessionToken
+        }, (place, status) => {
+            setLoading(false);
+            if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
+                const lat = place.geometry.location.lat();
+                const lng = place.geometry.location.lng();
+                const address = place.formatted_address || prediction.description;
+
+                setInputValue(address);
+                onSelect({ lat, lon: lng, display_name: address });
+                
+                // Novo token para a próxima busca
+                setSessionToken(new placesLibrary.AutocompleteSessionToken());
+            } else {
+                console.error("Erro ao detalhar local (Status):", status);
+                showError("Erro ao obter detalhes deste local.");
+            }
         });
-
-        await place.fetchFields({
-            fields: ['location', 'formattedAddress']
-        });
-
-        if (place.location) {
-            const lat = place.location.lat();
-            const lng = place.location.lng();
-            const address = place.formattedAddress || prediction.description;
-
-            setInputValue(address);
-            onSelect({ lat, lon: lng, display_name: address });
-            
-            // Gera novo token para a próxima transação de busca
-            setSessionToken(new placesLibrary.AutocompleteSessionToken());
-        }
     } catch (err) {
-        console.error("Erro ao detalhar local:", err);
-    } finally {
         setLoading(false);
+        console.error("Erro fatal ao detalhar local:", err);
     }
   };
 
@@ -164,7 +168,6 @@ const GoogleLocationSearch = ({
           {!loading && predictions.map((item, index) => (
             <button
               key={item.place_id || index}
-              // IMPORTANTE: onMouseDown dispara antes do onBlur/ClickOutside fechar a lista
               onMouseDown={(e) => {
                   e.preventDefault();
                   handleSelect(item);
