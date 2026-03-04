@@ -8,7 +8,7 @@ import {
   Menu, Banknote, FileText, Check, X, ExternalLink, Camera, User,
   Moon as MoonIcon, List, Plus, Power, Pencil, Star, Calendar, ArrowUpRight, ArrowDownLeft,
   Activity, BarChart3, PieChart, Coins, Lock, Unlock, Calculator, Info, MapPin, Zap, XCircle,
-  Ban, Percent, Navigation, PlusCircle
+  Ban, Percent, Navigation, PlusCircle, UserPlus
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -253,7 +253,7 @@ const AdminDashboard = () => {
                                   ))}
                               </TableBody>
                           </Table>
-                      </Card>
+                       </Card>
                   </div>
               )}
 
@@ -309,7 +309,7 @@ const AdminDashboard = () => {
                   </div>
               )}
 
-              {/* CONFIG (MANTIDO DO CÓDIGO ANTERIOR) */}
+              {/* CONFIG */}
               {activeTab === 'config' && (
                    <div className="bg-white rounded-[32px] p-10 shadow-xl text-center">
                        <Settings className="w-16 h-16 mx-auto mb-6 text-slate-200" />
