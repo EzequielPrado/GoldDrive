@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Loader2, User, Mail, Lock, Phone, Car, FileText } from "lucide-react";
+import { ArrowLeft, Loader2, User, Mail, Lock, Phone, Car, FileText, Calendar } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 
@@ -17,6 +17,7 @@ const LoginDriver = () => {
   const [phone, setPhone] = useState("");
   const [carModel, setCarModel] = useState("");
   const [carPlate, setCarPlate] = useState("");
+  const [carYear, setCarYear] = useState("");
   const [showPwa, setShowPwa] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -25,6 +26,7 @@ const LoginDriver = () => {
         const success = await handleSignUp(email, password, name, phone, 'driver', {
             car_model: carModel,
             car_plate: carPlate,
+            car_year: carYear,
             driver_status: 'PENDING'
         });
         if (success) setIsSignUp(false);
@@ -76,13 +78,17 @@ const LoginDriver = () => {
                                     <Input placeholder="Celular (DDD)" className="h-14 pl-12" value={phone} onChange={e => setPhone(e.target.value)} required />
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
-                                    <div className="relative">
+                                    <div className="relative col-span-2">
                                         <Car className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
-                                        <Input placeholder="Modelo Carro" className="h-14 pl-12" value={carModel} onChange={e => setCarModel(e.target.value)} required />
+                                        <Input placeholder="Modelo Carro (Ex: Onix)" className="h-14 pl-12" value={carModel} onChange={e => setCarModel(e.target.value)} required />
                                     </div>
                                     <div className="relative">
                                         <FileText className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
                                         <Input placeholder="Placa" className="h-14 pl-12 uppercase" value={carPlate} onChange={e => setCarPlate(e.target.value)} required />
+                                    </div>
+                                    <div className="relative">
+                                        <Calendar className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
+                                        <Input type="number" placeholder="Ano" className="h-14 pl-12" value={carYear} onChange={e => setCarYear(e.target.value)} required />
                                     </div>
                                 </div>
                             </>

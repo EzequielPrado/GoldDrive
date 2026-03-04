@@ -20,10 +20,10 @@ const Profile = () => {
   // Estados para edição do veículo
   const [isEditingVehicle, setIsEditingVehicle] = useState(false);
   const [savingVehicle, setSavingVehicle] = useState(false);
-  const [vehicleForm, setVehicleForm] = useState({ model: '', plate: '', color: '' });
+  const [vehicleForm, setVehicleForm] = useState({ model: '', plate: '', color: '', year: '' });
   
   const [profile, setProfile] = useState<any>({
-    id: "", first_name: "", last_name: "", email: "", phone: "", bio: "", avatar_url: "", role: "", created_at: "", car_model: "", car_plate: "", car_color: "", total_rides: 0, rating: 5.0
+    id: "", first_name: "", last_name: "", email: "", phone: "", bio: "", avatar_url: "", role: "", created_at: "", car_model: "", car_plate: "", car_color: "", car_year: "", total_rides: 0, rating: 5.0
   });
 
   useEffect(() => { getProfile(); }, []);
@@ -109,7 +109,8 @@ const Profile = () => {
         .update({
           car_model: vehicleForm.model,
           car_plate: vehicleForm.plate,
-          car_color: vehicleForm.color
+          car_color: vehicleForm.color,
+          car_year: vehicleForm.year
         })
         .eq('id', profile.id);
 
@@ -119,7 +120,8 @@ const Profile = () => {
         ...profile,
         car_model: vehicleForm.model,
         car_plate: vehicleForm.plate,
-        car_color: vehicleForm.color
+        car_color: vehicleForm.color,
+        car_year: vehicleForm.year
       });
       showSuccess("Informações do veículo atualizadas!");
       setIsEditingVehicle(false);
@@ -271,7 +273,8 @@ const Profile = () => {
                                 setVehicleForm({
                                     model: profile.car_model || '',
                                     plate: profile.car_plate || '',
-                                    color: profile.car_color || ''
+                                    color: profile.car_color || '',
+                                    year: profile.car_year || ''
                                 });
                                 setIsEditingVehicle(true);
                             }}
@@ -283,14 +286,26 @@ const Profile = () => {
 
                 {isEditingVehicle ? (
                     <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
-                        <div>
-                            <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Modelo do Veículo</Label>
-                            <Input 
-                                value={vehicleForm.model} 
-                                onChange={e => setVehicleForm({...vehicleForm, model: e.target.value})} 
-                                className="bg-white h-12 rounded-xl border-gray-200 mt-1" 
-                                placeholder="Ex: Chevrolet Onix" 
-                            />
+                        <div className="grid grid-cols-3 gap-3">
+                            <div className="col-span-2">
+                                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Modelo</Label>
+                                <Input 
+                                    value={vehicleForm.model} 
+                                    onChange={e => setVehicleForm({...vehicleForm, model: e.target.value})} 
+                                    className="bg-white h-12 rounded-xl border-gray-200 mt-1" 
+                                    placeholder="Ex: Onix" 
+                                />
+                            </div>
+                            <div>
+                                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Ano</Label>
+                                <Input 
+                                    type="number"
+                                    value={vehicleForm.year} 
+                                    onChange={e => setVehicleForm({...vehicleForm, year: e.target.value})} 
+                                    className="bg-white h-12 rounded-xl border-gray-200 mt-1" 
+                                    placeholder="Ex: 2018" 
+                                />
+                            </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
@@ -333,7 +348,7 @@ const Profile = () => {
                 ) : (
                     <div className="bg-slate-50 rounded-2xl p-4 flex justify-between items-center border border-slate-100">
                         <div>
-                            <p className="text-sm font-bold text-slate-900">{profile.car_model || 'Não informado'}</p>
+                            <p className="text-sm font-bold text-slate-900">{profile.car_model || 'Não informado'} {profile.car_year && <span className="text-xs font-medium text-slate-500">({profile.car_year})</span>}</p>
                             <p className="text-xs font-medium text-gray-500">{profile.car_color || 'Sem cor'}</p>
                         </div>
                         <Badge variant="outline" className="bg-white border-slate-200 text-slate-900 font-mono text-sm px-3 py-1 shadow-sm">

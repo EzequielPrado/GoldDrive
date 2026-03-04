@@ -40,6 +40,8 @@ const AdminDashboard = () => {
   // Configurações e Categorias (Taxas)
   const [carCategories, setCarCategories] = useState<any[]>([]);
   const [appSettings, setAppSettings] = useState({ enable_cash: true, enable_wallet: true });
+  const [minCarYear, setMinCarYear] = useState("2010"); // Valor padrão
+  const [savingYear, setSavingYear] = useState(false);
 
   // Estados de Gerenciamento
   const [selectedUser, setSelectedUser] = useState<any>(null);
@@ -94,6 +96,12 @@ const AdminDashboard = () => {
                 enable_cash: cashObj ? cashObj.value : true,
                 enable_wallet: walletObj ? walletObj.value : true
             });
+        }
+
+        // 6. Buscar Ano mínimo
+        const { data: adminConfig } = await supabase.from('admin_config').select('*').eq('key', 'min_car_year').maybeSingle();
+        if (adminConfig && adminConfig.value) {
+            setMinCarYear(adminConfig.value);
         }
 
     } catch (e: any) { 
@@ -158,6 +166,23 @@ const AdminDashboard = () => {
           showSuccess("Configuração atualizada!");
       } catch (e: any) {
           showError("Erro ao atualizar configuração.");
+      }
+  };
+
+  const handleSaveMinYear = async () => {
+      setSavingYear(true);
+      try {
+          const { data } = await supabase.from('admin_config').select('key').eq('key', 'min_car_year').maybeSingle();
+          if (data) {
+              await supabase.from('admin_config').update({ value: minCarYear }).eq('key', 'min_car_year');
+          } else {
+              await supabase.from('admin_config').insert({ key: 'min_car_year', value: minCarYear, description: 'Ano mínimo permitido para cadastro de veículos' });
+          }
+          showSuccess("Ano mínimo atualizado!");
+      } catch (e: any) {
+          showError("Erro ao salvar ano.");
+      } finally {
+          setSavingYear(false);
       }
   };
 
@@ -265,7 +290,7 @@ const AdminDashboard = () => {
                                   {pendingDrivers.length === 0 ? <TableRow><TableCell colSpan={4} className="h-60 text-center text-slate-400 font-bold">Nenhuma solicitação pendente no momento.</TableCell></TableRow> : pendingDrivers.map(d => (
                                       <TableRow key={d.id} className="hover:bg-slate-50 transition-colors border-slate-100">
                                           <TableCell className="pl-8"><div className="flex items-center gap-4"><Avatar className="h-12 w-12 border-2 border-white shadow-sm"><AvatarImage src={d.avatar_url} /><AvatarFallback>{d.first_name?.[0]}</AvatarFallback></Avatar><div><p className="font-black text-slate-900">{d.first_name} {d.last_name}</p><p className="text-xs text-slate-500">{d.email}</p></div></div></TableCell>
-                                          <TableCell><p className="font-bold text-sm text-slate-900">{d.car_model}</p><Badge variant="outline" className="font-mono text-[10px] mt-1 uppercase border-slate-200 text-slate-600 bg-white">{d.car_plate}</Badge></TableCell>
+                                          <TableCell><p className="font-bold text-sm text-slate-900">{d.car_model} {d.car_year && <span className="font-normal text-slate-500">({d.car_year})</span>}</p><Badge variant="outline" className="font-mono text-[10px] mt-1 uppercase border-slate-200 text-slate-600 bg-white">{d.car_plate}</Badge></TableCell>
                                           <TableCell className="text-slate-500 text-sm font-medium">{new Date(d.created_at).toLocaleDateString()}</TableCell>
                                           <TableCell className="text-right pr-8 flex items-center justify-end gap-2 py-6">
                                               <Button onClick={() => { setSelectedUser(d); setIsReviewModalOpen(true); }} className="bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl font-bold h-11 px-6 shadow-md">Analisar</Button>
@@ -319,7 +344,7 @@ const AdminDashboard = () => {
                                           {drivers.map(d => (
                                               <TableRow key={d.id} className={`border-slate-100 ${d.is_blocked ? 'opacity-60 bg-slate-50' : 'hover:bg-slate-50/50'}`}>
                                                   <TableCell className="pl-8 py-5"><div className="flex items-center gap-4"><Avatar className="h-10 w-10"><AvatarImage src={d.avatar_url} /><AvatarFallback>{d.first_name?.[0]}</AvatarFallback></Avatar><div><p className="font-bold text-slate-900 flex items-center gap-2">{d.first_name} {d.last_name} {d.is_blocked && <Ban className="w-3 h-3 text-red-500" />}</p><p className="text-xs text-slate-500">{d.email}</p></div></div></TableCell>
-                                                  <TableCell><p className="text-xs font-bold text-slate-900">{d.car_model || '---'}</p><p className="text-[10px] text-slate-500 uppercase font-mono">{d.car_plate || '---'}</p></TableCell>
+                                                  <TableCell><p className="text-xs font-bold text-slate-900">{d.car_model || '---'} {d.car_year && `(${d.car_year})`}</p><p className="text-[10px] text-slate-500 uppercase font-mono">{d.car_plate || '---'}</p></TableCell>
                                                   <TableCell><Badge className={`border-0 font-bold ${d.driver_status === 'APPROVED' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{d.driver_status}</Badge></TableCell>
                                                   <TableCell className="font-bold text-slate-900">R$ {Number(d.balance).toFixed(2)}</TableCell>
                                                   <TableCell className="text-right pr-8 flex items-center justify-end gap-2 py-6">
@@ -403,35 +428,66 @@ const AdminDashboard = () => {
                           </CardContent>
                       </Card>
 
-                      {/* Configurações Globais */}
-                      <Card className="rounded-[32px] border border-slate-100 shadow-xl overflow-hidden bg-white">
-                          <CardHeader className="p-8 border-b border-slate-100">
-                              <CardTitle className="text-xl font-black text-slate-900">Configurações Gerais</CardTitle>
-                              <CardDescription className="text-slate-500">Habilite ou desabilite recursos globais do aplicativo.</CardDescription>
-                          </CardHeader>
-                          <CardContent className="p-8 space-y-4">
-                              <div className="flex items-center justify-between p-5 bg-slate-50 rounded-2xl border border-slate-200 transition-colors hover:bg-slate-100">
-                                  <div className="flex gap-4 items-center">
-                                      <div className="p-3 bg-white rounded-xl shadow-sm border border-slate-200"><Banknote className="w-6 h-6 text-green-600" /></div>
-                                      <div>
-                                          <h4 className="font-black text-slate-900">Pagamento em Dinheiro</h4>
-                                          <p className="text-sm font-medium text-slate-500">Permitir que passageiros paguem diretamente ao motorista na corrida.</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                          {/* Configurações Globais */}
+                          <Card className="rounded-[32px] border border-slate-100 shadow-xl overflow-hidden bg-white">
+                              <CardHeader className="p-8 border-b border-slate-100">
+                                  <CardTitle className="text-xl font-black text-slate-900">Configurações Gerais</CardTitle>
+                                  <CardDescription className="text-slate-500">Habilite ou desabilite recursos globais do aplicativo.</CardDescription>
+                              </CardHeader>
+                              <CardContent className="p-8 space-y-4">
+                                  <div className="flex items-center justify-between p-5 bg-slate-50 rounded-2xl border border-slate-200 transition-colors hover:bg-slate-100">
+                                      <div className="flex gap-4 items-center">
+                                          <div className="p-3 bg-white rounded-xl shadow-sm border border-slate-200"><Banknote className="w-6 h-6 text-green-600" /></div>
+                                          <div>
+                                              <h4 className="font-black text-slate-900">Dinheiro</h4>
+                                              <p className="text-sm font-medium text-slate-500">Permitir pagamentos em dinheiro.</p>
+                                          </div>
                                       </div>
+                                      <Switch checked={appSettings.enable_cash} onCheckedChange={() => handleToggleSetting('enable_cash', appSettings.enable_cash)} />
                                   </div>
-                                  <Switch checked={appSettings.enable_cash} onCheckedChange={() => handleToggleSetting('enable_cash', appSettings.enable_cash)} />
-                              </div>
-                              <div className="flex items-center justify-between p-5 bg-slate-50 rounded-2xl border border-slate-200 transition-colors hover:bg-slate-100">
-                                  <div className="flex gap-4 items-center">
-                                      <div className="p-3 bg-white rounded-xl shadow-sm border border-slate-200"><Wallet className="w-6 h-6 text-blue-600" /></div>
-                                      <div>
-                                          <h4 className="font-black text-slate-900">Carteira Digital (Gold Wallet)</h4>
-                                          <p className="text-sm font-medium text-slate-500">Permitir que usuários façam depósitos (PIX) e paguem com saldo no app.</p>
+                                  <div className="flex items-center justify-between p-5 bg-slate-50 rounded-2xl border border-slate-200 transition-colors hover:bg-slate-100">
+                                      <div className="flex gap-4 items-center">
+                                          <div className="p-3 bg-white rounded-xl shadow-sm border border-slate-200"><Wallet className="w-6 h-6 text-blue-600" /></div>
+                                          <div>
+                                              <h4 className="font-black text-slate-900">Carteira (Wallet)</h4>
+                                              <p className="text-sm font-medium text-slate-500">Permitir pagamentos com saldo.</p>
+                                          </div>
                                       </div>
+                                      <Switch checked={appSettings.enable_wallet} onCheckedChange={() => handleToggleSetting('enable_wallet', appSettings.enable_wallet)} />
                                   </div>
-                                  <Switch checked={appSettings.enable_wallet} onCheckedChange={() => handleToggleSetting('enable_wallet', appSettings.enable_wallet)} />
-                              </div>
-                          </CardContent>
-                      </Card>
+                              </CardContent>
+                          </Card>
+
+                          {/* Restrições de Veículo */}
+                          <Card className="rounded-[32px] border border-slate-100 shadow-xl overflow-hidden bg-white">
+                              <CardHeader className="p-8 border-b border-slate-100 bg-yellow-50">
+                                  <CardTitle className="text-xl font-black text-slate-900 flex items-center gap-2"><Shield className="w-5 h-5 text-yellow-600" /> Restrições de Veículo</CardTitle>
+                                  <CardDescription className="text-slate-600">Defina regras para aprovação automática/alerta de novos motoristas.</CardDescription>
+                              </CardHeader>
+                              <CardContent className="p-8 space-y-6">
+                                  <div className="space-y-3">
+                                      <Label className="text-sm font-bold text-slate-900">Ano Mínimo Permitido</Label>
+                                      <div className="flex gap-3">
+                                          <Input 
+                                              type="number" 
+                                              value={minCarYear} 
+                                              onChange={(e) => setMinCarYear(e.target.value)} 
+                                              className="h-14 font-black text-xl text-center border-slate-200 bg-slate-50"
+                                          />
+                                          <Button 
+                                              onClick={handleSaveMinYear} 
+                                              className="h-14 bg-black hover:bg-zinc-800 text-white font-bold rounded-xl px-8"
+                                              disabled={savingYear}
+                                          >
+                                              {savingYear ? <Loader2 className="w-5 h-5 animate-spin" /> : "Salvar Regra"}
+                                          </Button>
+                                      </div>
+                                      <p className="text-xs text-slate-500">Ao analisar um novo cadastro, você receberá um alerta se o veículo for mais antigo que {minCarYear}.</p>
+                                  </div>
+                              </CardContent>
+                          </Card>
+                      </div>
 
                   </div>
               )}
@@ -443,19 +499,43 @@ const AdminDashboard = () => {
       <Dialog open={isReviewModalOpen} onOpenChange={setIsReviewModalOpen}>
           <DialogContent className="max-w-xl bg-white rounded-[40px] border-0 shadow-2xl p-0 overflow-hidden">
               <DialogHeader className="p-8 bg-slate-900 text-white"><DialogTitle className="text-2xl font-black">Revisar Cadastro</DialogTitle><DialogDescription className="text-slate-400">Verifique os dados antes de aprovar.</DialogDescription></DialogHeader>
-              <div className="p-8 space-y-8">
+              <div className="p-8 space-y-6">
                   <div className="flex items-center gap-6 bg-slate-50 p-6 rounded-3xl border border-slate-100">
                       <Avatar className="h-20 w-20 border-4 border-white shadow-xl"><AvatarImage src={selectedUser?.avatar_url} /><AvatarFallback className="bg-slate-200 text-slate-600 text-xl font-bold">{selectedUser?.first_name?.[0]}</AvatarFallback></Avatar>
                       <div><h3 className="text-2xl font-black text-slate-900">{selectedUser?.first_name} {selectedUser?.last_name}</h3><p className="text-slate-500 font-medium">{selectedUser?.phone || 'Telefone não informado'}</p></div>
                   </div>
-                  <div className="grid grid-cols-2 gap-6">
-                      <div className="space-y-1"><p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Modelo do Carro</p><p className="font-bold text-slate-900 text-lg">{selectedUser?.car_model || 'N/A'}</p></div>
-                      <div className="space-y-1"><p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Placa do Carro</p><p className="font-black text-slate-900 text-lg uppercase">{selectedUser?.car_plate || 'N/A'}</p></div>
+                  
+                  <div className="grid grid-cols-3 gap-4">
+                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                          <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Modelo</p>
+                          <p className="font-bold text-slate-900 truncate">{selectedUser?.car_model || 'N/A'}</p>
+                      </div>
+                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                          <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Ano</p>
+                          <p className="font-black text-slate-900 truncate">{selectedUser?.car_year || 'N/A'}</p>
+                      </div>
+                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                          <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Placa</p>
+                          <p className="font-black text-slate-900 uppercase truncate">{selectedUser?.car_plate || 'N/A'}</p>
+                      </div>
                   </div>
-                  <div className="bg-yellow-50 border border-yellow-200 p-6 rounded-3xl flex items-start gap-4 shadow-sm">
-                      <Shield className="w-6 h-6 text-yellow-600 shrink-0 mt-1" />
-                      <p className="text-sm text-yellow-800 font-medium">Ao aprovar, o motorista receberá acesso imediato para aceitar corridas e gerenciar sua carteira.</p>
-                  </div>
+
+                  {/* Alerta de Ano do Veículo */}
+                  {selectedUser?.car_year && parseInt(selectedUser.car_year) < parseInt(minCarYear) ? (
+                      <div className="bg-red-50 border border-red-200 p-6 rounded-3xl flex items-start gap-4 shadow-sm animate-in zoom-in-95">
+                          <AlertTriangle className="w-6 h-6 text-red-600 shrink-0 mt-1" />
+                          <div>
+                              <p className="font-black text-red-800">Veículo Fora do Padrão</p>
+                              <p className="text-sm text-red-700 font-medium mt-1">O ano deste veículo ({selectedUser.car_year}) é inferior ao mínimo permitido ({minCarYear}) nas configurações.</p>
+                          </div>
+                      </div>
+                  ) : (
+                      <div className="bg-yellow-50 border border-yellow-200 p-6 rounded-3xl flex items-start gap-4 shadow-sm">
+                          <CheckCircle className="w-6 h-6 text-yellow-600 shrink-0 mt-1" />
+                          <p className="text-sm text-yellow-800 font-medium">Veículo dentro dos padrões do aplicativo. Ao aprovar, o motorista receberá acesso imediato.</p>
+                      </div>
+                  )}
+
               </div>
               <DialogFooter className="p-8 bg-slate-50 flex gap-4 border-t border-slate-100">
                   <Button variant="outline" className="flex-1 h-14 rounded-2xl text-red-600 border-red-200 hover:bg-red-50 font-bold" onClick={() => handleUpdateUserStatus(selectedUser.id, 'REJECTED')}>REJEITAR</Button>
