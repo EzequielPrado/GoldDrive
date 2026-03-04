@@ -15,7 +15,7 @@ interface RideContextType {
       distance: string, 
       category: string, 
       paymentMethod: string
-  ) => Promise<boolean>; // Alterado para retornar boolean
+  ) => Promise<boolean>;
   createManualRide: (
       passengerName: string,
       passengerPhone: string,
@@ -81,7 +81,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   const fetchActiveRide = async (userId: string) => {
     try {
       let role = userRoleRef.current;
-      
       if (!role) {
           const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle();
           role = profile?.role || 'client';
@@ -89,7 +88,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       const queryField = role === 'driver' ? 'driver_id' : 'customer_id';
-      
       const { data } = await supabase
         .from('rides')
         .select(`*, driver_details:profiles!public_rides_driver_id_fkey(*), client_details:profiles!public_rides_customer_id_fkey(*)`)
@@ -103,33 +101,20 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
               setRide(null);
               return;
           }
-
           if (data.ride_type === 'MANUAL' && data.guest_name) {
-              data.client_details = {
-                  first_name: data.guest_name.split(' ')[0],
-                  last_name: data.guest_name.split(' ').slice(1).join(' '),
-                  phone: data.guest_phone,
-                  avatar_url: null 
-              };
+              data.client_details = { first_name: data.guest_name, last_name: '', phone: data.guest_phone, avatar_url: null };
           }
-
           const isFinished = ['CANCELLED', 'COMPLETED'].includes(data.status);
           if (isFinished) {
               const hasRated = role === 'driver' ? !!data.customer_rating : !!data.driver_rating;
-              if (hasRated) {
-                  setRide(null); 
-                  return;
-              }
-              
+              if (hasRated) { setRide(null); return; }
               const updatedAt = new Date(data.created_at).getTime();
               const now = new Date().getTime();
-              // Se foi finalizada/cancelada há mais de 30min, ignora
               if ((now - updatedAt) / 1000 / 60 > 30) {
                   dismissedRidesRef.current.push(data.id);
                   setRide(null);
                   return;
               }
-
               setRide(data);
           } else {
               setRide(data);
@@ -137,9 +122,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       } else {
           setRide(null);
       }
-    } catch (err) {
-      console.error("Erro fetchActiveRide:", err);
-    }
+    } catch (err) { console.error(err); }
   };
 
   const fetchAvailableRides = async (shouldPlaySound = false) => {
@@ -148,190 +131,106 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       if (role !== 'driver' || !uid) return;
 
       try {
-          const { data: ridesData, error } = await supabase
-            .from('rides')
-            .select('*')
-            .eq('status', 'SEARCHING')
-            .is('driver_id', null)
-            .order('created_at', { ascending: false });
-            
-          if (error) throw error;
-
+          const { data: ridesData } = await supabase.from('rides').select('*').eq('status', 'SEARCHING').is('driver_id', null).order('created_at', { ascending: false });
           if (ridesData && ridesData.length > 0) {
-              const clientIds = ridesData.map(r => r.customer_id);
-              const uniqueClientIds = [...new Set(clientIds)];
-              
-              const { data: profilesData } = await supabase.from('profiles').select('*').in('id', uniqueClientIds);
-                
+              const clientIds = [...new Set(ridesData.map(r => r.customer_id))];
+              const { data: profilesData } = await supabase.from('profiles').select('*').in('id', clientIds);
               const enrichedRides = ridesData.map(r => ({
                   ...r,
-                  client_details: profilesData?.find(p => p.id === r.customer_id) || { first_name: 'Passageiro', last_name: '' }
-              }));
-
-              const validRides = enrichedRides.filter(r => {
-                  if (r.customer_id === uid) return false;
-                  if (rejectedIdsRef.current.includes(r.id)) return false; 
-                  return true;
-              });
+                  client_details: profilesData?.find(p => p.id === r.customer_id) || { first_name: 'Passageiro' }
+              })).filter(r => r.customer_id !== uid && !rejectedIdsRef.current.includes(r.id));
               
               setAvailableRides(prev => {
-                  if (shouldPlaySound && validRides.length > prev.length) {
-                      const newIds = validRides.map(v => v.id);
-                      const oldIds = prev.map(p => p.id);
-                      if (newIds.some(id => !oldIds.includes(id))) playNotification();
-                  }
-                  return validRides;
+                  if (shouldPlaySound && enrichedRides.length > prev.length) playNotification();
+                  return enrichedRides;
               });
-          } else {
-              setAvailableRides([]);
-          }
+          } else { setAvailableRides([]); }
       } catch (err) { console.error(err); }
   };
 
-  // Realtime Subscription
   useEffect(() => {
-    const channel = supabase
-      .channel('global_ride_sync')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'rides' },
-        async (payload) => {
+    const channel = supabase.channel('global_ride_sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rides' }, async (payload) => {
             const newRecord = payload.new as any;
             const uid = currentUserIdRef.current;
             const role = userRoleRef.current;
-
-            // Se sou motorista e houve nova corrida ou atualização para SEARCHING
             if (role === 'driver') {
-                if ((payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') && 
-                    newRecord.status === 'SEARCHING' && !newRecord.driver_id) {
-                    await fetchAvailableRides(true);
-                }
-                // Se a corrida não está mais disponível
-                if (payload.eventType === 'UPDATE' && (newRecord.status !== 'SEARCHING' || newRecord.driver_id)) {
-                    setAvailableRides(prev => prev.filter(r => r.id !== newRecord.id));
-                }
+                if ((payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') && newRecord.status === 'SEARCHING' && !newRecord.driver_id) await fetchAvailableRides(true);
+                if (payload.eventType === 'UPDATE' && (newRecord.status !== 'SEARCHING' || newRecord.driver_id)) setAvailableRides(prev => prev.filter(r => r.id !== newRecord.id));
             }
-            
-            // Se sou participante da corrida (motorista ou passageiro), atualizo meu estado ativo
-            const isRelatedToMe = (newRecord?.customer_id === uid) || (newRecord?.driver_id === uid);
-            if (isRelatedToMe && uid) {
-                await fetchActiveRide(uid);
-            }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+            if ((newRecord?.customer_id === uid || newRecord?.driver_id === uid) && uid) await fetchActiveRide(uid);
+      }).subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // Polling de segurança
   useEffect(() => {
     const init = async () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
             setCurrentUserId(session.user.id);
-            const { data: profile } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
-            if (profile) setUserRole(profile.role);
+            const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
+            if (data) setUserRole(data.role);
             fetchActiveRide(session.user.id);
         }
     };
     init();
-    
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        setCurrentUserId(session.user.id);
-      } else if (event === 'SIGNED_OUT') {
-        setCurrentUserId(null);
-        setRide(null);
-        setAvailableRides([]);
-        dismissedRidesRef.current = [];
-      }
-    });
-    return () => { authListener.subscription.unsubscribe(); };
   }, []);
 
   useEffect(() => {
-      let interval: NodeJS.Timeout;
-      if (currentUserId) {
-          // Polling para garantir atualização mesmo se realtime falhar
-          interval = setInterval(() => fetchActiveRide(currentUserId), 3000);
-      }
-      return () => { if (interval) clearInterval(interval); };
-  }, [currentUserId]); 
-
-  useEffect(() => {
-      let interval: NodeJS.Timeout;
-      if (currentUserId && userRole === 'driver') {
-          fetchAvailableRides(); 
-          interval = setInterval(() => fetchAvailableRides(false), 5000); 
-      }
-      return () => { if (interval) clearInterval(interval); };
-  }, [currentUserId, userRole]); 
+      let interval: any;
+      if (currentUserId) interval = setInterval(() => fetchActiveRide(currentUserId), 3000);
+      return () => clearInterval(interval);
+  }, [currentUserId]);
 
   const requestRide = async (pickup: string, destination: string, pickupCoords: any, destCoords: any, price: number, distance: string, category: string, paymentMethod: string): Promise<boolean> => {
     if (!currentUserId) return false;
     try {
       const { data, error } = await supabase.from('rides').insert({
-          customer_id: currentUserId,
-          pickup_address: pickup, destination_address: destination,
+          customer_id: currentUserId, pickup_address: pickup, destination_address: destination,
           pickup_lat: pickupCoords.lat, pickup_lng: pickupCoords.lng,
           destination_lat: destCoords.lat, destination_lng: destCoords.lng,
           price, distance, status: 'SEARCHING', category, payment_method: paymentMethod
-        }).select().single();
-      
+      }).select().single();
       if (error) throw error;
-      
-      // Atualiza estado local imediatamente para feedback visual
       setRide(data);
-      // Força busca completa para trazer detalhes
-      fetchActiveRide(currentUserId);
-      
       return true;
-    } catch (e: any) { 
-        toast({ title: "Erro na solicitação", description: e.message, variant: "destructive" }); 
-        return false;
-    }
+    } catch (e: any) { toast({ title: "Erro", description: e.message, variant: "destructive" }); return false; }
   };
 
   const createManualRide = async (passengerName: string, passengerPhone: string, pickup: string, destination: string, pickupCoords: any, destCoords: any, price: number, distance: string, category: string) => {
       if (!currentUserId) return;
       try {
           const { data, error } = await supabase.from('rides').insert({
-              customer_id: currentUserId, driver_id: currentUserId,
-              pickup_address: pickup, destination_address: destination,
-              pickup_lat: pickupCoords.lat, pickup_lng: pickupCoords.lng,
-              destination_lat: destCoords.lat, destination_lng: destCoords.lng,
-              price, distance, status: 'IN_PROGRESS', category, payment_method: 'CASH',
-              ride_type: 'MANUAL', guest_name: passengerName, guest_phone: passengerPhone,
-              driver_earnings: price
+              customer_id: currentUserId, driver_id: currentUserId, pickup_address: pickup, destination_address: destination,
+              pickup_lat: pickupCoords.lat, pickup_lng: pickupCoords.lng, destination_lat: destCoords.lat, destination_lng: destCoords.lng,
+              price, distance, status: 'IN_PROGRESS', category, payment_method: 'CASH', ride_type: 'MANUAL', guest_name: passengerName, driver_earnings: price
           }).select().single();
           if (error) throw error;
           setRide(data);
-          fetchActiveRide(currentUserId);
-          toast({ title: "Corrida Iniciada" });
-      } catch (e: any) { toast({ title: "Erro ao criar", variant: "destructive" }); }
+          toast({ title: "Corrida Manual Iniciada" });
+      } catch (e) { toast({ title: "Erro ao criar", variant: "destructive" }); }
   };
 
   const cancelRide = async (rideId: string) => {
     try {
+        // Usa a função RPC que você adicionou no banco de dados para tratar multas
+        const { data, error } = await supabase.rpc('cancel_ride_as_user', { ride_id_to_cancel: rideId });
+        if (error) throw error;
+        if (currentUserId) await fetchActiveRide(currentUserId);
+        toast({ title: data || "Cancelado" });
+    } catch (e: any) { 
+        // Fallback caso a RPC falhe
         await supabase.from('rides').update({ status: 'CANCELLED' }).eq('id', rideId);
-        if(currentUserId) await fetchActiveRide(currentUserId); 
+        if (currentUserId) await fetchActiveRide(currentUserId);
         toast({ title: "Cancelado" });
-    } catch (e) { toast({ title: "Erro ao cancelar" }); }
+    }
   };
 
   const acceptRide = async (rideId: string) => {
      if (!currentUserId) return;
      try {
          const { data, error } = await supabase.from('rides').update({ status: 'ACCEPTED', driver_id: currentUserId }).eq('id', rideId).is('driver_id', null).select();
-         if (error) throw error;
-         if (!data || data.length === 0) {
-             toast({ title: "Indisponível", variant: "destructive" });
-             setAvailableRides(prev => prev.filter(r => r.id !== rideId));
-             return;
-         }
+         if (error || !data?.length) { toast({ title: "Corrida não disponível", variant: "destructive" }); return; }
          await fetchActiveRide(currentUserId);
      } catch (e) { toast({ title: "Erro ao aceitar" }); }
   };
@@ -341,50 +240,29 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       setAvailableRides(prev => prev.filter(r => r.id !== rideId));
   };
 
-  const confirmArrival = async (rideId: string) => {
-      await supabase.from('rides').update({ status: 'ARRIVED' }).eq('id', rideId);
-      if(currentUserId) fetchActiveRide(currentUserId);
-  };
-
-  const startRide = async (rideId: string) => {
-      await supabase.from('rides').update({ status: 'IN_PROGRESS' }).eq('id', rideId);
-      if(currentUserId) fetchActiveRide(currentUserId);
-  };
-
-  const finishRide = async (rideId: string) => {
-      await supabase.from('rides').update({ status: 'COMPLETED' }).eq('id', rideId);
-      if(currentUserId) fetchActiveRide(currentUserId);
-  };
+  const confirmArrival = async (rideId: string) => { await supabase.from('rides').update({ status: 'ARRIVED' }).eq('id', rideId); };
+  const startRide = async (rideId: string) => { await supabase.from('rides').update({ status: 'IN_PROGRESS' }).eq('id', rideId); };
+  const finishRide = async (rideId: string) => { await supabase.from('rides').update({ status: 'COMPLETED' }).eq('id', rideId); };
 
   const rateRide = async (rideId: string, rating: number, isDriver: boolean, comment?: string) => {
       const updateData = isDriver ? { customer_rating: rating } : { driver_rating: rating, review_comment: comment };
       await supabase.from('rides').update(updateData).eq('id', rideId);
-      clearRide(); // Chama o clear que descarta o ID
+      clearRide();
       toast({ title: "Avaliação enviada" });
   };
 
   const addBalance = async (amount: number) => {
       if(!currentUserId) return;
-      const { data: profile } = await supabase.from('profiles').select('balance').eq('id', currentUserId).single();
-      const newBalance = (profile?.balance || 0) + amount;
-      await supabase.from('profiles').update({ balance: newBalance }).eq('id', currentUserId);
-  }
-
-  const clearRide = () => {
-      if (ride?.id) {
-          dismissedRidesRef.current.push(ride.id);
-      }
-      setRide(null);
+      const { data } = await supabase.from('profiles').select('balance').eq('id', currentUserId).single();
+      await supabase.from('profiles').update({ balance: (data?.balance || 0) + amount }).eq('id', currentUserId);
   };
+
+  const clearRide = () => { if (ride?.id) dismissedRidesRef.current.push(ride.id); setRide(null); };
 
   return (
     <RideContext.Provider value={{ 
-        ride, availableRides, loading, 
-        requestRide, createManualRide, 
-        cancelRide, acceptRide, rejectRide, 
-        startRide, finishRide, rateRide, confirmArrival, 
-        addBalance, clearRide, 
-        currentUserId, userRole 
+        ride, availableRides, loading, requestRide, createManualRide, cancelRide, acceptRide, rejectRide, 
+        startRide, finishRide, rateRide, confirmArrival, addBalance, clearRide, currentUserId, userRole 
     }}>
       {children}
     </RideContext.Provider>
@@ -393,6 +271,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
 
 export const useRide = () => {
   const context = useContext(RideContext);
-  if (context === undefined) throw new Error('useRide must be used within a RideProvider');
+  if (context === undefined) throw new Error('useRide deve ser usado com RideProvider');
   return context;
 };
