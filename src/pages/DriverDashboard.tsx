@@ -68,13 +68,15 @@ const DriverDashboard = () => {
   const [destCoord, setDestCoord] = useState<{lat: number, lon: number} | null>(null);
 
   useEffect(() => {
-    if (ride) {
+    // Só exibe a rota da corrida se ela NÃO estiver finalizada nem cancelada
+    if (ride && ride.status !== 'COMPLETED' && ride.status !== 'CANCELLED') {
         setPickupCoord({ lat: Number(ride.pickup_lat), lon: Number(ride.pickup_lng) });
         setDestCoord({ lat: Number(ride.destination_lat), lon: Number(ride.destination_lng) });
     } else if (pickupLocation && destLocation && showManualRide) {
         setPickupCoord({ lat: pickupLocation.lat, lon: pickupLocation.lon });
         setDestCoord({ lat: destLocation.lat, lon: destLocation.lon });
     } else {
+        // Limpa a rota do mapa
         setPickupCoord(null);
         setDestCoord(null);
     }

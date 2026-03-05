@@ -242,10 +242,16 @@ const ClientDashboard = () => {
       );
   }
 
+  // Verifica se a rota deve ser exibida no mapa (apenas quando confirmar ou aguardando/em corrida)
+  const showRouteOnMap = step === 'confirm' || step === 'waiting';
+
   return (
     <div className="h-screen w-full overflow-hidden bg-gray-100 font-sans text-slate-900 relative">
       <div className="absolute inset-0 z-0">
-        <GoogleMapComponent pickupLocation={pickupLocation} destinationLocation={destLocation} />
+        <GoogleMapComponent 
+            pickupLocation={showRouteOnMap ? pickupLocation : null} 
+            destinationLocation={showRouteOnMap ? destLocation : null} 
+        />
       </div>
 
       {/* Header Fixo */}
