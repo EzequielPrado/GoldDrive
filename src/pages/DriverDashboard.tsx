@@ -218,7 +218,7 @@ const DriverDashboard = () => {
 
       <div className="absolute top-0 left-0 right-0 p-6 z-20 flex justify-between items-start pointer-events-none mt-4">
           {!isOnTrip && !isCompleted && (
-              <div className={`pointer-events-auto backdrop-blur-xl border border-white/20 p-2 pr-4 rounded-full flex items-center gap-3 shadow-lg ${isOnline ? 'bg-black/80' : 'bg-white/80'}`}>
+              <div className={`pointer-events-auto backdrop-blur-xl border border-white/20 p-2 pr-4 rounded-full flex items-center gap-3 shadow-lg transition-colors ${isOnline ? 'bg-black/80' : 'bg-white/80'}`}>
                  <Switch checked={isOnline} onCheckedChange={toggleOnline} />
                  <span className={`text-xs font-bold uppercase ${isOnline ? 'text-white' : 'text-slate-500'}`}>{isOnline ? 'Online' : 'Offline'}</span>
               </div>
@@ -253,27 +253,6 @@ const DriverDashboard = () => {
                         >
                             <UserPlus className="w-7 h-7" />
                         </Button>
-
-                        {availableRides.length > 0 && (
-                            <div className="w-full bg-white p-6 rounded-[32px] shadow-2xl mt-4 border border-gray-100 animate-in slide-in-from-bottom-4">
-                                <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Nova Corrida Disponível!</h4>
-                                {availableRides.map(r => (
-                                    <div key={r.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col gap-4">
-                                        <div className="flex justify-between items-center">
-                                            <div className="flex items-center gap-3">
-                                                <Avatar className="w-10 h-10 border-2 border-white"><AvatarImage src={r.client_details?.avatar_url} /><AvatarFallback>{r.client_details?.first_name?.[0]}</AvatarFallback></Avatar>
-                                                <div><p className="font-bold text-slate-900">{r.client_details?.first_name}</p><p className="text-[10px] text-gray-500 font-bold uppercase">{r.distance}</p></div>
-                                            </div>
-                                            <span className="text-xl font-black text-green-600">R$ {Number(r.price).toFixed(2)}</span>
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <Button variant="ghost" className="flex-1 text-red-500 font-bold" onClick={() => rejectRide(r.id)}>Ignorar</Button>
-                                            <Button className="flex-[2] bg-slate-900 text-white font-bold h-12 rounded-xl" onClick={() => acceptRide(r.id)}>Aceitar</Button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
                     </div>
                 )}
 
@@ -334,6 +313,73 @@ const DriverDashboard = () => {
              </div>
          )}
       </div>
+
+      {/* MODAL GIGANTE DE NOVA CORRIDA */}
+      <Dialog open={availableRides.length > 0 && isOnline && !ride} onOpenChange={() => {}}>
+          <DialogContent className="max-w-md bg-white rounded-[32px] border-0 shadow-2xl p-0 overflow-hidden outline-none">
+              <DialogTitle className="sr-only">Nova Solicitação</DialogTitle>
+              <div className="bg-yellow-500 p-6 text-center relative overflow-hidden">
+                  <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                  <div className="relative w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce shadow-xl">
+                      <Car className="w-10 h-10 text-black" />
+                  </div>
+                  <h2 className="relative text-2xl font-black text-black">Nova Solicitação!</h2>
+                  <p className="relative text-black/80 font-bold mt-1 text-sm">Passageiro aguardando motorista</p>
+              </div>
+              
+              <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar bg-slate-50">
+                  {availableRides.map(r => (
+                      <div key={r.id} className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm flex flex-col gap-4 relative overflow-hidden">
+                          <div className="flex justify-between items-center">
+                              <div className="flex items-center gap-3">
+                                  <Avatar className="w-12 h-12 border-2 border-yellow-500 shadow-sm">
+                                      <AvatarImage src={r.client_details?.avatar_url} />
+                                      <AvatarFallback className="font-bold bg-slate-100 text-slate-900">{r.client_details?.first_name?.[0]}</AvatarFallback>
+                                  </Avatar>
+                                  <div>
+                                      <p className="font-black text-slate-900 text-lg leading-tight">{r.client_details?.first_name}</p>
+                                      <div className="flex items-center gap-2 mt-1">
+                                          <Badge className="bg-slate-900 text-white text-[9px] px-2 py-0.5 uppercase tracking-wider">{r.category || 'Premium'}</Badge>
+                                          <span className="text-[10px] text-gray-500 font-bold uppercase">{r.distance}</span>
+                                      </div>
+                                  </div>
+                              </div>
+                              <div className="text-right">
+                                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Valor</p>
+                                  <span className="text-2xl font-black text-green-600">R$ {Number(r.price).toFixed(2)}</span>
+                              </div>
+                          </div>
+                          
+                          <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-3">
+                              <div className="flex items-start gap-3">
+                                  <div className="p-1.5 bg-white rounded-full shadow-sm mt-0.5"><MapPin className="w-3.5 h-3.5 text-slate-500" /></div>
+                                  <div>
+                                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Embarque</p>
+                                      <p className="text-xs font-bold text-slate-700 line-clamp-1">{r.pickup_address}</p>
+                                  </div>
+                              </div>
+                              <div className="flex items-start gap-3">
+                                  <div className="p-1.5 bg-yellow-100 rounded-full shadow-sm mt-0.5"><Flag className="w-3.5 h-3.5 text-yellow-600" /></div>
+                                  <div>
+                                      <p className="text-[9px] font-bold text-yellow-600/60 uppercase tracking-widest">Destino</p>
+                                      <p className="text-xs font-black text-slate-900 line-clamp-1">{r.destination_address}</p>
+                                  </div>
+                              </div>
+                          </div>
+
+                          <div className="flex gap-3 mt-2">
+                              <Button variant="ghost" className="flex-1 text-red-500 font-bold h-14 rounded-2xl bg-red-50 hover:bg-red-100 transition-colors" onClick={() => rejectRide(r.id)}>
+                                  <X className="w-5 h-5 mr-1" /> Ignorar
+                              </Button>
+                              <Button className="flex-[2] bg-slate-900 hover:bg-black text-white font-black h-14 rounded-2xl text-lg shadow-xl shadow-slate-900/20 transition-all active:scale-95" onClick={() => acceptRide(r.id)}>
+                                  ACEITAR CORRIDA
+                              </Button>
+                          </div>
+                      </div>
+                  ))}
+              </div>
+          </DialogContent>
+      </Dialog>
 
       {/* MODAL DE CORRIDA MANUAL */}
       <Dialog open={showManualRide} onOpenChange={setShowManualRide}>

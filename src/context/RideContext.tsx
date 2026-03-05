@@ -93,7 +93,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
 
       const queryField = role === 'driver' ? 'driver_id' : 'customer_id';
       
-      // Busca 10 corridas recentes para garantir que não vamos perder a corrida ativa por causa de uma corrida antiga finalizada
       const { data: ridesData } = await supabase
         .from('rides')
         .select(`*, driver_details:profiles!public_rides_driver_id_fkey(*), client_details:profiles!public_rides_customer_id_fkey(*)`)
@@ -102,10 +101,8 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
         .limit(10);
 
       if (ridesData && ridesData.length > 0) {
-          // 1. PRIORIDADE MÁXIMA: Encontrar corrida em andamento
           let targetRide = ridesData.find(r => ['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(r.status));
           
-          // 2. Se não houver ativa, busca uma finalizada recente pendente de avaliação
           if (!targetRide) {
               targetRide = ridesData.find(r => {
                   if (['COMPLETED', 'CANCELLED'].includes(r.status)) {
@@ -114,7 +111,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
                       if (hasRated) return false;
                       const updatedAt = new Date(r.created_at).getTime();
                       const now = new Date().getTime();
-                      return ((now - updatedAt) / 1000 / 60 <= 30); // 30 minutos
+                      return ((now - updatedAt) / 1000 / 60 <= 30); 
                   }
                   return false;
               });
@@ -163,7 +160,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
                           return false; 
                       }
                   }
-                  
                   return true;
               });
               
@@ -195,11 +191,12 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
             setCurrentUserId(session.user.id);
+            currentUserIdRef.current = session.user.id;
             
             const { data } = await supabase.from('profiles').select('role, car_year').eq('id', session.user.id).maybeSingle();
             if (data) {
                 setUserRole(data.role);
-                userRoleRef.current = data.role; // Fix sincronização
+                userRoleRef.current = data.role; 
                 driverCarYearRef.current = parseInt(data.car_year) || 0;
             }
             
@@ -210,15 +207,26 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
                 } catch(e) {}
             }
 
-            fetchActiveRide(session.user.id);
+            await fetchActiveRide(session.user.id);
+            if (userRoleRef.current === 'driver') {
+                await fetchAvailableRides(false);
+            }
         }
     };
     init();
   }, []);
 
+  // Polling a cada 3 segundos como backup do sistema em tempo real
   useEffect(() => {
       let interval: any;
-      if (currentUserId) interval = setInterval(() => fetchActiveRide(currentUserId), 3000);
+      if (currentUserId) {
+          interval = setInterval(() => {
+              fetchActiveRide(currentUserId);
+              if (userRoleRef.current === 'driver') {
+                  fetchAvailableRides(false);
+              }
+          }, 3000);
+      }
       return () => clearInterval(interval);
   }, [currentUserId]);
 
