@@ -296,15 +296,27 @@ const DriverDashboard = () => {
                             <Badge className="bg-yellow-500 text-black font-black uppercase tracking-widest text-[10px] px-3 py-1">{ride?.status === 'ACCEPTED' ? 'A CAMINHO' : ride?.status === 'ARRIVED' ? 'NO LOCAL' : 'EM VIAGEM'}</Badge>
                             <span className="font-black text-lg">R$ {Number(ride?.price).toFixed(2)}</span>
                         </div>
+                        
                         {ride?.status === 'ACCEPTED' && <NavigationBlock label="Buscar Passageiro" lat={ride.pickup_lat} lng={ride.pickup_lng} address={ride.pickup_address} />}
-                        {ride?.status === 'ARRIVED' && <div className="bg-green-50 p-6 rounded-2xl text-center mb-4 border border-green-100 animate-pulse"><p className="font-black text-green-800">Aguardando passageiro embarcar...</p></div>}
+                        
+                        {ride?.status === 'ARRIVED' && (
+                            <>
+                                <div className="bg-green-50 p-4 rounded-2xl text-center mb-4 border border-green-100 animate-pulse">
+                                    <p className="font-black text-green-800 text-sm">Aguardando passageiro embarcar...</p>
+                                </div>
+                                <NavigationBlock label="Destino Final" lat={ride.destination_lat} lng={ride.destination_lng} address={ride.destination_address} icon={Flag} />
+                            </>
+                        )}
+                        
                         {ride?.status === 'IN_PROGRESS' && <NavigationBlock label="Destino Final" lat={ride.destination_lat} lng={ride.destination_lng} address={ride.destination_address} icon={Flag} />}
-                        <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100 mb-6">
+                        
+                        <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100 mb-6 mt-2">
                              <Avatar className="w-12 h-12 border-2 border-white"><AvatarImage src={ride?.client_details?.avatar_url} /><AvatarFallback>{ride?.client_details?.first_name?.[0]}</AvatarFallback></Avatar>
                              <div className="flex-1"><h3 className="font-black text-slate-900 leading-tight">{ride?.client_details?.first_name} {ride?.client_details?.last_name}</h3><p className="text-[10px] text-gray-500 font-bold uppercase mt-0.5">Nota: 5.0 ⭐</p></div>
                              <Button size="icon" variant="outline" className="h-10 w-10 rounded-xl" onClick={() => setShowChat(true)}><MessageCircle className="w-4 h-4" /></Button>
                              {ride?.client_details?.phone && <Button size="icon" variant="outline" className="h-10 w-10 rounded-xl" onClick={() => window.open(`tel:${ride.client_details.phone}`)}><Phone className="w-4 h-4" /></Button>}
                         </div>
+                        
                         {ride?.status === 'ACCEPTED' && <Button className="w-full h-16 bg-slate-900 text-white font-black text-lg rounded-2xl shadow-xl" onClick={() => confirmArrival(ride.id)}>CHEGUEI NO LOCAL</Button>}
                         {ride?.status === 'ARRIVED' && <Button className="w-full h-16 bg-green-600 hover:bg-green-700 text-white font-black text-lg rounded-2xl shadow-xl" onClick={() => startRide(ride.id)}>INICIAR VIAGEM</Button>}
                         {ride?.status === 'IN_PROGRESS' && <Button className="w-full h-16 bg-blue-600 hover:bg-blue-700 text-white font-black text-lg rounded-2xl shadow-xl" onClick={() => finishRide(ride.id)}>FINALIZAR CORRIDA</Button>}
@@ -323,7 +335,7 @@ const DriverDashboard = () => {
          )}
       </div>
 
-      {/* MODAL DE CORRIDA MANUAL (MAÇANETA) */}
+      {/* MODAL DE CORRIDA MANUAL */}
       <Dialog open={showManualRide} onOpenChange={setShowManualRide}>
           <DialogContent className="max-w-md bg-white rounded-[32px] border-0 shadow-2xl p-0 overflow-visible">
               <DialogHeader className="p-6 bg-slate-900 text-white rounded-t-[32px]">
@@ -332,7 +344,6 @@ const DriverDashboard = () => {
               </DialogHeader>
               
               <div className="p-6 space-y-6 bg-white rounded-b-[32px]">
-                  {/* Dados do Passageiro */}
                   <div className="space-y-4">
                       <div className="space-y-1.5">
                           <Label className="text-xs font-black uppercase text-slate-400 ml-1">Nome do Passageiro</Label>
@@ -345,7 +356,6 @@ const DriverDashboard = () => {
                       </div>
                   </div>
 
-                  {/* Rota */}
                   <div className="space-y-4 pt-2">
                       <div className="space-y-1.5">
                           <Label className="text-xs font-black uppercase text-slate-400 ml-1">Local de Embarque</Label>
@@ -373,7 +383,6 @@ const DriverDashboard = () => {
                       </div>
                   </div>
 
-                  {/* Resumo e Botão */}
                   <div className="pt-4 space-y-4">
                       {pickupLocation && destLocation && (
                           <div className="bg-yellow-50 p-4 rounded-2xl border border-yellow-200 text-center animate-in zoom-in-95">

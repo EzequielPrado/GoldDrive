@@ -88,43 +88,48 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle();
           role = profile?.role || 'client';
           setUserRole(role);
+          userRoleRef.current = role;
       }
 
       const queryField = role === 'driver' ? 'driver_id' : 'customer_id';
-      const { data } = await supabase
+      
+      // Busca 10 corridas recentes para garantir que não vamos perder a corrida ativa por causa de uma corrida antiga finalizada
+      const { data: ridesData } = await supabase
         .from('rides')
         .select(`*, driver_details:profiles!public_rides_driver_id_fkey(*), client_details:profiles!public_rides_customer_id_fkey(*)`)
         .eq(queryField, userId)
         .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(10);
 
-      if (data) {
-          if (dismissedRidesRef.current.includes(data.id)) {
-              setRide(null);
+      if (ridesData && ridesData.length > 0) {
+          // 1. PRIORIDADE MÁXIMA: Encontrar corrida em andamento
+          let targetRide = ridesData.find(r => ['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(r.status));
+          
+          // 2. Se não houver ativa, busca uma finalizada recente pendente de avaliação
+          if (!targetRide) {
+              targetRide = ridesData.find(r => {
+                  if (['COMPLETED', 'CANCELLED'].includes(r.status)) {
+                      if (dismissedRidesRef.current.includes(r.id)) return false;
+                      const hasRated = role === 'driver' ? !!r.customer_rating : !!r.driver_rating;
+                      if (hasRated) return false;
+                      const updatedAt = new Date(r.created_at).getTime();
+                      const now = new Date().getTime();
+                      return ((now - updatedAt) / 1000 / 60 <= 30); // 30 minutos
+                  }
+                  return false;
+              });
+          }
+
+          if (targetRide) {
+              if (targetRide.ride_type === 'MANUAL' && targetRide.guest_name) {
+                  targetRide.client_details = { first_name: targetRide.guest_name, last_name: '', phone: targetRide.guest_phone, avatar_url: null };
+              }
+              setRide(targetRide);
               return;
           }
-          if (data.ride_type === 'MANUAL' && data.guest_name) {
-              data.client_details = { first_name: data.guest_name, last_name: '', phone: data.guest_phone, avatar_url: null };
-          }
-          const isFinished = ['CANCELLED', 'COMPLETED'].includes(data.status);
-          if (isFinished) {
-              const hasRated = role === 'driver' ? !!data.customer_rating : !!data.driver_rating;
-              if (hasRated) { setRide(null); return; }
-              const updatedAt = new Date(data.created_at).getTime();
-              const now = new Date().getTime();
-              if ((now - updatedAt) / 1000 / 60 > 30) {
-                  dismissedRidesRef.current.push(data.id);
-                  setRide(null);
-                  return;
-              }
-              setRide(data);
-          } else {
-              setRide(data);
-          }
-      } else {
-          setRide(null);
       }
+      
+      setRide(null);
     } catch (err) { console.error(err); }
   };
 
@@ -144,21 +149,18 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
                   client_details: profilesData?.find(p => p.id === r.customer_id) || { first_name: 'Passageiro' }
               }));
               
-              // Aplicar o filtro de regras de Categoria e Ano do Veículo
               const rules = categoryRulesRef.current;
               const driverYear = driverCarYearRef.current;
               
               const validRides = enrichedRides.filter(r => {
-                  // Rejeições locais
                   if (r.customer_id === uid || rejectedIdsRef.current.includes(r.id)) return false;
                   
-                  // Validação da categoria x ano do motorista
                   const rule = rules[r.category];
                   if (rule && driverYear > 0) {
                       const min = parseInt(rule.min) || 0;
                       const max = parseInt(rule.max) || 9999;
                       if (driverYear < min || driverYear > max) {
-                          return false; // Veículo fora da regra desta categoria
+                          return false; 
                       }
                   }
                   
@@ -194,14 +196,13 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
         if (session?.user) {
             setCurrentUserId(session.user.id);
             
-            // Busca dados do Perfil (role, e o Ano do Carro do motorista)
             const { data } = await supabase.from('profiles').select('role, car_year').eq('id', session.user.id).maybeSingle();
             if (data) {
                 setUserRole(data.role);
+                userRoleRef.current = data.role; // Fix sincronização
                 driverCarYearRef.current = parseInt(data.car_year) || 0;
             }
             
-            // Busca as regras das categorias do admin_config (ano max/min)
             const { data: configData } = await supabase.from('admin_config').select('value').eq('key', 'category_rules').maybeSingle();
             if (configData?.value) {
                 try {
@@ -268,6 +269,8 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
      try {
          const { data, error } = await supabase.from('rides').update({ status: 'ACCEPTED', driver_id: currentUserId }).eq('id', rideId).is('driver_id', null).select();
          if (error || !data?.length) { toast({ title: "Corrida não disponível", variant: "destructive" }); return; }
+         
+         setAvailableRides(prev => prev.filter(r => r.id !== rideId)); // Oculta da lista
          await fetchActiveRide(currentUserId);
      } catch (e) { toast({ title: "Erro ao aceitar" }); }
   };
@@ -277,9 +280,20 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       setAvailableRides(prev => prev.filter(r => r.id !== rideId));
   };
 
-  const confirmArrival = async (rideId: string) => { await supabase.from('rides').update({ status: 'ARRIVED' }).eq('id', rideId); };
-  const startRide = async (rideId: string) => { await supabase.from('rides').update({ status: 'IN_PROGRESS' }).eq('id', rideId); };
-  const finishRide = async (rideId: string) => { await supabase.from('rides').update({ status: 'COMPLETED' }).eq('id', rideId); };
+  const confirmArrival = async (rideId: string) => { 
+      await supabase.from('rides').update({ status: 'ARRIVED' }).eq('id', rideId); 
+      if (currentUserId) await fetchActiveRide(currentUserId);
+  };
+  
+  const startRide = async (rideId: string) => { 
+      await supabase.from('rides').update({ status: 'IN_PROGRESS' }).eq('id', rideId); 
+      if (currentUserId) await fetchActiveRide(currentUserId);
+  };
+  
+  const finishRide = async (rideId: string) => { 
+      await supabase.from('rides').update({ status: 'COMPLETED' }).eq('id', rideId); 
+      if (currentUserId) await fetchActiveRide(currentUserId);
+  };
 
   const rateRide = async (rideId: string, rating: number, isDriver: boolean, comment?: string) => {
       const updateData = isDriver ? { customer_rating: rating } : { driver_rating: rating, review_comment: comment };
