@@ -157,7 +157,6 @@ const AdminDashboard = () => {
 
   const handleSaveCategory = async (cat: any) => {
       try {
-          // Salva os valores básicos da categoria
           const { error } = await supabase.from('car_categories')
               .update({ 
                   base_fare: cat.base_fare, 
@@ -168,7 +167,6 @@ const AdminDashboard = () => {
               .eq('id', cat.id);
           if (error) throw error;
 
-          // Salva as regras de anos no admin_config
           const { data } = await supabase.from('admin_config').select('key').eq('key', 'category_rules').maybeSingle();
           if (data) {
               await supabase.from('admin_config').update({ value: JSON.stringify(categoryRules) }).eq('key', 'category_rules');
@@ -438,23 +436,23 @@ const AdminDashboard = () => {
                                       <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mt-6">
                                           <div className="space-y-2 col-span-2 md:col-span-1">
                                               <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Base (R$)</Label>
-                                              <Input type="number" step="0.01" value={cat.base_fare} onChange={e => handleCategoryChange(cat.id, 'base_fare', e.target.value)} className="font-black text-lg h-12 bg-white border-slate-200" />
+                                              <Input type="number" step="0.01" value={cat.base_fare} onChange={e => handleCategoryChange(cat.id, 'base_fare', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-white border-slate-200" />
                                           </div>
                                           <div className="space-y-2 col-span-2 md:col-span-1">
                                               <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">KM (R$)</Label>
-                                              <Input type="number" step="0.01" value={cat.cost_per_km} onChange={e => handleCategoryChange(cat.id, 'cost_per_km', e.target.value)} className="font-black text-lg h-12 bg-white border-slate-200" />
+                                              <Input type="number" step="0.01" value={cat.cost_per_km} onChange={e => handleCategoryChange(cat.id, 'cost_per_km', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-white border-slate-200" />
                                           </div>
                                           <div className="space-y-2 col-span-2 md:col-span-1">
                                               <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Mín. (R$)</Label>
-                                              <Input type="number" step="0.01" value={cat.min_fare} onChange={e => handleCategoryChange(cat.id, 'min_fare', e.target.value)} className="font-black text-lg h-12 bg-white border-slate-200" />
+                                              <Input type="number" step="0.01" value={cat.min_fare} onChange={e => handleCategoryChange(cat.id, 'min_fare', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-white border-slate-200" />
                                           </div>
                                           <div className="space-y-2">
                                               <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Ano Mín</Label>
-                                              <Input type="number" value={categoryRules[cat.name]?.min || ''} onChange={e => handleRuleChange(cat.name, 'min', e.target.value)} className="font-black text-lg h-12 bg-white border-slate-200 placeholder:text-slate-300" placeholder="Ex: 2010" />
+                                              <Input type="number" value={categoryRules[cat.name]?.min || ''} onChange={e => handleRuleChange(cat.name, 'min', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-white border-slate-200 placeholder:text-slate-300" placeholder="Ex: 2010" />
                                           </div>
                                           <div className="space-y-2">
                                               <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Ano Máx</Label>
-                                              <Input type="number" value={categoryRules[cat.name]?.max || ''} onChange={e => handleRuleChange(cat.name, 'max', e.target.value)} className="font-black text-lg h-12 bg-white border-slate-200 placeholder:text-slate-300" placeholder="Ex: 2016" />
+                                              <Input type="number" value={categoryRules[cat.name]?.max || ''} onChange={e => handleRuleChange(cat.name, 'max', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-white border-slate-200 placeholder:text-slate-300" placeholder="Ex: 2016" />
                                           </div>
                                           <div className="flex items-end col-span-2 md:col-span-1">
                                               <Button onClick={() => handleSaveCategory(cat)} className="w-full bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl h-12 font-black shadow-md">
@@ -512,7 +510,7 @@ const AdminDashboard = () => {
                                               type="number" 
                                               value={minCarYear} 
                                               onChange={(e) => setMinCarYear(e.target.value)} 
-                                              className="h-14 font-black text-xl text-center border-slate-200 bg-slate-50"
+                                              className="h-14 font-black text-slate-900 text-xl text-center border-slate-200 bg-slate-50"
                                           />
                                           <Button 
                                               onClick={handleSaveMinYear} 
