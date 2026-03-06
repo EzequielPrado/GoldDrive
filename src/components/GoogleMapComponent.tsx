@@ -18,8 +18,9 @@ const Directions = ({ pickup, destination }: { pickup: any, destination: any }) 
 
   useEffect(() => {
     if (!routesLibrary || !map) return;
-    setDirectionsService(new routesLibrary.DirectionsService());
-    setDirectionsRenderer(new routesLibrary.DirectionsRenderer({ 
+    
+    const ds = new routesLibrary.DirectionsService();
+    const dr = new routesLibrary.DirectionsRenderer({ 
         map,
         suppressMarkers: true,
         polylineOptions: {
@@ -27,14 +28,29 @@ const Directions = ({ pickup, destination }: { pickup: any, destination: any }) 
             strokeWeight: 5,
             strokeOpacity: 0.8
         }
-    }));
+    });
+
+    setDirectionsService(ds);
+    setDirectionsRenderer(dr);
+
+    // Quando o componente for desmontado, limpa a rota da memória
+    return () => {
+        dr.setMap(null);
+    };
   }, [routesLibrary, map]);
 
   useEffect(() => {
-    if (!directionsService || !directionsRenderer || !pickup || !destination) {
-        if (directionsRenderer) directionsRenderer.setDirections(null as any);
+    if (!directionsService || !directionsRenderer) return;
+
+    // A MÁGICA ACONTECE AQUI:
+    // Se não tem origem ou destino (ex: corrida finalizou), APAGA a linha do mapa.
+    if (!pickup || !destination) {
+        directionsRenderer.setMap(null);
         return;
     }
+
+    // Se tem viagem, garante que a linha vai ser desenhada no mapa correto.
+    directionsRenderer.setMap(map);
 
     directionsService.route({
       origin: pickup,
@@ -45,7 +61,7 @@ const Directions = ({ pickup, destination }: { pickup: any, destination: any }) 
         directionsRenderer.setDirections(result);
       }
     });
-  }, [directionsService, directionsRenderer, pickup, destination]);
+  }, [directionsService, directionsRenderer, pickup, destination, map]);
 
   return null;
 };
