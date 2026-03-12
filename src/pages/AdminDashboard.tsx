@@ -8,7 +8,7 @@ import {
   Menu, Banknote, FileText, Check, X, ExternalLink, Camera, User,
   Moon as MoonIcon, List, Plus, Power, Pencil, Star, Calendar, ArrowUpRight, ArrowDownLeft,
   Activity, BarChart3, PieChart, Coins, Lock, Unlock, Calculator, Info, MapPin, Zap, XCircle,
-  Ban, Percent, Navigation, PlusCircle, UserPlus
+  Ban, Percent, Navigation, PlusCircle, UserPlus, Eye
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -534,49 +534,132 @@ const AdminDashboard = () => {
 
       {/* MODAL DE REVISÃO DE MOTORISTA */}
       <Dialog open={isReviewModalOpen} onOpenChange={setIsReviewModalOpen}>
-          <DialogContent className="max-w-xl bg-white rounded-[40px] border-0 shadow-2xl p-0 overflow-hidden">
-              <DialogHeader className="p-8 bg-slate-900 text-white"><DialogTitle className="text-2xl font-black">Revisar Cadastro</DialogTitle><DialogDescription className="text-slate-400">Verifique os dados antes de aprovar.</DialogDescription></DialogHeader>
-              <div className="p-8 space-y-6">
-                  <div className="flex items-center gap-6 bg-slate-50 p-6 rounded-3xl border border-slate-100">
-                      <Avatar className="h-20 w-20 border-4 border-white shadow-xl"><AvatarImage src={selectedUser?.avatar_url} /><AvatarFallback className="bg-slate-200 text-slate-600 text-xl font-bold">{selectedUser?.first_name?.[0]}</AvatarFallback></Avatar>
-                      <div><h3 className="text-2xl font-black text-slate-900">{selectedUser?.first_name} {selectedUser?.last_name}</h3><p className="text-slate-500 font-medium">{selectedUser?.phone || 'Telefone não informado'}</p></div>
+          <DialogContent className="max-w-2xl bg-white rounded-[40px] border-0 shadow-2xl p-0 overflow-hidden outline-none">
+              <DialogHeader className="p-8 bg-slate-900 text-white flex flex-row items-center justify-between">
+                  <div>
+                      <DialogTitle className="text-2xl font-black">Revisar Cadastro</DialogTitle>
+                      <DialogDescription className="text-slate-400">Verifique os documentos e selfie antes de aprovar.</DialogDescription>
                   </div>
-                  
-                  <div className="grid grid-cols-3 gap-4">
-                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                          <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Modelo</p>
-                          <p className="font-bold text-slate-900 truncate">{selectedUser?.car_model || 'N/A'}</p>
-                      </div>
-                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                          <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Ano</p>
-                          <p className="font-black text-slate-900 truncate">{selectedUser?.car_year || 'N/A'}</p>
-                      </div>
-                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                          <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Placa</p>
-                          <p className="font-black text-slate-900 uppercase truncate">{selectedUser?.car_plate || 'N/A'}</p>
-                      </div>
-                  </div>
-
-                  {/* Alerta de Ano do Veículo */}
-                  {selectedUser?.car_year && parseInt(selectedUser.car_year) < parseInt(minCarYear) ? (
-                      <div className="bg-red-50 border border-red-200 p-6 rounded-3xl flex items-start gap-4 shadow-sm animate-in zoom-in-95">
-                          <AlertTriangle className="w-6 h-6 text-red-600 shrink-0 mt-1" />
-                          <div>
-                              <p className="font-black text-red-800">Veículo Fora do Padrão Global</p>
-                              <p className="text-sm text-red-700 font-medium mt-1">O ano deste veículo ({selectedUser.car_year}) é inferior ao mínimo permitido ({minCarYear}) nas configurações.</p>
+                  <Button variant="ghost" size="icon" onClick={() => setIsReviewModalOpen(false)} className="text-white hover:bg-white/10 rounded-full"><X className="w-6 h-6" /></Button>
+              </DialogHeader>
+              
+              <div className="p-8 space-y-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                  {/* Identificação e Selfie */}
+                  <div className="flex flex-col md:flex-row items-center gap-8 bg-slate-50 p-6 rounded-[32px] border border-slate-100">
+                      <div className="relative">
+                          <div className="w-32 h-32 rounded-3xl overflow-hidden shadow-xl border-4 border-white">
+                              <img 
+                                src={selectedUser?.face_photo_url || selectedUser?.avatar_url} 
+                                alt="Selfie" 
+                                className="w-full h-full object-cover"
+                              />
+                          </div>
+                          <div className="absolute -bottom-2 -right-2 bg-yellow-500 p-2 rounded-xl shadow-lg border-2 border-white">
+                              <Camera className="w-4 h-4 text-black" />
                           </div>
                       </div>
-                  ) : (
-                      <div className="bg-yellow-50 border border-yellow-200 p-6 rounded-3xl flex items-start gap-4 shadow-sm">
-                          <CheckCircle className="w-6 h-6 text-yellow-600 shrink-0 mt-1" />
-                          <p className="text-sm text-yellow-800 font-medium">Veículo dentro dos padrões mínimos do aplicativo. Ao aprovar, o motorista receberá acesso imediato.</p>
+                      <div className="text-center md:text-left">
+                          <h3 className="text-2xl font-black text-slate-900">{selectedUser?.first_name} {selectedUser?.last_name}</h3>
+                          <p className="text-slate-500 font-bold mt-1">{selectedUser?.email}</p>
+                          <div className="flex items-center gap-2 mt-3 justify-center md:justify-start">
+                              <Badge className="bg-slate-900 text-white font-bold h-7 px-3">{selectedUser?.phone || 'Sem Telefone'}</Badge>
+                              <Badge variant="outline" className="border-slate-200 font-bold h-7 px-3">Motorista Parceiro</Badge>
+                          </div>
                       </div>
-                  )}
+                  </div>
+                  
+                  {/* Veículo */}
+                  <div className="space-y-4">
+                      <h4 className="text-xs font-black text-slate-400 uppercase tracking-[2px] ml-1">Dados do Veículo</h4>
+                      <div className="grid grid-cols-3 gap-4">
+                          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Modelo</p>
+                              <p className="font-bold text-slate-900 truncate">{selectedUser?.car_model || 'N/A'}</p>
+                          </div>
+                          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Ano</p>
+                              <p className="font-black text-slate-900 truncate">{selectedUser?.car_year || 'N/A'}</p>
+                          </div>
+                          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Placa</p>
+                              <p className="font-black text-slate-900 uppercase truncate">{selectedUser?.car_plate || 'N/A'}</p>
+                          </div>
+                      </div>
+                      {/* Alerta de Ano do Veículo */}
+                      {selectedUser?.car_year && parseInt(selectedUser.car_year) < parseInt(minCarYear) && (
+                          <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-center gap-3">
+                              <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
+                              <p className="text-xs text-red-700 font-bold">Veículo mais antigo que o permitido ({minCarYear})!</p>
+                          </div>
+                      )}
+                  </div>
 
+                  {/* Documentos (CNH) */}
+                  <div className="space-y-4">
+                      <h4 className="text-xs font-black text-slate-400 uppercase tracking-[2px] ml-1">Documentos do Motorista</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {/* Frente */}
+                          <div className="space-y-2">
+                              <p className="text-[10px] font-bold text-slate-500 uppercase ml-1">CNH (Frente)</p>
+                              <div className="relative group rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 aspect-video">
+                                  {selectedUser?.cnh_front_url ? (
+                                      <>
+                                          <img src={selectedUser.cnh_front_url} className="w-full h-full object-cover" alt="CNH Frente" />
+                                          <button 
+                                            onClick={() => window.open(selectedUser.cnh_front_url, '_blank')}
+                                            className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold gap-2"
+                                          >
+                                              <Eye className="w-5 h-5" /> Ver Original
+                                          </button>
+                                      </>
+                                  ) : (
+                                      <div className="w-full h-full flex flex-col items-center justify-center text-slate-300">
+                                          <FileText className="w-10 h-10 mb-2" />
+                                          <p className="text-xs font-bold">Não enviado</p>
+                                      </div>
+                                  )}
+                              </div>
+                          </div>
+                          {/* Verso */}
+                          <div className="space-y-2">
+                              <p className="text-[10px] font-bold text-slate-500 uppercase ml-1">CNH (Verso)</p>
+                              <div className="relative group rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 aspect-video">
+                                  {selectedUser?.cnh_back_url ? (
+                                      <>
+                                          <img src={selectedUser.cnh_back_url} className="w-full h-full object-cover" alt="CNH Verso" />
+                                          <button 
+                                            onClick={() => window.open(selectedUser.cnh_back_url, '_blank')}
+                                            className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold gap-2"
+                                          >
+                                              <Eye className="w-5 h-5" /> Ver Original
+                                          </button>
+                                      </>
+                                  ) : (
+                                      <div className="w-full h-full flex flex-col items-center justify-center text-slate-300">
+                                          <FileText className="w-10 h-10 mb-2" />
+                                          <p className="text-xs font-bold">Não enviado</p>
+                                      </div>
+                                  )}
+                              </div>
+                          </div>
+                      </div>
+                  </div>
               </div>
+              
               <DialogFooter className="p-8 bg-slate-50 flex gap-4 border-t border-slate-100">
-                  <Button variant="outline" className="flex-1 h-14 rounded-2xl text-red-600 border-red-200 hover:bg-red-50 font-bold" onClick={() => handleUpdateUserStatus(selectedUser.id, 'REJECTED')}>REJEITAR</Button>
-                  <Button className="flex-1 h-14 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-black text-lg shadow-md" onClick={() => handleUpdateUserStatus(selectedUser.id, 'APPROVED')}>APROVAR AGORA</Button>
+                  <Button 
+                    variant="outline" 
+                    className="flex-1 h-14 rounded-2xl text-red-600 border-red-200 hover:bg-red-50 font-bold" 
+                    onClick={() => handleUpdateUserStatus(selectedUser.id, 'REJECTED')}
+                  >
+                      REJEITAR
+                  </Button>
+                  <Button 
+                    className="flex-1 h-14 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-black text-lg shadow-md" 
+                    onClick={() => handleUpdateUserStatus(selectedUser.id, 'APPROVED')}
+                  >
+                      APROVAR AGORA
+                  </Button>
               </DialogFooter>
           </DialogContent>
       </Dialog>
