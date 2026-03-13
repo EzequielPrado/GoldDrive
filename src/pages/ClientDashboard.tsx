@@ -171,14 +171,29 @@ const ClientDashboard = () => {
   const calculatePrice = useCallback((catId?: string) => {
       const category = categories.find(c => c.id === (catId || selectedCategoryId));
       if (!category || routeDistance <= 0) return 0;
+      
       let price = 0;
+      
+      // Se for a categoria Gold Driver, usa a tabela de preços por faixa de distância
       if (category.name === 'Gold Driver') {
           const tier = pricingTiers.find(t => routeDistance <= Number(t.max_distance)) || pricingTiers[pricingTiers.length - 1];
           price = Number(tier?.price || 15);
       } else {
-          price = Number(category.base_fare) + (routeDistance * Number(category.cost_per_km));
-          if (price < Number(category.min_fare)) price = Number(category.min_fare);
+          // Lógica por fórmula baseada no feedback:
+          // Se for abaixo de 1 KM, usa o preço mínimo.
+          if (routeDistance < 1) {
+              price = Number(category.min_fare);
+          } else {
+              // Se for acima de 1 KM, usa Base + (KM * Distância)
+              price = Number(category.base_fare) + (routeDistance * Number(category.cost_per_km));
+              
+              // Garante que o valor nunca seja menor que o mínimo definido
+              if (price < Number(category.min_fare)) {
+                  price = Number(category.min_fare);
+              }
+          }
       }
+      
       return parseFloat(price.toFixed(2));
   }, [categories, pricingTiers, routeDistance, selectedCategoryId]);
 

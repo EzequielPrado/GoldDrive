@@ -138,9 +138,26 @@ const DriverDashboard = () => {
 
   const calculatePrice = useCallback(() => {
       if (routeDistance <= 0) return 0;
-      const tier = pricingTiers.find(t => routeDistance <= Number(t.max_distance)) || pricingTiers[pricingTiers.length - 1];
-      return Number(tier?.price || 15);
-  }, [pricingTiers, routeDistance]);
+      
+      // Busca a categoria padrão Go (ou a primeira disponível) para manual
+      const category = categories.find(c => c.name.toLowerCase().includes('go')) || categories[0];
+      
+      if (!category) return 15; // Fallback
+
+      let price = 0;
+      
+      // Regra de negócio:
+      if (routeDistance < 1) {
+          price = Number(category.min_fare);
+      } else {
+          price = Number(category.base_fare) + (routeDistance * Number(category.cost_per_km));
+          if (price < Number(category.min_fare)) {
+              price = Number(category.min_fare);
+          }
+      }
+      
+      return parseFloat(price.toFixed(2));
+  }, [categories, routeDistance]);
 
   const checkProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
