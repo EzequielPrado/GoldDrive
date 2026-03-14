@@ -105,10 +105,14 @@ const DriverDashboard = () => {
   useEffect(() => {
       const fetchPricing = async () => {
           const [catsRes, tiersRes] = await Promise.all([
-              supabase.from('car_categories').select('*').eq('active', true),
+              supabase.from('car_categories').select('*').eq('active', true).order('base_fare', { ascending: true }),
               supabase.from('pricing_tiers').select('*').order('max_distance', { ascending: true })
           ]);
-          if (catsRes.data) setCategories(catsRes.data);
+          if (catsRes.data) {
+              // Filtra para pegar apenas categorias padrão (ignorando promos para manual por segurança)
+              const filtered = catsRes.data.filter(c => !c.name.toLowerCase().includes('promo'));
+              setCategories(filtered);
+          }
           if (tiersRes.data) setPricingTiers(tiersRes.data);
       };
       fetchPricing();
@@ -139,18 +143,22 @@ const DriverDashboard = () => {
   const calculatePrice = useCallback(() => {
       if (routeDistance <= 0) return 0;
       
-      // Busca a categoria padrão Go (ou a primeira disponível) para manual
+      // Busca a categoria padrão "Go" ou a primeira disponível que não seja promo
       const category = categories.find(c => c.name.toLowerCase().includes('go')) || categories[0];
       
-      if (!category) return 15; // Fallback
+      if (!category) return 15; // Fallback de segurança
 
       let price = 0;
       
-      // Regra de negócio:
+      // Regra de negócio alinhada com ClientDashboard:
       if (routeDistance < 1) {
+          // Abaixo de 1 KM, cobra o preço mínimo da categoria
           price = Number(category.min_fare);
       } else {
+          // Acima de 1 KM, cobra Base + (KM * Distância)
           price = Number(category.base_fare) + (routeDistance * Number(category.cost_per_km));
+          
+          // Garante que não fique abaixo do mínimo da categoria mesmo no cálculo
           if (price < Number(category.min_fare)) {
               price = Number(category.min_fare);
           }
@@ -183,12 +191,14 @@ const DriverDashboard = () => {
       setManualLoading(true);
       try {
           const price = calculatePrice();
+          const category = categories.find(c => c.name.toLowerCase().includes('go')) || categories[0];
+          
           await createManualRide(
               passengerName, "", 
               pickupLocation.display_name, destLocation.display_name,
               { lat: pickupLocation.lat, lng: pickupLocation.lon },
               { lat: destLocation.lat, lng: destLocation.lon },
-              price, `${routeDistance.toFixed(1)} km`, 'Manual'
+              price, `${routeDistance.toFixed(1)} km`, category?.name || 'Manual'
           );
           setShowManualRide(false);
           setPassengerName("");
