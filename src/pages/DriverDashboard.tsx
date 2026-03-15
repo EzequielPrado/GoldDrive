@@ -109,7 +109,6 @@ const DriverDashboard = () => {
               supabase.from('pricing_tiers').select('*').order('max_distance', { ascending: true })
           ]);
           if (catsRes.data) {
-              // Filtra para pegar apenas categorias padrão (ignorando promos para manual por segurança)
               const filtered = catsRes.data.filter(c => !c.name.toLowerCase().includes('promo'));
               setCategories(filtered);
           }
@@ -141,31 +140,33 @@ const DriverDashboard = () => {
   }, [pickupLocation, destLocation, showManualRide, calculateRouteDistance]);
 
   const calculatePrice = useCallback(() => {
-      if (routeDistance <= 0) return 0;
+      if (routeDistance <= 0 || categories.length === 0) return 0;
       
-      // Busca a categoria padrão "Go" ou a primeira disponível que não seja promo
-      const category = categories.find(c => c.name.toLowerCase().includes('go')) || categories[0];
+      // Busca a categoria padrão "Gold Driver" ou a primeira disponível que não seja promo
+      const category = categories.find(c => c.name === 'Gold Driver') || categories.find(c => c.name.toLowerCase().includes('go')) || categories[0];
       
-      if (!category) return 15; // Fallback de segurança
+      if (!category) return 15;
 
       let price = 0;
       
-      // Regra de negócio alinhada com ClientDashboard:
-      if (routeDistance < 1) {
-          // Abaixo de 1 KM, cobra o preço mínimo da categoria
-          price = Number(category.min_fare);
+      // Se for Gold Driver, usa a tabela de faixas (pricing_tiers)
+      if (category.name === 'Gold Driver' && pricingTiers.length > 0) {
+          const tier = pricingTiers.find(t => routeDistance <= Number(t.max_distance)) || pricingTiers[pricingTiers.length - 1];
+          price = Number(tier?.price || 15);
       } else {
-          // Acima de 1 KM, cobra Base + (KM * Distância)
-          price = Number(category.base_fare) + (routeDistance * Number(category.cost_per_km));
-          
-          // Garante que não fique abaixo do mínimo da categoria mesmo no cálculo
-          if (price < Number(category.min_fare)) {
+          // Lógica padrão: Base + KM
+          if (routeDistance < 1) {
               price = Number(category.min_fare);
+          } else {
+              price = Number(category.base_fare) + (routeDistance * Number(category.cost_per_km));
+              if (price < Number(category.min_fare)) {
+                  price = Number(category.min_fare);
+              }
           }
       }
       
       return parseFloat(price.toFixed(2));
-  }, [categories, routeDistance]);
+  }, [categories, pricingTiers, routeDistance]);
 
   const checkProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -191,7 +192,7 @@ const DriverDashboard = () => {
       setManualLoading(true);
       try {
           const price = calculatePrice();
-          const category = categories.find(c => c.name.toLowerCase().includes('go')) || categories[0];
+          const category = categories.find(c => c.name === 'Gold Driver') || categories.find(c => c.name.toLowerCase().includes('go')) || categories[0];
           
           await createManualRide(
               passengerName, "", 
