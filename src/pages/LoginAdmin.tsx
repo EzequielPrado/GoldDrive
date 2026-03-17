@@ -21,7 +21,7 @@ const LoginAdmin = () => {
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden font-sans">
        <div className="w-full max-w-md relative z-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
            <div className="mb-8 text-center flex flex-col items-center">
-               <img src="/app-logo.jpg" alt="Gold Mobile" className="w-48 h-auto mb-6 rounded-2xl" />
+               <img src="/app-logo.png" alt="Gold Mobile" className="w-48 h-auto mb-6 rounded-2xl" />
                <p className="text-slate-400">Credenciais de alta segurança necessárias.</p>
            </div>
            <Card className="bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl rounded-[32px] overflow-hidden">

@@ -10,9 +10,9 @@
   "start_url": "/",
   "icons": [
     {
-      "src": "/app-logo.jpg",
+      "src": "/app-logo.png",
       "sizes": "512x512",
-      "type": "image/jpeg"
+      "type": "image/png"
     }
   ]
 }

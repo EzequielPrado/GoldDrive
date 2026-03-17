@@ -240,7 +240,7 @@ const DriverDashboard = () => {
 
   return (
     <div className="h-screen flex flex-col bg-slate-50 relative overflow-hidden font-sans">
-      <img src="/app-logo.jpg" alt="Logo" className="fixed top-4 left-1/2 -translate-x-1/2 h-8 opacity-90 z-50 pointer-events-none drop-shadow-md rounded-lg" />
+      <img src="/app-logo.png" alt="Logo" className="fixed top-4 left-1/2 -translate-x-1/2 h-8 opacity-90 z-50 pointer-events-none drop-shadow-md rounded-lg" />
       
       <div className="absolute inset-0 z-0">
           <GoogleMapComponent className="h-full w-full" pickupLocation={pickupCoord} destinationLocation={destCoord} />

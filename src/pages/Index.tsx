@@ -42,7 +42,7 @@ const Index = () => {
       <div className="flex-1 flex flex-col px-6 pt-12 pb-6 relative z-10 max-w-md mx-auto w-full justify-between">
         <div className="text-center space-y-4 mt-12 animate-in slide-in-from-top-10 duration-700 flex flex-col items-center">
             <img 
-              src="/app-logo.jpg" 
+              src="/app-logo.png" 
               alt="Gold Mobile" 
               className="w-64 h-auto drop-shadow-2xl rounded-2xl"
             />

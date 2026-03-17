@@ -117,7 +117,7 @@ const LoginDriver = () => {
            <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center opacity-40" />
            <div className="absolute inset-0 bg-gradient-to-r from-zinc-950 via-zinc-900/80 to-transparent" />
            <div className="relative z-10 px-12 text-center">
-                <img src="/app-logo.jpg" alt="Gold" className="w-64 mb-8 mx-auto rounded-2xl" />
+                <img src="/app-logo.png" alt="Gold" className="w-64 mb-8 mx-auto rounded-2xl" />
                 <h2 className="text-6xl font-black text-white tracking-tighter mb-4">SEJA <span className="text-yellow-500">GOLD</span>.</h2>
                 <p className="text-xl text-gray-300 font-light">Taxas justas. Pagamento rápido. Respeito real.</p>
            </div>
@@ -128,7 +128,7 @@ const LoginDriver = () => {
                <Button variant="ghost" onClick={() => navigate('/')} className="hover:bg-zinc-800 text-white rounded-full w-12 h-12 p-0 shrink-0">
                    <ArrowLeft className="w-6 h-6" />
                </Button>
-               <img src="/app-logo.jpg" alt="Gold" className="h-10 ml-4 lg:hidden rounded-lg" />
+               <img src="/app-logo.png" alt="Gold" className="h-10 ml-4 lg:hidden rounded-lg" />
            </div>
 
            <div className="flex-1 flex flex-col justify-center px-6 sm:px-12 md:px-24 py-10">
@@ -201,7 +201,7 @@ const LoginDriver = () => {
                             
                             <div className="relative">
                                 <Lock className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
-                                <Input type="password" placeholder="Sua senha" className="h-14 pl-12" value={password} onChange={e => setPassword(e.target.value)} required />
+                                <Input type="password" placeholder="Sua senha" className="h-14 pl-12" value={password} onChange={setPassword(e.target.value)} required />
                             </div>
                         </div>
 
