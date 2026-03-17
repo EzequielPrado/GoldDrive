@@ -10,7 +10,7 @@
   "start_url": "/",
   "icons": [
     {
-      "src": "/pwa-icon.png",
+      "src": "/app-logo.png",
       "sizes": "512x512",
       "type": "image/png"
     }
