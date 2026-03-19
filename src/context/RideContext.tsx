@@ -231,32 +231,72 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   }, [currentUserId]);
 
   const requestRide = async (pickup: string, destination: string, pickupCoords: any, destCoords: any, price: number, distance: string, category: string, paymentMethod: string): Promise<boolean> => {
-    if (!currentUserId) return false;
+    // Garante que temos o ID do usuário antes de tentar inserir
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    
+    if (!userId) {
+        toast({ title: "Erro de Autenticação", description: "Sua sessão expirou. Faça login novamente.", variant: "destructive" });
+        return false;
+    }
+
     try {
       const { data, error } = await supabase.from('rides').insert({
-          customer_id: currentUserId, pickup_address: pickup, destination_address: destination,
-          pickup_lat: pickupCoords.lat, pickup_lng: pickupCoords.lng,
-          destination_lat: destCoords.lat, destination_lng: destCoords.lng,
-          price, distance, status: 'SEARCHING', category, payment_method: paymentMethod
+          customer_id: userId, 
+          pickup_address: pickup, 
+          destination_address: destination,
+          pickup_lat: pickupCoords.lat, 
+          pickup_lng: pickupCoords.lng,
+          destination_lat: destCoords.lat, 
+          destination_lng: destCoords.lng,
+          price, 
+          distance, 
+          status: 'SEARCHING', 
+          category, 
+          payment_method: paymentMethod
       }).select().single();
+      
       if (error) throw error;
       setRide(data);
       return true;
-    } catch (e: any) { toast({ title: "Erro", description: e.message, variant: "destructive" }); return false; }
+    } catch (e: any) { 
+        toast({ title: "Erro ao solicitar", description: e.message, variant: "destructive" }); 
+        return false; 
+    }
   };
 
   const createManualRide = async (passengerName: string, passengerPhone: string, pickup: string, destination: string, pickupCoords: any, destCoords: any, price: number, distance: string, category: string) => {
-      if (!currentUserId) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      
+      if (!userId) return;
+
       try {
           const { data, error } = await supabase.from('rides').insert({
-              customer_id: currentUserId, driver_id: currentUserId, pickup_address: pickup, destination_address: destination,
-              pickup_lat: pickupCoords.lat, pickup_lng: pickupCoords.lng, destination_lat: destCoords.lat, destination_lng: destCoords.lng,
-              price, distance, status: 'IN_PROGRESS', category, payment_method: 'CASH', ride_type: 'MANUAL', guest_name: passengerName, driver_earnings: price
+              customer_id: userId, 
+              driver_id: userId, 
+              pickup_address: pickup, 
+              destination_address: destination,
+              pickup_lat: pickupCoords.lat, 
+              pickup_lng: pickupCoords.lng, 
+              destination_lat: destCoords.lat, 
+              destination_lng: destCoords.lng,
+              price, 
+              distance, 
+              status: 'IN_PROGRESS', 
+              category, 
+              payment_method: 'CASH', 
+              ride_type: 'MANUAL', 
+              guest_name: passengerName, 
+              driver_earnings: price
           }).select().single();
+          
           if (error) throw error;
           setRide(data);
           toast({ title: "Corrida Manual Iniciada" });
-      } catch (e) { toast({ title: "Erro ao criar", variant: "destructive" }); }
+      } catch (e: any) { 
+          toast({ title: "Erro ao criar", description: e.message, variant: "destructive" }); 
+      }
   };
 
   const cancelRide = async (rideId: string) => {
