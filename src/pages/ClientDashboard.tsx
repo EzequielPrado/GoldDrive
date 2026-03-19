@@ -138,8 +138,8 @@ const ClientDashboard = () => {
         setStep('waiting');
       }
     } else {
-      // Se estamos em 'waiting' e a corrida sumiu, volta para a busca
-      if (step === 'waiting') {
+      // Importante: Se não houver ride, garantir que resetamos para a tela de busca
+      if (step !== 'search' && step !== 'confirm') {
           setStep('search');
       }
     }
@@ -197,7 +197,7 @@ const ClientDashboard = () => {
     }
     
     setIsRequesting(true);
-    setStep('waiting'); // Transição otimista para evitar o "piscar" de volta para o preço
+    setStep('waiting');
     
     try { 
         const success = await requestRide(
@@ -212,7 +212,7 @@ const ClientDashboard = () => {
         ); 
         
         if (!success) {
-            setStep('confirm'); // Volta se falhar
+            setStep('confirm');
         } else {
             showSuccess("Motorista solicitado!");
         }
@@ -260,7 +260,6 @@ const ClientDashboard = () => {
         />
       </div>
 
-      {/* Header Fixo */}
       <img src="/app-logo.png" alt="Gold" className="fixed top-4 left-1/2 -translate-x-1/2 h-8 opacity-90 z-[100] drop-shadow-md rounded-lg" />
       <div className="absolute top-0 left-0 right-0 p-6 z-50 flex justify-between items-start pointer-events-none mt-4">
           <div className="pointer-events-auto bg-white/95 backdrop-blur-xl p-2 pr-4 rounded-full flex items-center gap-3 shadow-lg border border-white/20 cursor-pointer" onClick={() => navigate('/profile')}>
@@ -278,7 +277,6 @@ const ClientDashboard = () => {
           )}
       </div>
 
-      {/* Painel de Controle */}
       <div className="absolute inset-0 z-50 pointer-events-none flex flex-col justify-end pb-32 md:justify-center p-4">
         {activeTab === 'home' && (
             <div className="w-full max-w-md mx-auto pointer-events-auto">
@@ -401,7 +399,6 @@ const ClientDashboard = () => {
             </div>
         )}
 
-        {/* Histórico Aba */}
         {activeTab === 'history' && (
             <div className="w-full max-w-md mx-auto bg-white/95 backdrop-blur-xl p-6 rounded-[32px] shadow-2xl border border-white/40 pointer-events-auto h-[60vh] flex flex-col animate-in fade-in duration-300">
                 <h2 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-2"><History className="w-6 h-6" /> Suas Viagens</h2>
