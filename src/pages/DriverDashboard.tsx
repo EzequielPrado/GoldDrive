@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Wallet, MapPin, Navigation, DollarSign, Star, History, Car, ArrowRight, MessageCircle, Phone, Smartphone, Map, Flag, CheckCircle2, UserPlus, Clock, X, MousePointer2, Loader2, ChevronRight, Banknote } from "lucide-react";
+import { Wallet, MapPin, Navigation, DollarSign, Star, History, Car, ArrowRight, MessageCircle, Phone, Smartphone, Map, Flag, CheckCircle2, UserPlus, Clock, X, MousePointer2, Loader2, ChevronRight, Banknote, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -234,6 +234,7 @@ const DriverDashboard = () => {
 
   const isOnTrip = !!ride && ['ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(ride?.status || '');
   const isCompleted = ride?.status === 'COMPLETED';
+  const isCancelled = ride?.status === 'CANCELLED';
 
   return (
     <div className="h-screen flex flex-col bg-slate-50 relative overflow-hidden font-sans">
@@ -244,7 +245,7 @@ const DriverDashboard = () => {
       </div>
 
       <div className="absolute top-0 left-0 right-0 p-6 z-20 flex justify-between items-start pointer-events-none mt-4">
-          {!isOnTrip && !isCompleted && (
+          {!isOnTrip && !isCompleted && !isCancelled && (
               <div className={`pointer-events-auto backdrop-blur-xl border border-white/20 p-2 pr-4 rounded-full flex items-center gap-3 shadow-lg transition-colors ${isOnline ? 'bg-black/80' : 'bg-white/80'}`}>
                  <Switch checked={isOnline} onCheckedChange={toggleOnline} />
                  <span className={`text-xs font-bold uppercase ${isOnline ? 'text-white' : 'text-slate-500'}`}>{isOnline ? 'Online' : 'Offline'}</span>
@@ -280,6 +281,15 @@ const DriverDashboard = () => {
                         >
                             <UserPlus className="w-7 h-7" />
                         </Button>
+                    </div>
+                )}
+
+                {isCancelled && (
+                    <div className="bg-white p-8 rounded-[32px] shadow-2xl text-center animate-in zoom-in-95 duration-300 border border-gray-100">
+                        <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6"><XCircle className="w-10 h-10 text-red-600" /></div>
+                        <h2 className="text-3xl font-black text-slate-900 mb-2">Corrida Cancelada</h2>
+                        <p className="text-gray-500 mb-6 font-medium">O passageiro cancelou a solicitação desta corrida.</p>
+                        <Button className="w-full h-14 bg-black text-white font-bold rounded-2xl shadow-xl" onClick={() => clearRide()}>VOLTAR AO MAPA</Button>
                     </div>
                 )}
 
