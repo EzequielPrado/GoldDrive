@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { Map, useMap, useMapsLibrary, AdvancedMarker, Pin } from '@vis.gl/react-google-maps';
-import { Car } from 'lucide-react';
+import { Map, useMap, useMapsLibrary, Marker } from '@vis.gl/react-google-maps';
 
 interface MapProps {
   className?: string;
@@ -66,20 +65,22 @@ const GoogleMapComponent = ({
         defaultZoom={14}
         gestureHandling={'greedy'}
         disableDefaultUI={true}
-        mapId="bf50a63493f06e40"
       >
         <Directions 
             pickup={pickupLocation ? { lat: pickupLocation.lat, lng: pickupLocation.lon } : null}
             destination={destinationLocation ? { lat: destinationLocation.lat, lng: destinationLocation.lon } : null}
         />
 
-        {/* MARCADOR DO MOTORISTA EM TEMPO REAL */}
+        {/* MARCADOR DO MOTORISTA EM TEMPO REAL (CARRINHO) */}
         {driverLocation && (
-            <AdvancedMarker position={{ lat: driverLocation.lat, lng: driverLocation.lon }}>
-                <div className="bg-black p-2 rounded-full border-2 border-yellow-500 shadow-xl animate-in zoom-in duration-300">
-                    <Car className="w-6 h-6 text-yellow-500" />
-                </div>
-            </AdvancedMarker>
+            <Marker 
+                position={{ lat: driverLocation.lat, lng: driverLocation.lon }}
+                icon={{
+                    url: "https://cdn-icons-png.flaticon.com/512/3082/3082349.png", // Ícone de carro de cima
+                    scaledSize: new google.maps.Size(40, 40),
+                    anchor: new google.maps.Point(20, 20)
+                }}
+            />
         )}
       </Map>
     </div>

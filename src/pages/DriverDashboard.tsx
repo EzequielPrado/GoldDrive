@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Wallet, MapPin, Navigation, DollarSign, Star, History, Car, ArrowRight, MessageCircle, Phone, Smartphone, Map, Flag, CheckCircle2, UserPlus, Clock, X, MousePointer2, Loader2, ChevronRight, Banknote, XCircle } from "lucide-react";
+import { Wallet, MapPin, Navigation, DollarSign, Star, History, Car, ArrowRight, MessageCircle, Phone, Smartphone, Map, Flag, CheckCircle2, UserPlus, Clock, X, MousePointer2, Loader2, ChevronRight, Banknote, XCircle, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -52,7 +52,12 @@ const DriverDashboard = () => {
   const [rating, setRating] = useState(0);
   const [showManualRide, setShowManualRide] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
+  const [trackingActive, setTrackingActive] = useState(false);
   
+  // Localização para Google Maps
+  const [pickupCoord, setPickupCoord] = useState<{lat: number, lon: number} | null>(null);
+  const [destCoord, setDestCoord] = useState<{lat: number, lon: number} | null>(null);
+
   // Estados para Corrida Manual
   const [passengerName, setPassengerName] = useState("");
   const [pickupLocation, setPickupLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
@@ -61,27 +66,31 @@ const DriverDashboard = () => {
   const [manualLoading, setManualLoading] = useState(false);
   const [categories, setCategories] = useState<any[]>([]);
   const [pricingTiers, setPricingTiers] = useState<any[]>([]);
-  
-  // Localização para Google Maps
-  const [pickupCoord, setPickupCoord] = useState<{lat: number, lon: number} | null>(null);
-  const [destCoord, setDestCoord] = useState<{lat: number, lon: number} | null>(null);
 
   // TRACKING: Envia localização a cada 5 segundos
   useEffect(() => {
-    if (!isOnline || !currentUserId) return;
+    if (!isOnline || !currentUserId) {
+        setTrackingActive(false);
+        return;
+    }
 
     const updateLocation = () => {
         navigator.geolocation.getCurrentPosition(async (pos) => {
-            await supabase.from('profiles').update({
+            const { error } = await supabase.from('profiles').update({
                 current_lat: pos.coords.latitude,
                 current_lng: pos.coords.longitude,
                 last_active: new Date().toISOString()
             }).eq('id', currentUserId);
-        }, (err) => console.warn("Erro GPS Tracking:", err), { enableHighAccuracy: true });
+            
+            if (!error) setTrackingActive(true);
+        }, (err) => {
+            console.error("Erro GPS:", err);
+            setTrackingActive(false);
+        }, { enableHighAccuracy: true });
     };
 
-    updateLocation(); // Executa imediato
-    const interval = setInterval(updateLocation, 5000); // Repete a cada 5s
+    updateLocation();
+    const interval = setInterval(updateLocation, 5000);
     return () => clearInterval(interval);
   }, [isOnline, currentUserId]);
 
@@ -190,6 +199,7 @@ const DriverDashboard = () => {
       }
       if (val) {
           await refreshAvailableRides();
+          showSuccess("Você está Online! Ative o GPS se solicitado.");
       }
   };
 
@@ -227,7 +237,7 @@ const DriverDashboard = () => {
       setGpsLoading(true);
       navigator.geolocation.getCurrentPosition(async (pos) => {
           const geocoder = new google.maps.Geocoder();
-          geocoder.geocode({ location: { lat: pos.coords.latitude, lng: pos.coords.longitude } }, (results, status) => {
+          geocoder.geocode({ location: { lat: pos.coords.latitude, lon: pos.coords.longitude } }, (results, status) => {
               if (status === 'OK' && results?.[0]) {
                   setPickupLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude, display_name: results[0].formatted_address });
                   showSuccess("Sua localização atualizada!");
@@ -258,6 +268,7 @@ const DriverDashboard = () => {
               <div className={`pointer-events-auto backdrop-blur-xl border border-white/20 p-2 pr-4 rounded-full flex items-center gap-3 shadow-lg transition-colors ${isOnline ? 'bg-black/80' : 'bg-white/80'}`}>
                  <Switch checked={isOnline} onCheckedChange={toggleOnline} />
                  <span className={`text-xs font-bold uppercase ${isOnline ? 'text-white' : 'text-slate-500'}`}>{isOnline ? 'Online' : 'Offline'}</span>
+                 {isOnline && trackingActive && <Zap className="w-3 h-3 text-yellow-500 animate-pulse" />}
               </div>
           )}
           <div className="pointer-events-auto bg-white/10 backdrop-blur-xl p-1 rounded-full shadow-lg cursor-pointer" onClick={() => navigate('/profile')}>
@@ -328,6 +339,7 @@ const DriverDashboard = () => {
                             <>
                                 <div className="bg-green-50 p-4 rounded-2xl text-center mb-4 border border-green-100 animate-pulse">
                                     <p className="font-black text-green-800 text-sm">Aguardando passageiro embarcar...</p>
+                                    {trackingActive && <p className="text-[10px] text-green-600 mt-1">Rastreamento ativo</p>}
                                 </div>
                                 <NavigationBlock label="Destino Final" lat={ride.destination_lat} lng={ride.destination_lng} address={ride.destination_address} icon={Flag} />
                             </>
