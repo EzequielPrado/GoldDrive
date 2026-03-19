@@ -1,12 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Wallet, MapPin, Navigation, DollarSign, Star, History, Car, ArrowRight, MessageCircle, Phone, Smartphone, Map, Flag, CheckCircle2, UserPlus, Clock, X, MousePointer2, Loader2, ChevronRight, Banknote, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import GoogleMapComponent from "@/components/GoogleMapComponent";
 import { useRide } from "@/context/RideContext";
 import { showSuccess, showError } from "@/utils/toast";
@@ -43,7 +42,7 @@ const NavigationBlock = ({ label, lat, lng, address, icon: Icon = MapPin }: any)
 const DriverDashboard = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { ride, availableRides, acceptRide, rejectRide, confirmArrival, finishRide, startRide, cancelRide, rateRide, clearRide, currentUserId, createManualRide } = useRide();
+  const { ride, availableRides, acceptRide, rejectRide, confirmArrival, finishRide, startRide, rateRide, clearRide, currentUserId, createManualRide, refreshAvailableRides } = useRide();
   
   const [activeTab, setActiveTab] = useState('home');
   const [isOnline, setIsOnline] = useState(false);
@@ -68,7 +67,6 @@ const DriverDashboard = () => {
   const [destCoord, setDestCoord] = useState<{lat: number, lon: number} | null>(null);
 
   useEffect(() => {
-    // Só exibe a rota da corrida se ela NÃO estiver finalizada nem cancelada
     if (ride && ride.status !== 'COMPLETED' && ride.status !== 'CANCELLED') {
         setPickupCoord({ lat: Number(ride.pickup_lat), lon: Number(ride.pickup_lng) });
         setDestCoord({ lat: Number(ride.destination_lat), lon: Number(ride.destination_lng) });
@@ -76,7 +74,6 @@ const DriverDashboard = () => {
         setPickupCoord({ lat: pickupLocation.lat, lon: pickupLocation.lon });
         setDestCoord({ lat: destLocation.lat, lon: destLocation.lon });
     } else {
-        // Limpa a rota do mapa
         setPickupCoord(null);
         setDestCoord(null);
     }
@@ -108,10 +105,7 @@ const DriverDashboard = () => {
               supabase.from('car_categories').select('*').eq('active', true).order('base_fare', { ascending: true }),
               supabase.from('pricing_tiers').select('*').order('max_distance', { ascending: true })
           ]);
-          if (catsRes.data) {
-              const filtered = catsRes.data; 
-              setCategories(filtered);
-          }
+          if (catsRes.data) setCategories(catsRes.data);
           if (tiersRes.data) setPricingTiers(tiersRes.data);
       };
       fetchPricing();
@@ -141,13 +135,10 @@ const DriverDashboard = () => {
 
   const calculatePrice = useCallback(() => {
       if (routeDistance <= 0 || categories.length === 0) return 0;
-      
       const category = categories.find(c => c.name === 'Gold Driver') || categories.find(c => c.name.toLowerCase().includes('go')) || categories[0];
-      
       if (!category) return 15;
 
       let price = 0;
-      
       if (category.name === 'Gold Driver' && pricingTiers.length > 0) {
           const tier = pricingTiers.find(t => routeDistance <= Number(t.max_distance)) || pricingTiers[pricingTiers.length - 1];
           price = Number(tier?.price || 15);
@@ -156,12 +147,9 @@ const DriverDashboard = () => {
               price = Number(category.min_fare);
           } else {
               price = Number(category.base_fare) + (routeDistance * Number(category.cost_per_km));
-              if (price < Number(category.min_fare)) {
-                  price = Number(category.min_fare);
-              }
+              if (price < Number(category.min_fare)) price = Number(category.min_fare);
           }
       }
-      
       return parseFloat(price.toFixed(2));
   }, [categories, pricingTiers, routeDistance]);
 
@@ -178,7 +166,13 @@ const DriverDashboard = () => {
 
   const toggleOnline = async (val: boolean) => { 
       setIsOnline(val);
-      if (driverProfile?.id) await supabase.from('profiles').update({ is_online: val, last_active: new Date().toISOString() }).eq('id', driverProfile.id);
+      if (driverProfile?.id) {
+          await supabase.from('profiles').update({ is_online: val, last_active: new Date().toISOString() }).eq('id', driverProfile.id);
+      }
+      // Força o sistema a buscar corridas IMEDIATAMENTE quando o motorista fica online
+      if (val) {
+          await refreshAvailableRides();
+      }
   };
 
   const handleCreateManual = async () => {
@@ -217,11 +211,7 @@ const DriverDashboard = () => {
           const geocoder = new google.maps.Geocoder();
           geocoder.geocode({ location: { lat: pos.coords.latitude, lng: pos.coords.longitude } }, (results, status) => {
               if (status === 'OK' && results?.[0]) {
-                  setPickupLocation({ 
-                      lat: pos.coords.latitude, 
-                      lon: pos.coords.longitude, 
-                      display_name: results[0].formatted_address 
-                  });
+                  setPickupLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude, display_name: results[0].formatted_address });
                   showSuccess("Sua localização atualizada!");
               }
               setGpsLoading(false);
@@ -235,6 +225,7 @@ const DriverDashboard = () => {
   const isOnTrip = !!ride && ['ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(ride?.status || '');
   const isCompleted = ride?.status === 'COMPLETED';
   const isCancelled = ride?.status === 'CANCELLED';
+  const hasAvailableRides = availableRides.length > 0;
 
   return (
     <div className="h-screen flex flex-col bg-slate-50 relative overflow-hidden font-sans">
@@ -268,7 +259,7 @@ const DriverDashboard = () => {
                     </div>
                 )}
 
-                {!ride && isOnline && (
+                {!ride && isOnline && !hasAvailableRides && (
                     <div className="flex flex-col gap-4 items-center">
                         <div className="bg-black/80 backdrop-blur-xl px-8 py-4 rounded-full shadow-2xl flex items-center gap-4 animate-pulse border border-white/10">
                             <div className="w-3 h-3 bg-green-500 rounded-full" />
@@ -352,7 +343,7 @@ const DriverDashboard = () => {
       </div>
 
       {/* MODAL GIGANTE DE NOVA CORRIDA */}
-      <Dialog open={Boolean(availableRides.length > 0 && isOnline && !ride)} onOpenChange={() => {}}>
+      <Dialog open={hasAvailableRides && isOnline && !ride} onOpenChange={() => {}}>
           <DialogContent className="max-w-md bg-white rounded-[32px] border-0 shadow-2xl p-0 overflow-hidden outline-none">
               <DialogTitle className="sr-only">Nova Solicitação</DialogTitle>
               <div className="bg-yellow-500 p-6 text-center relative overflow-hidden">

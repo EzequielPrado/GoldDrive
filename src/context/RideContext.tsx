@@ -36,6 +36,7 @@ interface RideContextType {
   confirmArrival: (rideId: string) => Promise<void>;
   addBalance: (amount: number) => Promise<void>;
   clearRide: () => void;
+  refreshAvailableRides: () => Promise<void>;
   currentUserId: string | null;
   userRole: 'client' | 'driver' | null;
 }
@@ -53,10 +54,8 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   
   const userRoleRef = useRef(userRole);
   const currentUserIdRef = useRef(currentUserId);
-  const driverCarYearRef = useRef<number>(0);
-  const categoryRulesRef = useRef<any>({});
   
-  // Lista de corridas canceladas/finalizadas que o usuário já fechou a tela
+  // Lista de corridas rejeitadas ou fechadas nesta sessão
   const dismissedRidesRef = useRef<string[]>([]);
   const rejectedIdsRef = useRef<string[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -78,7 +77,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
 
   const playNotification = () => {
       if (audioRef.current) {
-          audioRef.current.play().catch(e => console.log("Áudio bloqueado", e));
+          audioRef.current.play().catch(e => console.log("Áudio bloqueado pelo navegador", e));
       }
   };
 
@@ -102,27 +101,20 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
         .limit(5);
 
       if (ridesData && ridesData.length > 0) {
-          // 1. Procurar corridas totalmente ativas
           let targetRide = ridesData.find(r => ['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(r.status));
           
           if (!targetRide) {
-              // 2. Se não houver ativas, verificar a MAIS RECENTE apenas
               const mostRecent = ridesData[0];
-              
               if (!dismissedRidesRef.current.includes(mostRecent.id)) {
                   if (mostRecent.status === 'COMPLETED') {
                       const hasRated = role === 'driver' ? !!mostRecent.customer_rating : !!mostRecent.driver_rating;
                       if (!hasRated) targetRide = mostRecent;
                   } else if (mostRecent.status === 'CANCELLED') {
-                      // Só exibimos que foi cancelado se foi uma corrida muito recente (ex: 5 minutos)
                       const rideAgeMinutes = (new Date().getTime() - new Date(mostRecent.created_at).getTime()) / 60000;
                       if (rideAgeMinutes <= 5) {
                           targetRide = mostRecent;
                       } else {
-                          // Se já passou do tempo, adiciona automaticamente à lista de dispensadas
-                          if (!dismissedRidesRef.current.includes(mostRecent.id)) {
-                              dismissedRidesRef.current.push(mostRecent.id);
-                          }
+                          if (!dismissedRidesRef.current.includes(mostRecent.id)) dismissedRidesRef.current.push(mostRecent.id);
                       }
                   }
               }
@@ -159,29 +151,12 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
               const clientIds = [...new Set(ridesData.map(r => r.customer_id))];
               const { data: profilesData } = await supabase.from('profiles').select('*').in('id', clientIds);
               
-              const rules = categoryRulesRef.current || {};
-              const driverYear = driverCarYearRef.current || 0;
-              
               const validRides = ridesData.map(r => ({
                   ...r,
                   client_details: profilesData?.find(p => p.id === r.customer_id) || { first_name: 'Passageiro' }
               })).filter(r => {
-                  // AQUI FOI REMOVIDA A TRAVA DE CUSTOMER_ID PARA PERMITIR TESTES!
-                  // Ignora se o motorista rejeitou nesta sessão ou no BD
+                  // Filtra apenas se o motorista ignorou manualmente nesta sessão
                   if (rejectedIdsRef.current.includes(r.id)) return false;
-                  if (r.rejected_by && Array.isArray(r.rejected_by) && r.rejected_by.includes(uid)) return false;
-                  
-                  // Validação de regras (Ano do carro)
-                  try {
-                      const rule = rules[r.category];
-                      if (rule && driverYear > 0) {
-                          const min = parseInt(rule.min);
-                          const max = parseInt(rule.max);
-                          if (!isNaN(min) && driverYear < min) return false;
-                          if (!isNaN(max) && driverYear > max) return false;
-                      }
-                  } catch(e) {}
-                  
                   return true;
               });
               
@@ -193,6 +168,11 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
               setAvailableRides([]); 
           }
       } catch (err) { console.error("Erro ao buscar corridas disponíveis:", err); }
+  };
+
+  // Função exportada para forçar o Refresh
+  const refreshAvailableRides = async () => {
+      await fetchAvailableRides(false);
   };
 
   useEffect(() => {
@@ -227,16 +207,10 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
             setCurrentUserId(session.user.id);
             currentUserIdRef.current = session.user.id;
             
-            const { data } = await supabase.from('profiles').select('role, car_year').eq('id', session.user.id).maybeSingle();
+            const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
             if (data) {
                 setUserRole(data.role as any);
                 userRoleRef.current = data.role as any; 
-                driverCarYearRef.current = parseInt(data.car_year) || 0;
-            }
-            
-            const { data: configData } = await supabase.from('admin_config').select('value').eq('key', 'category_rules').maybeSingle();
-            if (configData?.value) {
-                try { categoryRulesRef.current = JSON.parse(configData.value); } catch(e) {}
             }
 
             await fetchActiveRide(session.user.id);
@@ -248,13 +222,14 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
     init();
   }, []);
 
+  // Polling agressivo a cada 3 segundos
   useEffect(() => {
       let interval: any;
       if (currentUserId) {
           interval = setInterval(() => {
               fetchActiveRide(currentUserId);
               if (userRoleRef.current === 'driver') fetchAvailableRides(false);
-          }, 4000);
+          }, 3000);
       }
       return () => clearInterval(interval);
   }, [currentUserId]);
@@ -324,11 +299,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   const cancelRide = async (rideId: string) => {
     try {
         await supabase.from('rides').update({ status: 'CANCELLED' }).eq('id', rideId);
-        
-        // Assim que o cliente cancela, adicionamos à lista de ignoradas
-        if (!dismissedRidesRef.current.includes(rideId)) {
-            dismissedRidesRef.current.push(rideId);
-        }
+        if (!dismissedRidesRef.current.includes(rideId)) dismissedRidesRef.current.push(rideId);
         setRide(null);
     } catch (e) { console.error(e); }
   };
@@ -346,11 +317,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   const rejectRide = async (rideId: string) => {
       rejectedIdsRef.current.push(rideId);
       setAvailableRides(prev => prev.filter(r => r.id !== rideId));
-      
-      try {
-          // Utiliza a procedure do banco para registrar permanentemente que este motorista ignorou
-          await supabase.rpc('reject_ride', { ride_id_param: rideId });
-      } catch (e) { console.error(e); }
   };
 
   const confirmArrival = async (rideId: string) => { await supabase.from('rides').update({ status: 'ARRIVED' }).eq('id', rideId); };
@@ -379,7 +345,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   return (
     <RideContext.Provider value={{ 
         ride, availableRides, loading, requestRide, createManualRide, cancelRide, acceptRide, rejectRide, 
-        startRide, finishRide, rateRide, confirmArrival, addBalance, clearRide, currentUserId, userRole 
+        startRide, finishRide, rateRide, confirmArrival, addBalance, clearRide, refreshAvailableRides, currentUserId, userRole 
     }}>
       {children}
     </RideContext.Provider>
