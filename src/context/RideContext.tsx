@@ -159,23 +159,28 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
               const clientIds = [...new Set(ridesData.map(r => r.customer_id))];
               const { data: profilesData } = await supabase.from('profiles').select('*').in('id', clientIds);
               
-              const enrichedRides = ridesData.map(r => ({
+              const rules = categoryRulesRef.current || {};
+              const driverYear = driverCarYearRef.current || 0;
+              
+              const validRides = ridesData.map(r => ({
                   ...r,
                   client_details: profilesData?.find(p => p.id === r.customer_id) || { first_name: 'Passageiro' }
-              }));
-              
-              const rules = categoryRulesRef.current;
-              const driverYear = driverCarYearRef.current;
-              
-              const validRides = enrichedRides.filter(r => {
-                  if (r.customer_id === uid || rejectedIdsRef.current.includes(r.id)) return false;
+              })).filter(r => {
+                  // Ignora se o motorista rejeitou nesta sessão ou no BD
+                  if (rejectedIdsRef.current.includes(r.id)) return false;
+                  if (r.rejected_by && Array.isArray(r.rejected_by) && r.rejected_by.includes(uid)) return false;
                   
-                  const rule = rules[r.category];
-                  if (rule && driverYear > 0) {
-                      const min = parseInt(rule.min) || 0;
-                      const max = parseInt(rule.max) || 9999;
-                      if (driverYear < min || driverYear > max) return false; 
-                  }
+                  // Validação de regras (Ano do carro) - Apenas se estiver configurado
+                  try {
+                      const rule = rules[r.category];
+                      if (rule && driverYear > 0) {
+                          const min = parseInt(rule.min);
+                          const max = parseInt(rule.max);
+                          if (!isNaN(min) && driverYear < min) return false;
+                          if (!isNaN(max) && driverYear > max) return false;
+                      }
+                  } catch(e) {}
+                  
                   return true;
               });
               
@@ -186,7 +191,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           } else { 
               setAvailableRides([]); 
           }
-      } catch (err) { console.error(err); }
+      } catch (err) { console.error("Erro ao buscar corridas disponíveis:", err); }
   };
 
   useEffect(() => {
@@ -340,6 +345,11 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   const rejectRide = async (rideId: string) => {
       rejectedIdsRef.current.push(rideId);
       setAvailableRides(prev => prev.filter(r => r.id !== rideId));
+      
+      try {
+          // Utiliza a procedure do banco para registrar permanentemente que este motorista ignorou
+          await supabase.rpc('reject_ride', { ride_id_param: rideId });
+      } catch (e) { console.error(e); }
   };
 
   const confirmArrival = async (rideId: string) => { await supabase.from('rides').update({ status: 'ARRIVED' }).eq('id', rideId); };

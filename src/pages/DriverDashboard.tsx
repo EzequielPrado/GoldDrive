@@ -352,7 +352,7 @@ const DriverDashboard = () => {
       </div>
 
       {/* MODAL GIGANTE DE NOVA CORRIDA */}
-      <Dialog open={availableRides.length > 0 && isOnline && !ride} onOpenChange={() => {}}>
+      <Dialog open={Boolean(availableRides.length > 0 && isOnline && !ride)} onOpenChange={() => {}}>
           <DialogContent className="max-w-md bg-white rounded-[32px] border-0 shadow-2xl p-0 overflow-hidden outline-none">
               <DialogTitle className="sr-only">Nova Solicitação</DialogTitle>
               <div className="bg-yellow-500 p-6 text-center relative overflow-hidden">
