@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Wallet, MapPin, Navigation, DollarSign, Star, History, Car, ArrowRight, MessageCircle, Phone, Smartphone, Map, Flag, CheckCircle2, UserPlus, Clock, X, MousePointer2, Loader2, ChevronRight, Banknote, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -65,6 +65,25 @@ const DriverDashboard = () => {
   // Localização para Google Maps
   const [pickupCoord, setPickupCoord] = useState<{lat: number, lon: number} | null>(null);
   const [destCoord, setDestCoord] = useState<{lat: number, lon: number} | null>(null);
+
+  // TRACKING: Envia localização a cada 5 segundos
+  useEffect(() => {
+    if (!isOnline || !currentUserId) return;
+
+    const updateLocation = () => {
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+            await supabase.from('profiles').update({
+                current_lat: pos.coords.latitude,
+                current_lng: pos.coords.longitude,
+                last_active: new Date().toISOString()
+            }).eq('id', currentUserId);
+        }, (err) => console.warn("Erro GPS Tracking:", err), { enableHighAccuracy: true });
+    };
+
+    updateLocation(); // Executa imediato
+    const interval = setInterval(updateLocation, 5000); // Repete a cada 5s
+    return () => clearInterval(interval);
+  }, [isOnline, currentUserId]);
 
   useEffect(() => {
     if (ride && ride.status !== 'COMPLETED' && ride.status !== 'CANCELLED') {
@@ -169,7 +188,6 @@ const DriverDashboard = () => {
       if (driverProfile?.id) {
           await supabase.from('profiles').update({ is_online: val, last_active: new Date().toISOString() }).eq('id', driverProfile.id);
       }
-      // Força o sistema a buscar corridas IMEDIATAMENTE quando o motorista fica online
       if (val) {
           await refreshAvailableRides();
       }
@@ -342,7 +360,6 @@ const DriverDashboard = () => {
          )}
       </div>
 
-      {/* MODAL GIGANTE DE NOVA CORRIDA */}
       <Dialog open={hasAvailableRides && isOnline && !ride} onOpenChange={() => {}}>
           <DialogContent className="max-w-md bg-white rounded-[32px] border-0 shadow-2xl p-0 overflow-hidden outline-none">
               <DialogTitle className="sr-only">Nova Solicitação</DialogTitle>
@@ -409,7 +426,6 @@ const DriverDashboard = () => {
           </DialogContent>
       </Dialog>
 
-      {/* MODAL DE CORRIDA MANUAL */}
       <Dialog open={showManualRide} onOpenChange={setShowManualRide}>
           <DialogContent className="max-w-md bg-white rounded-[32px] border-0 shadow-2xl p-0 overflow-visible">
               <DialogHeader className="p-6 bg-slate-900 text-white rounded-t-[32px]">

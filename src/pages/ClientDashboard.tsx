@@ -24,19 +24,16 @@ const ClientDashboard = () => {
   const [searchParams] = useSearchParams();
   const { ride, loading: rideLoading, requestRide, cancelRide, rateRide, clearRide, currentUserId } = useRide();
   
-  // Estados principais de navegação e sincronização
   const [activeTab, setActiveTab] = useState("home");
   const [step, setStep] = useState<'search' | 'confirm' | 'waiting' | 'rating' | 'cancelled'>('search');
   const [isInitialSync, setIsInitialSync] = useState(true);
   
-  // Localizações e Planejamento
   const [pickupLocation, setPickupLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
   const [destLocation, setDestLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
   const [routeDistance, setRouteDistance] = useState<number>(0); 
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
   const [paymentMethod, setPaymentMethod] = useState<'WALLET' | 'CASH'>('CASH');
   
-  // Status de Processamento
   const [isRequesting, setIsRequesting] = useState(false);
   const [calculatingRoute, setCalculatingRoute] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
@@ -45,7 +42,6 @@ const ClientDashboard = () => {
   const [showBalanceAlert, setShowBalanceAlert] = useState(false);
   const [missingAmount, setMissingAmount] = useState(0);
 
-  // Dados Externos
   const [categories, setCategories] = useState<any[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [pricingTiers, setPricingTiers] = useState<any[]>([]);
@@ -53,10 +49,8 @@ const ClientDashboard = () => {
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [rating, setRating] = useState(0);
 
-  // Evita re-inicializações infinitas
   const dataFetched = useRef(false);
 
-  // 1. Monitoramento de Tab via URL
   useEffect(() => {
     const tabParam = searchParams.get('tab');
     if (tabParam && ['home', 'history', 'wallet', 'profile'].includes(tabParam)) {
@@ -64,10 +58,8 @@ const ClientDashboard = () => {
     }
   }, [searchParams]);
 
-  // 2. Busca de Dados Iniciais
   useEffect(() => {
     if (dataFetched.current) return;
-
     const fetchInitialData = async () => {
         try {
             const { data: { user } } = await supabase.auth.getUser();
@@ -75,39 +67,32 @@ const ClientDashboard = () => {
                 navigate('/login');
                 return;
             }
-            
             const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(); 
             if (profile) setUserProfile(profile); 
-
             const [catsRes, tiersRes, settingsRes] = await Promise.all([
                 supabase.from('car_categories').select('*').eq('active', true).order('base_fare', { ascending: true }),
                 supabase.from('pricing_tiers').select('*').order('max_distance', { ascending: true }),
                 supabase.from('app_settings').select('*')
             ]);
-            
             if (catsRes.data) {
                 setCategories(catsRes.data); 
                 if (catsRes.data.length > 0) setSelectedCategoryId(catsRes.data[0].id);
             }
             if (tiersRes.data) setPricingTiers(tiersRes.data);
-            
             if (settingsRes.data) {
                 const cash = settingsRes.data.find((s: any) => s.key === 'enable_cash');
                 const wallet = settingsRes.data.find((s: any) => s.key === 'enable_wallet');
                 setAppSettings({ enableCash: cash?.value ?? true, enableWallet: wallet?.value ?? true });
             }
-
             dataFetched.current = true;
             setIsInitialSync(false);
         } catch (error) { 
-            console.error(error); 
             setIsInitialSync(false);
         }
     };
     fetchInitialData();
   }, [navigate]);
 
-  // 3. Sincronização de Histórico
   useEffect(() => {
     if (activeTab === 'history' && userProfile?.id) {
         const fetchHistory = async () => {
@@ -121,10 +106,8 @@ const ClientDashboard = () => {
     }
   }, [activeTab, userProfile?.id]);
 
-  // 4. Lógica de Sincronização de Estado da Corrida
   useEffect(() => {
     if (rideLoading || isInitialSync || isRequesting) return;
-
     if (ride) {
       if (ride.status === 'CANCELLED') {
           setStep('cancelled');
@@ -138,14 +121,12 @@ const ClientDashboard = () => {
         setStep('waiting');
       }
     } else {
-      // Importante: Se não houver ride, garantir que resetamos para a tela de busca
       if (step !== 'search' && step !== 'confirm') {
           setStep('search');
       }
     }
   }, [ride, rideLoading, isInitialSync, isRequesting]);
 
-  // 5. Cálculo de Distância Google Maps
   useEffect(() => {
     if (pickupLocation && destLocation && step === 'confirm') {
         setCalculatingRoute(true);
@@ -169,7 +150,6 @@ const ClientDashboard = () => {
   const calculatePrice = useCallback((catId?: string) => {
       const category = categories.find(c => c.id === (catId || selectedCategoryId));
       if (!category || routeDistance <= 0) return 0;
-      
       let price = 0;
       if (category.name === 'Gold Driver') {
           const tier = pricingTiers.find(t => routeDistance <= Number(t.max_distance)) || pricingTiers[pricingTiers.length - 1];
@@ -189,16 +169,13 @@ const ClientDashboard = () => {
     if (isRequesting || !pickupLocation || !destLocation || !selectedCategoryId) return;
     const price = calculatePrice();
     const category = categories.find(c => c.id === selectedCategoryId);
-    
     if (paymentMethod === 'WALLET' && (userProfile?.balance || 0) < price) { 
         setMissingAmount(price - (userProfile?.balance || 0)); 
         setShowBalanceAlert(true); 
         return; 
     }
-    
     setIsRequesting(true);
     setStep('waiting');
-    
     try { 
         const success = await requestRide(
             pickupLocation.display_name, 
@@ -210,12 +187,8 @@ const ClientDashboard = () => {
             category.name, 
             paymentMethod
         ); 
-        
-        if (!success) {
-            setStep('confirm');
-        } else {
-            showSuccess("Motorista solicitado!");
-        }
+        if (!success) setStep('confirm');
+        else showSuccess("Motorista solicitado!");
     } catch (e: any) { 
         showError(e.message); 
         setStep('confirm');
@@ -250,6 +223,8 @@ const ClientDashboard = () => {
   }
 
   const showRouteOnMap = step === 'confirm' || step === 'waiting';
+  // Extrai a localização em tempo real do motorista do objeto de corrida
+  const driverLiveLocation = ride?.driver_details?.current_lat ? { lat: ride.driver_details.current_lat, lon: ride.driver_details.current_lng } : null;
 
   return (
     <div className="h-screen w-full overflow-hidden bg-gray-100 font-sans text-slate-900 relative">
@@ -257,6 +232,7 @@ const ClientDashboard = () => {
         <GoogleMapComponent 
             pickupLocation={showRouteOnMap ? pickupLocation : null} 
             destinationLocation={showRouteOnMap ? destLocation : null} 
+            driverLocation={driverLiveLocation}
         />
       </div>
 
@@ -286,13 +262,7 @@ const ClientDashboard = () => {
                         <div className="space-y-4">
                             <div className="flex gap-2">
                                 <GoogleLocationSearch placeholder="Local de embarque" onSelect={(l) => setPickupLocation(l)} initialValue={pickupLocation?.display_name} className="flex-1" />
-                                <Button 
-                                    size="icon" 
-                                    variant="outline" 
-                                    className="h-14 w-14 rounded-2xl shrink-0 border-slate-200 bg-slate-50 hover:bg-slate-100" 
-                                    onClick={getCurrentLocation} 
-                                    disabled={gpsLoading}
-                                >
+                                <Button size="icon" variant="outline" className="h-14 w-14 rounded-2xl shrink-0 border-slate-200 bg-slate-50 hover:bg-slate-100" onClick={getCurrentLocation} disabled={gpsLoading}>
                                     {gpsLoading ? <Loader2 className="animate-spin text-slate-400" /> : <MapPin className="w-5 h-5 text-slate-600" />}
                                 </Button>
                             </div>
