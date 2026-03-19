@@ -98,12 +98,14 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
         .select(`*, driver_details:profiles!public_rides_driver_id_fkey(*), client_details:profiles!public_rides_customer_id_fkey(*)`)
         .eq(queryField, userId)
         .order('created_at', { ascending: false })
-        .limit(10);
+        .limit(5);
 
       if (ridesData && ridesData.length > 0) {
+          // Busca corridas em andamento
           let targetRide = ridesData.find(r => ['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(r.status));
           
           if (!targetRide) {
+              // Busca finalizadas recentemente para avaliação
               targetRide = ridesData.find(r => {
                   if (['COMPLETED', 'CANCELLED'].includes(r.status)) {
                       if (dismissedRidesRef.current.includes(r.id)) return false;
@@ -111,7 +113,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
                       if (hasRated) return false;
                       const updatedAt = new Date(r.created_at).getTime();
                       const now = new Date().getTime();
-                      return ((now - updatedAt) / 1000 / 60 <= 30); 
+                      return ((now - updatedAt) / 1000 / 60 <= 15); 
                   }
                   return false;
               });
@@ -126,6 +128,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           }
       }
       
+      // Se não encontrou nenhuma no banco, e não estamos esperando o Realtime, limpa
       setRide(null);
     } catch (err) { console.error(err); }
   };
@@ -136,7 +139,15 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       if (role !== 'driver' || !uid) return;
 
       try {
-          const { data: ridesData } = await supabase.from('rides').select('*').eq('status', 'SEARCHING').is('driver_id', null).order('created_at', { ascending: false });
+          // Busca todas as corridas SEARCHING sem motorista
+          const { data: ridesData, error } = await supabase.from('rides')
+            .select('*')
+            .eq('status', 'SEARCHING')
+            .is('driver_id', null)
+            .order('created_at', { ascending: false });
+
+          if (error) throw error;
+
           if (ridesData && ridesData.length > 0) {
               const clientIds = [...new Set(ridesData.map(r => r.customer_id))];
               const { data: profilesData } = await supabase.from('profiles').select('*').in('id', clientIds);
@@ -150,15 +161,15 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
               const driverYear = driverCarYearRef.current;
               
               const validRides = enrichedRides.filter(r => {
+                  // Não mostrar minhas próprias solicitações (teste) nem as que eu ignorei
                   if (r.customer_id === uid || rejectedIdsRef.current.includes(r.id)) return false;
                   
+                  // Aplicar regras de categoria (ano de veículo)
                   const rule = rules[r.category];
                   if (rule && driverYear > 0) {
                       const min = parseInt(rule.min) || 0;
                       const max = parseInt(rule.max) || 9999;
-                      if (driverYear < min || driverYear > max) {
-                          return false; 
-                      }
+                      if (driverYear < min || driverYear > max) return false; 
                   }
                   return true;
               });
@@ -167,22 +178,37 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
                   if (shouldPlaySound && validRides.length > prev.length) playNotification();
                   return validRides;
               });
-          } else { setAvailableRides([]); }
+          } else { 
+              setAvailableRides([]); 
+          }
       } catch (err) { console.error(err); }
   };
 
   useEffect(() => {
-    const channel = supabase.channel('global_ride_sync')
+    const channel = supabase.channel('ride_updates')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rides' }, async (payload) => {
-            const newRecord = payload.new as any;
             const uid = currentUserIdRef.current;
-            const role = userRoleRef.current;
-            if (role === 'driver') {
-                if ((payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') && newRecord.status === 'SEARCHING' && !newRecord.driver_id) await fetchAvailableRides(true);
-                if (payload.eventType === 'UPDATE' && (newRecord.status !== 'SEARCHING' || newRecord.driver_id)) setAvailableRides(prev => prev.filter(r => r.id !== newRecord.id));
+            if (!uid) return;
+
+            const newRecord = payload.new as any;
+            const oldRecord = payload.old as any;
+
+            // Se eu sou motorista, atualiza lista de disponíveis
+            if (userRoleRef.current === 'driver') {
+                if (newRecord.status === 'SEARCHING' && !newRecord.driver_id) {
+                    await fetchAvailableRides(true);
+                } else {
+                    // Se a corrida foi aceita por outro ou cancelada, remove da lista
+                    setAvailableRides(prev => prev.filter(r => r.id !== (newRecord.id || oldRecord?.id)));
+                }
             }
-            if ((newRecord?.customer_id === uid || newRecord?.driver_id === uid) && uid) await fetchActiveRide(uid);
+
+            // Se a atualização é de uma corrida minha, recarrega o estado principal
+            if (newRecord?.customer_id === uid || newRecord?.driver_id === uid || oldRecord?.customer_id === uid || oldRecord?.driver_id === uid) {
+                await fetchActiveRide(uid);
+            }
       }).subscribe();
+
     return () => { supabase.removeChannel(channel); };
   }, []);
 
@@ -195,16 +221,14 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
             
             const { data } = await supabase.from('profiles').select('role, car_year').eq('id', session.user.id).maybeSingle();
             if (data) {
-                setUserRole(data.role);
-                userRoleRef.current = data.role; 
+                setUserRole(data.role as any);
+                userRoleRef.current = data.role as any; 
                 driverCarYearRef.current = parseInt(data.car_year) || 0;
             }
             
             const { data: configData } = await supabase.from('admin_config').select('value').eq('key', 'category_rules').maybeSingle();
             if (configData?.value) {
-                try {
-                    categoryRulesRef.current = JSON.parse(configData.value);
-                } catch(e) {}
+                try { categoryRulesRef.current = JSON.parse(configData.value); } catch(e) {}
             }
 
             await fetchActiveRide(session.user.id);
@@ -216,29 +240,22 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
     init();
   }, []);
 
-  // Polling a cada 3 segundos como backup do sistema em tempo real
+  // Polling como fallback
   useEffect(() => {
       let interval: any;
       if (currentUserId) {
           interval = setInterval(() => {
               fetchActiveRide(currentUserId);
-              if (userRoleRef.current === 'driver') {
-                  fetchAvailableRides(false);
-              }
-          }, 3000);
+              if (userRoleRef.current === 'driver') fetchAvailableRides(false);
+          }, 4000);
       }
       return () => clearInterval(interval);
   }, [currentUserId]);
 
   const requestRide = async (pickup: string, destination: string, pickupCoords: any, destCoords: any, price: number, distance: string, category: string, paymentMethod: string): Promise<boolean> => {
-    // Garante que temos o ID do usuário antes de tentar inserir
     const { data: { session } } = await supabase.auth.getSession();
     const userId = session?.user?.id;
-    
-    if (!userId) {
-        toast({ title: "Erro de Autenticação", description: "Sua sessão expirou. Faça login novamente.", variant: "destructive" });
-        return false;
-    }
+    if (!userId) return false;
 
     try {
       const { data, error } = await supabase.from('rides').insert({
@@ -268,7 +285,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   const createManualRide = async (passengerName: string, passengerPhone: string, pickup: string, destination: string, pickupCoords: any, destCoords: any, price: number, distance: string, category: string) => {
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
-      
       if (!userId) return;
 
       try {
@@ -293,7 +309,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           
           if (error) throw error;
           setRide(data);
-          toast({ title: "Corrida Manual Iniciada" });
       } catch (e: any) { 
           toast({ title: "Erro ao criar", description: e.message, variant: "destructive" }); 
       }
@@ -301,24 +316,17 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
 
   const cancelRide = async (rideId: string) => {
     try {
-        const { data, error } = await supabase.rpc('cancel_ride_as_user', { ride_id_to_cancel: rideId });
-        if (error) throw error;
-        if (currentUserId) await fetchActiveRide(currentUserId);
-        toast({ title: data || "Cancelado" });
-    } catch (e: any) { 
         await supabase.from('rides').update({ status: 'CANCELLED' }).eq('id', rideId);
-        if (currentUserId) await fetchActiveRide(currentUserId);
-        toast({ title: "Cancelado" });
-    }
+        setRide(null);
+    } catch (e) { console.error(e); }
   };
 
   const acceptRide = async (rideId: string) => {
      if (!currentUserId) return;
      try {
          const { data, error } = await supabase.from('rides').update({ status: 'ACCEPTED', driver_id: currentUserId }).eq('id', rideId).is('driver_id', null).select();
-         if (error || !data?.length) { toast({ title: "Corrida não disponível", variant: "destructive" }); return; }
-         
-         setAvailableRides(prev => prev.filter(r => r.id !== rideId)); // Oculta da lista
+         if (error || !data?.length) { toast({ title: "Corrida já aceita por outro motorista." }); return; }
+         setAvailableRides(prev => prev.filter(r => r.id !== rideId));
          await fetchActiveRide(currentUserId);
      } catch (e) { toast({ title: "Erro ao aceitar" }); }
   };
@@ -328,26 +336,14 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       setAvailableRides(prev => prev.filter(r => r.id !== rideId));
   };
 
-  const confirmArrival = async (rideId: string) => { 
-      await supabase.from('rides').update({ status: 'ARRIVED' }).eq('id', rideId); 
-      if (currentUserId) await fetchActiveRide(currentUserId);
-  };
-  
-  const startRide = async (rideId: string) => { 
-      await supabase.from('rides').update({ status: 'IN_PROGRESS' }).eq('id', rideId); 
-      if (currentUserId) await fetchActiveRide(currentUserId);
-  };
-  
-  const finishRide = async (rideId: string) => { 
-      await supabase.from('rides').update({ status: 'COMPLETED' }).eq('id', rideId); 
-      if (currentUserId) await fetchActiveRide(currentUserId);
-  };
+  const confirmArrival = async (rideId: string) => { await supabase.from('rides').update({ status: 'ARRIVED' }).eq('id', rideId); };
+  const startRide = async (rideId: string) => { await supabase.from('rides').update({ status: 'IN_PROGRESS' }).eq('id', rideId); };
+  const finishRide = async (rideId: string) => { await supabase.from('rides').update({ status: 'COMPLETED' }).eq('id', rideId); };
 
   const rateRide = async (rideId: string, rating: number, isDriver: boolean, comment?: string) => {
       const updateData = isDriver ? { customer_rating: rating } : { driver_rating: rating, review_comment: comment };
       await supabase.from('rides').update(updateData).eq('id', rideId);
       clearRide();
-      toast({ title: "Avaliação enviada" });
   };
 
   const addBalance = async (amount: number) => {

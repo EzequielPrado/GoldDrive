@@ -64,7 +64,7 @@ const ClientDashboard = () => {
     }
   }, [searchParams]);
 
-  // 2. Busca de Dados Iniciais (Perfil, Configurações, Categorias)
+  // 2. Busca de Dados Iniciais
   useEffect(() => {
     if (dataFetched.current) return;
 
@@ -86,10 +86,8 @@ const ClientDashboard = () => {
             ]);
             
             if (catsRes.data) {
-                // Removido o filtro que ocultava 'promo'
-                const filtered = catsRes.data; 
-                setCategories(filtered); 
-                if (filtered.length > 0) setSelectedCategoryId(filtered[0].id);
+                setCategories(catsRes.data); 
+                if (catsRes.data.length > 0) setSelectedCategoryId(catsRes.data[0].id);
             }
             if (tiersRes.data) setPricingTiers(tiersRes.data);
             
@@ -100,7 +98,7 @@ const ClientDashboard = () => {
             }
 
             dataFetched.current = true;
-            setIsInitialSync(false); // Sincronização básica concluída
+            setIsInitialSync(false);
         } catch (error) { 
             console.error(error); 
             setIsInitialSync(false);
@@ -123,9 +121,9 @@ const ClientDashboard = () => {
     }
   }, [activeTab, userProfile?.id]);
 
-  // 4. Lógica CRÍTICA: Sincronização de Estado da Corrida (Evita o modal "piscar")
+  // 4. Lógica de Sincronização de Estado da Corrida
   useEffect(() => {
-    if (rideLoading || isInitialSync) return;
+    if (rideLoading || isInitialSync || isRequesting) return;
 
     if (ride) {
       if (ride.status === 'CANCELLED') {
@@ -133,20 +131,19 @@ const ClientDashboard = () => {
       } else if (ride.status === 'COMPLETED') {
         if (!ride.driver_rating) setStep('rating');
         else {
-            clearRide(); // Se já avaliou ou passou do tempo, limpa
+            clearRide();
             setStep('search');
         }
       } else {
         setStep('waiting');
       }
     } else {
-      // Se não há corrida ativa no banco, volta para a busca
-      // Ignora se o usuário já estiver confirmando uma nova (estado 'confirm')
-      if (step !== 'search' && step !== 'confirm') {
+      // Se estamos em 'waiting' e a corrida sumiu, volta para a busca
+      if (step === 'waiting') {
           setStep('search');
       }
     }
-  }, [ride, rideLoading, isInitialSync]);
+  }, [ride, rideLoading, isInitialSync, isRequesting]);
 
   // 5. Cálculo de Distância Google Maps
   useEffect(() => {
@@ -174,27 +171,17 @@ const ClientDashboard = () => {
       if (!category || routeDistance <= 0) return 0;
       
       let price = 0;
-      
-      // Se for a categoria Gold Driver, usa a tabela de preços por faixa de distância
       if (category.name === 'Gold Driver') {
           const tier = pricingTiers.find(t => routeDistance <= Number(t.max_distance)) || pricingTiers[pricingTiers.length - 1];
           price = Number(tier?.price || 15);
       } else {
-          // Lógica por fórmula baseada no feedback:
-          // Se for abaixo de 1 KM, usa o preço mínimo.
           if (routeDistance < 1) {
               price = Number(category.min_fare);
           } else {
-              // Se for acima de 1 KM, usa Base + (KM * Distância)
               price = Number(category.base_fare) + (routeDistance * Number(category.cost_per_km));
-              
-              // Garante que o valor nunca seja menor que o mínimo definido
-              if (price < Number(category.min_fare)) {
-                  price = Number(category.min_fare);
-              }
+              if (price < Number(category.min_fare)) price = Number(category.min_fare);
           }
       }
-      
       return parseFloat(price.toFixed(2));
   }, [categories, pricingTiers, routeDistance, selectedCategoryId]);
 
@@ -210,6 +197,8 @@ const ClientDashboard = () => {
     }
     
     setIsRequesting(true);
+    setStep('waiting'); // Transição otimista para evitar o "piscar" de volta para o preço
+    
     try { 
         const success = await requestRide(
             pickupLocation.display_name, 
@@ -222,12 +211,14 @@ const ClientDashboard = () => {
             paymentMethod
         ); 
         
-        if (success) {
+        if (!success) {
+            setStep('confirm'); // Volta se falhar
+        } else {
             showSuccess("Motorista solicitado!");
-            setStep('waiting'); // Força a transição imediata
         }
     } catch (e: any) { 
         showError(e.message); 
+        setStep('confirm');
     } finally { 
         setIsRequesting(false); 
     }
@@ -258,7 +249,6 @@ const ClientDashboard = () => {
       );
   }
 
-  // Verifica se a rota deve ser exibida no mapa (apenas quando confirmar ou aguardando/em corrida)
   const showRouteOnMap = step === 'confirm' || step === 'waiting';
 
   return (
@@ -358,9 +348,9 @@ const ClientDashboard = () => {
                     </div>
                 )}
 
-                {step === 'waiting' && (
+                {(step === 'waiting' || isRequesting) && (
                      <div className="bg-white p-6 rounded-[32px] shadow-2xl border border-gray-100 flex flex-col gap-6 animate-in zoom-in-95 duration-300">
-                         {ride?.status === 'SEARCHING' ? (
+                         {(ride?.status === 'SEARCHING' || isRequesting) ? (
                              <div className="py-8 text-center">
                                  <div className="relative w-24 h-24 mx-auto mb-6">
                                     <div className="absolute inset-0 bg-yellow-500 rounded-full animate-ping opacity-20" />
