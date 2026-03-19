@@ -56,8 +56,9 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   const driverCarYearRef = useRef<number>(0);
   const categoryRulesRef = useRef<any>({});
   
-  const rejectedIdsRef = useRef<string[]>([]);
+  // Lista de corridas canceladas/finalizadas que o usuário já fechou a tela
   const dismissedRidesRef = useRef<string[]>([]);
+  const rejectedIdsRef = useRef<string[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   
   const { toast } = useToast();
@@ -91,7 +92,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           userRoleRef.current = role;
       }
 
-      // Se sou motorista, procuro corridas onde sou o motorista. Se sou cliente, onde sou o cliente.
       const queryField = role === 'driver' ? 'driver_id' : 'customer_id';
       
       const { data: ridesData } = await supabase
@@ -102,31 +102,30 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
         .limit(5);
 
       if (ridesData && ridesData.length > 0) {
-          const now = new Date().getTime();
-
-          // Busca corridas em andamento com filtro de tempo para SEARCHING
-          let targetRide = ridesData.find(r => {
-              if (['ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(r.status)) return true;
-              if (r.status === 'SEARCHING') {
-                  const createdAt = new Date(r.created_at).getTime();
-                  // Se a corrida está procurando há mais de 10 minutos, consideramos expirada/travada
-                  return ((now - createdAt) / 1000 / 60 <= 10);
-              }
-              return false;
-          });
+          // 1. Procurar corridas totalmente ativas
+          let targetRide = ridesData.find(r => ['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(r.status));
           
           if (!targetRide) {
-              // Busca finalizadas recentemente para avaliação
-              targetRide = ridesData.find(r => {
-                  if (['COMPLETED', 'CANCELLED'].includes(r.status)) {
-                      if (dismissedRidesRef.current.includes(r.id)) return false;
-                      const hasRated = role === 'driver' ? !!r.customer_rating : !!r.driver_rating;
-                      if (hasRated) return false;
-                      const updatedAt = new Date(r.created_at).getTime();
-                      return ((now - updatedAt) / 1000 / 60 <= 15); 
+              // 2. Se não houver ativas, verificar a MAIS RECENTE apenas
+              const mostRecent = ridesData[0];
+              
+              if (!dismissedRidesRef.current.includes(mostRecent.id)) {
+                  if (mostRecent.status === 'COMPLETED') {
+                      const hasRated = role === 'driver' ? !!mostRecent.customer_rating : !!mostRecent.driver_rating;
+                      if (!hasRated) targetRide = mostRecent;
+                  } else if (mostRecent.status === 'CANCELLED') {
+                      // Só exibimos que foi cancelado se foi uma corrida muito recente (ex: 5 minutos)
+                      const rideAgeMinutes = (new Date().getTime() - new Date(mostRecent.created_at).getTime()) / 60000;
+                      if (rideAgeMinutes <= 5) {
+                          targetRide = mostRecent;
+                      } else {
+                          // Se já passou do tempo, adiciona automaticamente à lista de dispensadas
+                          if (!dismissedRidesRef.current.includes(mostRecent.id)) {
+                              dismissedRidesRef.current.push(mostRecent.id);
+                          }
+                      }
                   }
-                  return false;
-              });
+              }
           }
 
           if (targetRide) {
@@ -249,7 +248,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           interval = setInterval(() => {
               fetchActiveRide(currentUserId);
               if (userRoleRef.current === 'driver') fetchAvailableRides(false);
-          }, 5000);
+          }, 4000);
       }
       return () => clearInterval(interval);
   }, [currentUserId]);
@@ -319,8 +318,12 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   const cancelRide = async (rideId: string) => {
     try {
         await supabase.from('rides').update({ status: 'CANCELLED' }).eq('id', rideId);
+        
+        // Assim que o cliente cancela, adicionamos à lista de ignoradas
+        if (!dismissedRidesRef.current.includes(rideId)) {
+            dismissedRidesRef.current.push(rideId);
+        }
         setRide(null);
-        dismissedRidesRef.current.push(rideId);
     } catch (e) { console.error(e); }
   };
 
@@ -355,7 +358,12 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       await supabase.from('profiles').update({ balance: (data?.balance || 0) + amount }).eq('id', currentUserId);
   };
 
-  const clearRide = () => { if (ride?.id) dismissedRidesRef.current.push(ride.id); setRide(null); };
+  const clearRide = () => { 
+      if (ride?.id && !dismissedRidesRef.current.includes(ride.id)) {
+          dismissedRidesRef.current.push(ride.id); 
+      }
+      setRide(null); 
+  };
 
   return (
     <RideContext.Provider value={{ 
