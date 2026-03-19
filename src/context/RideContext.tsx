@@ -88,48 +88,42 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           userRoleRef.current = role;
       }
 
-      const queryField = role === 'driver' ? 'driver_id' : 'customer_id';
-      
-      const { data: ridesData } = await supabase
+      // IMPORTANTE: Busca corridas onde o usuário é ou o passageiro ou o motorista
+      const { data: ridesData, error } = await supabase
         .from('rides')
         .select(`*, driver_details:profiles!public_rides_driver_id_fkey(*), client_details:profiles!public_rides_customer_id_fkey(*)`)
-        .eq(queryField, userId)
+        .or(`customer_id.eq.${userId},driver_id.eq.${userId}`)
         .order('created_at', { ascending: false })
-        .limit(5);
+        .limit(3);
+
+      if (error) throw error;
 
       if (ridesData && ridesData.length > 0) {
-          // 1. Procura primeiro por corridas em andamento
+          // Prioridade 1: Corridas ativas
           let targetRide = ridesData.find(r => ['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(r.status));
           
-          // 2. Se não houver em andamento, procura por COMPLETED que ainda não foram avaliadas por ESTE usuário
+          // Prioridade 2: Corridas finalizadas recentemente para avaliação
           if (!targetRide) {
               const mostRecent = ridesData[0];
               if (!dismissedRidesRef.current.includes(mostRecent.id)) {
                   if (mostRecent.status === 'COMPLETED') {
-                      // Se eu sou motorista, verifico customer_rating (dada pelo passageiro, mas aqui no contexto de 'ainda aparecer' para o motorista, ele avalia o passageiro)
-                      // IMPORTANTE: isDriver avalia o passageiro, isClient avalia o motorista.
                       const hasRated = role === 'driver' ? !!mostRecent.customer_rating : !!mostRecent.driver_rating;
                       if (!hasRated) targetRide = mostRecent;
                   } else if (mostRecent.status === 'CANCELLED') {
                       const rideAgeMinutes = (new Date().getTime() - new Date(mostRecent.created_at).getTime()) / 60000;
-                      if (rideAgeMinutes <= 5) {
-                          targetRide = mostRecent;
-                      }
+                      if (rideAgeMinutes <= 2) targetRide = mostRecent;
                   }
               }
           }
 
           if (targetRide) {
-              if (targetRide.ride_type === 'MANUAL' && targetRide.guest_name) {
-                  targetRide.client_details = { first_name: targetRide.guest_name, last_name: '', phone: targetRide.guest_phone, avatar_url: null };
-              }
               setRide(targetRide);
               return;
           }
       }
       
       setRide(null);
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error("Erro ao buscar corrida ativa:", err); }
   };
 
   const fetchAvailableRides = async (shouldPlaySound = false) => {
@@ -155,14 +149,13 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
                   client_details: profilesData?.find(p => p.id === r.customer_id) || { first_name: 'Passageiro' }
               })).filter(r => !rejectedIdsRef.current.includes(r.id));
 
-              if (shouldPlaySound) {
+              if (shouldPlaySound && validRides.length > 0) {
                   const hasNewRide = validRides.some(r => !alertedRideIds.current.has(r.id));
                   if (hasNewRide) {
                       validRides.forEach(r => alertedRideIds.current.add(r.id));
                       playNotification();
                   }
               }
-              
               setAvailableRides(validRides);
           } else { 
               setAvailableRides([]); 
@@ -170,12 +163,8 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       } catch (err) { console.error("Erro ao buscar corridas disponíveis:", err); }
   };
 
-  const refreshAvailableRides = async () => {
-      await fetchAvailableRides(false);
-  };
-
   useEffect(() => {
-    const channel = supabase.channel('ride_updates')
+    const channel = supabase.channel('ride_updates_global')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rides' }, async (payload) => {
             const uid = currentUserIdRef.current;
             if (!uid) return;
@@ -183,16 +172,17 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
             const newRecord = payload.new as any;
             const oldRecord = payload.old as any;
 
-            if (userRoleRef.current === 'driver') {
-                if (newRecord.status === 'SEARCHING' && !newRecord.driver_id) {
-                    await fetchAvailableRides(true);
-                } else {
-                    setAvailableRides(prev => prev.filter(r => r.id !== (newRecord.id || oldRecord?.id)));
-                }
+            // Se eu sou motorista e tem uma nova busca
+            if (userRoleRef.current === 'driver' && newRecord.status === 'SEARCHING' && !newRecord.driver_id) {
+                await fetchAvailableRides(true);
             }
 
-            if (newRecord?.customer_id === uid || newRecord?.driver_id === uid || oldRecord?.customer_id === uid || oldRecord?.driver_id === uid) {
-                await fetchActiveRide(uid);
+            // Se a mudança envolve minha corrida (sou passageiro ou motorista nela)
+            const involvesMe = newRecord?.customer_id === uid || newRecord?.driver_id === uid || oldRecord?.customer_id === uid || oldRecord?.driver_id === uid;
+            
+            if (involvesMe) {
+                // Pequeno delay para garantir que o banco persistiu os joins se necessário
+                setTimeout(() => fetchActiveRide(uid), 500);
             }
       }).subscribe();
 
@@ -211,28 +201,27 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
                 userRoleRef.current = data.role as any; 
             }
             await fetchActiveRide(session.user.id);
-            if (userRoleRef.current === 'driver') {
-                await fetchAvailableRides(false);
-            }
+            if (userRoleRef.current === 'driver') await fetchAvailableRides(false);
         }
+        setLoading(false);
     };
     init();
   }, []);
 
+  // Polling de segurança (mais rápido agora para evitar "vácuos" de sincronia)
   useEffect(() => {
       let interval: any;
       if (currentUserId) {
           interval = setInterval(() => {
               fetchActiveRide(currentUserId);
-              if (userRoleRef.current === 'driver') fetchAvailableRides(true);
-          }, 4000);
+              if (userRoleRef.current === 'driver') fetchAvailableRides(false);
+          }, 3000);
       }
       return () => clearInterval(interval);
   }, [currentUserId]);
 
   const requestRide = async (pickup: string, destination: string, pickupCoords: any, destCoords: any, price: number, distance: string, category: string, paymentMethod: string): Promise<boolean> => {
-    const { data: { session } } = await supabase.auth.getSession();
-    const userId = session?.user?.id;
+    const userId = currentUserIdRef.current;
     if (!userId) return false;
     try {
       const { data, error } = await supabase.from('rides').insert({
@@ -259,8 +248,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const createManualRide = async (passengerName: string, passengerPhone: string, pickup: string, destination: string, pickupCoords: any, destCoords: any, price: number, distance: string, category: string) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id;
+      const userId = currentUserIdRef.current;
       if (!userId) return;
       try {
           const { data, error } = await supabase.from('rides').insert({
@@ -297,13 +285,22 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const acceptRide = async (rideId: string) => {
-     if (!currentUserId) return;
+     const uid = currentUserIdRef.current;
+     if (!uid) return;
      try {
-         const { data, error } = await supabase.from('rides').update({ status: 'ACCEPTED', driver_id: currentUserId }).eq('id', rideId).is('driver_id', null).select();
-         if (error || !data?.length) { toast({ title: "Corrida já aceita por outro motorista." }); return; }
-         setAvailableRides(prev => prev.filter(r => r.id !== rideId));
-         await fetchActiveRide(currentUserId);
-     } catch (e) { toast({ title: "Erro ao aceitar" }); }
+         const { data, error } = await supabase.from('rides')
+            .update({ status: 'ACCEPTED', driver_id: uid })
+            .eq('id', rideId)
+            .is('driver_id', null)
+            .select();
+            
+         if (error || !data?.length) { 
+             toast({ title: "Esta corrida já foi aceita por outro motorista." }); 
+             setAvailableRides(prev => prev.filter(r => r.id !== rideId));
+             return; 
+         }
+         await fetchActiveRide(uid);
+     } catch (e) { toast({ title: "Erro ao aceitar corrida." }); }
   };
 
   const rejectRide = async (rideId: string) => {
@@ -318,18 +315,15 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   const rateRide = async (rideId: string, rating: number, isDriver: boolean, comment?: string) => {
       const updateData = isDriver ? { customer_rating: rating } : { driver_rating: rating, review_comment: comment };
       await supabase.from('rides').update(updateData).eq('id', rideId);
-      
-      // Só remove do estado após a avaliação ser salva com sucesso
-      if (!dismissedRidesRef.current.includes(rideId)) {
-          dismissedRidesRef.current.push(rideId);
-      }
+      if (!dismissedRidesRef.current.includes(rideId)) dismissedRidesRef.current.push(rideId);
       setRide(null);
   };
 
   const addBalance = async (amount: number) => {
-      if(!currentUserId) return;
-      const { data } = await supabase.from('profiles').select('balance').eq('id', currentUserId).single();
-      await supabase.from('profiles').update({ balance: (data?.balance || 0) + amount }).eq('id', currentUserId);
+      const uid = currentUserIdRef.current;
+      if(!uid) return;
+      const { data } = await supabase.from('profiles').select('balance').eq('id', uid).single();
+      await supabase.from('profiles').update({ balance: (data?.balance || 0) + amount }).eq('id', uid);
   };
 
   const clearRide = () => { 

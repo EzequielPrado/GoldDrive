@@ -108,17 +108,15 @@ const ClientDashboard = () => {
 
   // Lógica principal de navegação de estados baseada na corrida
   useEffect(() => {
-    if (rideLoading || isInitialSync || isRequesting) return;
+    if (rideLoading || isInitialSync) return;
 
     if (ride) {
       if (ride.status === 'CANCELLED') {
           setStep('cancelled');
       } else if (ride.status === 'COMPLETED') {
-        // Se a corrida está completa mas não foi avaliada pelo passageiro (driver_rating é a nota pro motorista)
         if (!ride.driver_rating) {
             setStep('rating');
         } else {
-            // Se já avaliou, volta pra busca
             clearRide();
             setStep('search');
         }
@@ -128,7 +126,7 @@ const ClientDashboard = () => {
       }
     } else {
       // Se não tem corrida nenhuma e estamos num estado de "espera", volta pra busca
-      if (step === 'waiting' || step === 'rating' || step === 'cancelled') {
+      if (!isRequesting && (step === 'waiting' || step === 'rating' || step === 'cancelled')) {
           setStep('search');
       }
     }
@@ -208,7 +206,7 @@ const ClientDashboard = () => {
       setGpsLoading(true);
       navigator.geolocation.getCurrentPosition(async (pos) => {
           const geocoder = new google.maps.Geocoder();
-          geocoder.geocode({ location: { lat: pos.coords.latitude, lng: pos.coords.longitude } }, (results, status) => {
+          geocoder.geocode({ location: { lat: pos.coords.latitude, lon: pos.coords.longitude } }, (results, status) => {
               if (status === 'OK' && results?.[0]) {
                   setPickupLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude, display_name: results[0].formatted_address });
                   showSuccess("Sua localização atualizada!");
@@ -322,9 +320,9 @@ const ClientDashboard = () => {
                     </div>
                 )}
 
-                {step === 'waiting' && (
+                {(step === 'waiting' || isRequesting) && (
                      <div className="bg-white p-6 rounded-[32px] shadow-2xl border border-gray-100 flex flex-col gap-6 animate-in zoom-in-95 duration-300">
-                         {(ride?.status === 'SEARCHING') ? (
+                         {(ride?.status === 'SEARCHING' || isRequesting) ? (
                              <div className="py-8 text-center">
                                  <div className="relative w-24 h-24 mx-auto mb-6">
                                     <div className="absolute inset-0 bg-yellow-500 rounded-full animate-ping opacity-20" />
