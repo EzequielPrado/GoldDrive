@@ -109,7 +109,8 @@ const DriverDashboard = () => {
               supabase.from('pricing_tiers').select('*').order('max_distance', { ascending: true })
           ]);
           if (catsRes.data) {
-              const filtered = catsRes.data.filter(c => !c.name.toLowerCase().includes('promo'));
+              // Removido o filtro que ocultava 'promo'
+              const filtered = catsRes.data; 
               setCategories(filtered);
           }
           if (tiersRes.data) setPricingTiers(tiersRes.data);
@@ -502,6 +503,3 @@ const DriverDashboard = () => {
       {showChat && ride && currentUserId && (<RideChat rideId={ride.id} currentUserId={currentUserId} role="driver" otherUserName={ride.client_details?.first_name || 'Passageiro'} otherUserAvatar={ride.client_details?.avatar_url} onClose={() => setShowChat(false)} />)}
     </div>
   );
-};
-
-export default DriverDashboard;

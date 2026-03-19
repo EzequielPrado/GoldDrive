@@ -86,7 +86,8 @@ const ClientDashboard = () => {
             ]);
             
             if (catsRes.data) {
-                const filtered = catsRes.data.filter(c => !c.name.toLowerCase().includes('promo'));
+                // Removido o filtro que ocultava 'promo'
+                const filtered = catsRes.data; 
                 setCategories(filtered); 
                 if (filtered.length > 0) setSelectedCategoryId(filtered[0].id);
             }
