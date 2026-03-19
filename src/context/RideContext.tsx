@@ -43,7 +43,8 @@ interface RideContextType {
 
 const RideContext = createContext<RideContextType | undefined>(undefined);
 
-const NOTIFICATION_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
+// NOVO SOM: Mais alto e nítido para motoristas
+const NOTIFICATION_SOUND = "https://assets.mixkit.co/active_storage/sfx/2530/2530-preview.mp3";
 
 export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   const [ride, setRide] = useState<any | null>(null);
@@ -54,11 +55,12 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   
   const userRoleRef = useRef(userRole);
   const currentUserIdRef = useRef(currentUserId);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   
-  // Lista de corridas rejeitadas ou fechadas nesta sessão
+  // Lista de IDs que já tocaram som nesta sessão para não repetir a mesma corrida
+  const alertedRideIds = useRef<Set<string>>(new Set());
   const dismissedRidesRef = useRef<string[]>([]);
   const rejectedIdsRef = useRef<string[]>([]);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   
   const { toast } = useToast();
 
@@ -67,17 +69,16 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       currentUserIdRef.current = currentUserId;
       if (!audioRef.current) {
           audioRef.current = new Audio(NOTIFICATION_SOUND);
+          audioRef.current.load(); // Pré-carrega o som
       }
   }, [userRole, currentUserId]);
 
-  useEffect(() => {
-    const forceStopLoading = setTimeout(() => setLoading(false), 1000);
-    return () => clearTimeout(forceStopLoading);
-  }, []);
-
   const playNotification = () => {
       if (audioRef.current) {
-          audioRef.current.play().catch(e => console.log("Áudio bloqueado pelo navegador", e));
+          audioRef.current.currentTime = 0; // Reinicia se já estiver tocando
+          audioRef.current.play().catch(e => {
+              console.warn("Som bloqueado pelo navegador. Clique na tela para habilitar.");
+          });
       }
   };
 
@@ -155,22 +156,26 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
                   ...r,
                   client_details: profilesData?.find(p => p.id === r.customer_id) || { first_name: 'Passageiro' }
               })).filter(r => {
-                  // Filtra apenas se o motorista ignorou manualmente nesta sessão
                   if (rejectedIdsRef.current.includes(r.id)) return false;
                   return true;
               });
+
+              // Lógica de Som: Se houver qualquer corrida NOVA que o motorista ainda não foi alertado
+              if (shouldPlaySound) {
+                  const hasNewRide = validRides.some(r => !alertedRideIds.current.has(r.id));
+                  if (hasNewRide) {
+                      validRides.forEach(r => alertedRideIds.current.add(r.id));
+                      playNotification();
+                  }
+              }
               
-              setAvailableRides(prev => {
-                  if (shouldPlaySound && validRides.length > prev.length) playNotification();
-                  return validRides;
-              });
+              setAvailableRides(validRides);
           } else { 
               setAvailableRides([]); 
           }
       } catch (err) { console.error("Erro ao buscar corridas disponíveis:", err); }
   };
 
-  // Função exportada para forçar o Refresh
   const refreshAvailableRides = async () => {
       await fetchAvailableRides(false);
   };
@@ -206,13 +211,11 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
         if (session?.user) {
             setCurrentUserId(session.user.id);
             currentUserIdRef.current = session.user.id;
-            
             const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
             if (data) {
                 setUserRole(data.role as any);
                 userRoleRef.current = data.role as any; 
             }
-
             await fetchActiveRide(session.user.id);
             if (userRoleRef.current === 'driver') {
                 await fetchAvailableRides(false);
@@ -222,13 +225,12 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
     init();
   }, []);
 
-  // Polling agressivo a cada 3 segundos
   useEffect(() => {
       let interval: any;
       if (currentUserId) {
           interval = setInterval(() => {
               fetchActiveRide(currentUserId);
-              if (userRoleRef.current === 'driver') fetchAvailableRides(false);
+              if (userRoleRef.current === 'driver') fetchAvailableRides(true); // Ativa som no polling também
           }, 3000);
       }
       return () => clearInterval(interval);
@@ -238,7 +240,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
     const { data: { session } } = await supabase.auth.getSession();
     const userId = session?.user?.id;
     if (!userId) return false;
-
     try {
       const { data, error } = await supabase.from('rides').insert({
           customer_id: userId, 
@@ -254,7 +255,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           category, 
           payment_method: paymentMethod
       }).select().single();
-      
       if (error) throw error;
       setRide(data);
       return true;
@@ -268,7 +268,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
       if (!userId) return;
-
       try {
           const { data, error } = await supabase.from('rides').insert({
               customer_id: userId, 
@@ -288,7 +287,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
               guest_name: passengerName, 
               driver_earnings: price
           }).select().single();
-          
           if (error) throw error;
           setRide(data);
       } catch (e: any) { 
