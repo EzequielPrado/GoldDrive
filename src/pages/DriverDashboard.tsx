@@ -109,7 +109,6 @@ const DriverDashboard = () => {
               supabase.from('pricing_tiers').select('*').order('max_distance', { ascending: true })
           ]);
           if (catsRes.data) {
-              // Removido o filtro que ocultava 'promo'
               const filtered = catsRes.data; 
               setCategories(filtered);
           }
@@ -143,19 +142,16 @@ const DriverDashboard = () => {
   const calculatePrice = useCallback(() => {
       if (routeDistance <= 0 || categories.length === 0) return 0;
       
-      // Busca a categoria padrão "Gold Driver" ou a primeira disponível que não seja promo
       const category = categories.find(c => c.name === 'Gold Driver') || categories.find(c => c.name.toLowerCase().includes('go')) || categories[0];
       
       if (!category) return 15;
 
       let price = 0;
       
-      // Se for Gold Driver, usa a tabela de faixas (pricing_tiers)
       if (category.name === 'Gold Driver' && pricingTiers.length > 0) {
           const tier = pricingTiers.find(t => routeDistance <= Number(t.max_distance)) || pricingTiers[pricingTiers.length - 1];
           price = Number(tier?.price || 15);
       } else {
-          // Lógica padrão: Base + KM
           if (routeDistance < 1) {
               price = Number(category.min_fare);
           } else {
@@ -503,3 +499,6 @@ const DriverDashboard = () => {
       {showChat && ride && currentUserId && (<RideChat rideId={ride.id} currentUserId={currentUserId} role="driver" otherUserName={ride.client_details?.first_name || 'Passageiro'} otherUserAvatar={ride.client_details?.avatar_url} onClose={() => setShowChat(false)} />)}
     </div>
   );
+};
+
+export default DriverDashboard;
