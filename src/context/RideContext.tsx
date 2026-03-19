@@ -43,7 +43,6 @@ interface RideContextType {
 
 const RideContext = createContext<RideContextType | undefined>(undefined);
 
-// NOVO SOM: Mais alto e nítido para motoristas
 const NOTIFICATION_SOUND = "https://assets.mixkit.co/active_storage/sfx/2530/2530-preview.mp3";
 
 export const RideProvider = ({ children }: { children: React.ReactNode }) => {
@@ -57,7 +56,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   const currentUserIdRef = useRef(currentUserId);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   
-  // Lista de IDs que já tocaram som nesta sessão para não repetir a mesma corrida
   const alertedRideIds = useRef<Set<string>>(new Set());
   const dismissedRidesRef = useRef<string[]>([]);
   const rejectedIdsRef = useRef<string[]>([]);
@@ -69,16 +67,14 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       currentUserIdRef.current = currentUserId;
       if (!audioRef.current) {
           audioRef.current = new Audio(NOTIFICATION_SOUND);
-          audioRef.current.load(); // Pré-carrega o som
+          audioRef.current.load();
       }
   }, [userRole, currentUserId]);
 
   const playNotification = () => {
       if (audioRef.current) {
-          audioRef.current.currentTime = 0; // Reinicia se já estiver tocando
-          audioRef.current.play().catch(e => {
-              console.warn("Som bloqueado pelo navegador. Clique na tela para habilitar.");
-          });
+          audioRef.current.currentTime = 0;
+          audioRef.current.play().catch(() => {});
       }
   };
 
@@ -102,20 +98,22 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
         .limit(5);
 
       if (ridesData && ridesData.length > 0) {
+          // 1. Procura primeiro por corridas em andamento
           let targetRide = ridesData.find(r => ['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(r.status));
           
+          // 2. Se não houver em andamento, procura por COMPLETED que ainda não foram avaliadas por ESTE usuário
           if (!targetRide) {
               const mostRecent = ridesData[0];
               if (!dismissedRidesRef.current.includes(mostRecent.id)) {
                   if (mostRecent.status === 'COMPLETED') {
+                      // Se eu sou motorista, verifico customer_rating (dada pelo passageiro, mas aqui no contexto de 'ainda aparecer' para o motorista, ele avalia o passageiro)
+                      // IMPORTANTE: isDriver avalia o passageiro, isClient avalia o motorista.
                       const hasRated = role === 'driver' ? !!mostRecent.customer_rating : !!mostRecent.driver_rating;
                       if (!hasRated) targetRide = mostRecent;
                   } else if (mostRecent.status === 'CANCELLED') {
                       const rideAgeMinutes = (new Date().getTime() - new Date(mostRecent.created_at).getTime()) / 60000;
                       if (rideAgeMinutes <= 5) {
                           targetRide = mostRecent;
-                      } else {
-                          if (!dismissedRidesRef.current.includes(mostRecent.id)) dismissedRidesRef.current.push(mostRecent.id);
                       }
                   }
               }
@@ -155,12 +153,8 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
               const validRides = ridesData.map(r => ({
                   ...r,
                   client_details: profilesData?.find(p => p.id === r.customer_id) || { first_name: 'Passageiro' }
-              })).filter(r => {
-                  if (rejectedIdsRef.current.includes(r.id)) return false;
-                  return true;
-              });
+              })).filter(r => !rejectedIdsRef.current.includes(r.id));
 
-              // Lógica de Som: Se houver qualquer corrida NOVA que o motorista ainda não foi alertado
               if (shouldPlaySound) {
                   const hasNewRide = validRides.some(r => !alertedRideIds.current.has(r.id));
                   if (hasNewRide) {
@@ -230,8 +224,8 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       if (currentUserId) {
           interval = setInterval(() => {
               fetchActiveRide(currentUserId);
-              if (userRoleRef.current === 'driver') fetchAvailableRides(true); // Ativa som no polling também
-          }, 3000);
+              if (userRoleRef.current === 'driver') fetchAvailableRides(true);
+          }, 4000);
       }
       return () => clearInterval(interval);
   }, [currentUserId]);
@@ -324,7 +318,12 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   const rateRide = async (rideId: string, rating: number, isDriver: boolean, comment?: string) => {
       const updateData = isDriver ? { customer_rating: rating } : { driver_rating: rating, review_comment: comment };
       await supabase.from('rides').update(updateData).eq('id', rideId);
-      clearRide();
+      
+      // Só remove do estado após a avaliação ser salva com sucesso
+      if (!dismissedRidesRef.current.includes(rideId)) {
+          dismissedRidesRef.current.push(rideId);
+      }
+      setRide(null);
   };
 
   const addBalance = async (amount: number) => {

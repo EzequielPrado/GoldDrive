@@ -106,22 +106,29 @@ const ClientDashboard = () => {
     }
   }, [activeTab, userProfile?.id]);
 
+  // Lógica principal de navegação de estados baseada na corrida
   useEffect(() => {
     if (rideLoading || isInitialSync || isRequesting) return;
+
     if (ride) {
       if (ride.status === 'CANCELLED') {
           setStep('cancelled');
       } else if (ride.status === 'COMPLETED') {
-        if (!ride.driver_rating) setStep('rating');
-        else {
+        // Se a corrida está completa mas não foi avaliada pelo passageiro (driver_rating é a nota pro motorista)
+        if (!ride.driver_rating) {
+            setStep('rating');
+        } else {
+            // Se já avaliou, volta pra busca
             clearRide();
             setStep('search');
         }
       } else {
+        // Corridas ativas (Searching, Accepted, Arrived, In Progress)
         setStep('waiting');
       }
     } else {
-      if (step !== 'search' && step !== 'confirm') {
+      // Se não tem corrida nenhuma e estamos num estado de "espera", volta pra busca
+      if (step === 'waiting' || step === 'rating' || step === 'cancelled') {
           setStep('search');
       }
     }
@@ -223,7 +230,6 @@ const ClientDashboard = () => {
   }
 
   const showRouteOnMap = step === 'confirm' || step === 'waiting';
-  // Extrai a localização em tempo real do motorista do objeto de corrida
   const driverLiveLocation = ride?.driver_details?.current_lat ? { lat: ride.driver_details.current_lat, lon: ride.driver_details.current_lng } : null;
 
   return (
@@ -316,9 +322,9 @@ const ClientDashboard = () => {
                     </div>
                 )}
 
-                {(step === 'waiting' || isRequesting) && (
+                {step === 'waiting' && (
                      <div className="bg-white p-6 rounded-[32px] shadow-2xl border border-gray-100 flex flex-col gap-6 animate-in zoom-in-95 duration-300">
-                         {(ride?.status === 'SEARCHING' || isRequesting) ? (
+                         {(ride?.status === 'SEARCHING') ? (
                              <div className="py-8 text-center">
                                  <div className="relative w-24 h-24 mx-auto mb-6">
                                     <div className="absolute inset-0 bg-yellow-500 rounded-full animate-ping opacity-20" />
@@ -354,7 +360,7 @@ const ClientDashboard = () => {
                         <h2 className="text-3xl font-black text-slate-900 mb-2">Você Chegou!</h2>
                         <p className="text-gray-500 mb-8">Avalie sua experiência com o motorista:</p>
                         <div className="flex justify-center gap-3 mb-8">{[1,2,3,4,5].map(star => (<button key={star} onClick={() => setRating(star)} className="transition-transform active:scale-90"><Star className={`w-10 h-10 ${rating >= star ? 'fill-yellow-500 text-yellow-500' : 'text-gray-200'}`} /></button>))}</div>
-                        <Button className="w-full h-14 bg-black text-white font-bold rounded-2xl shadow-xl" onClick={async () => { if (ride) await rateRide(ride.id, rating || 5, false); clearRide(); setStep('search'); }}>Finalizar e Voltar</Button>
+                        <Button className="w-full h-14 bg-black text-white font-bold rounded-2xl shadow-xl" onClick={async () => { if (ride) await rateRide(ride.id, rating || 5, false); setStep('search'); }}>Finalizar e Voltar</Button>
                     </div>
                 )}
                 
