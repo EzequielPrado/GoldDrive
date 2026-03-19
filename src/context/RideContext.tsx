@@ -166,11 +166,12 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
                   ...r,
                   client_details: profilesData?.find(p => p.id === r.customer_id) || { first_name: 'Passageiro' }
               })).filter(r => {
+                  // AQUI FOI REMOVIDA A TRAVA DE CUSTOMER_ID PARA PERMITIR TESTES!
                   // Ignora se o motorista rejeitou nesta sessão ou no BD
                   if (rejectedIdsRef.current.includes(r.id)) return false;
                   if (r.rejected_by && Array.isArray(r.rejected_by) && r.rejected_by.includes(uid)) return false;
                   
-                  // Validação de regras (Ano do carro) - Apenas se estiver configurado
+                  // Validação de regras (Ano do carro)
                   try {
                       const rule = rules[r.category];
                       if (rule && driverYear > 0) {
