@@ -54,11 +54,9 @@ const DriverDashboard = () => {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [trackingActive, setTrackingActive] = useState(false);
   
-  // Localização para Google Maps
   const [pickupCoord, setPickupCoord] = useState<{lat: number, lon: number} | null>(null);
   const [destCoord, setDestCoord] = useState<{lat: number, lon: number} | null>(null);
 
-  // Estados para Corrida Manual
   const [passengerName, setPassengerName] = useState("");
   const [pickupLocation, setPickupLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
   const [destLocation, setDestLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
@@ -67,7 +65,6 @@ const DriverDashboard = () => {
   const [categories, setCategories] = useState<any[]>([]);
   const [pricingTiers, setPricingTiers] = useState<any[]>([]);
 
-  // TRACKING: Envia localização a cada 5 segundos
   useEffect(() => {
     if (!isOnline || !currentUserId) {
         setTrackingActive(false);
@@ -237,17 +234,26 @@ const DriverDashboard = () => {
       setGpsLoading(true);
       navigator.geolocation.getCurrentPosition(async (pos) => {
           const geocoder = new google.maps.Geocoder();
-          geocoder.geocode({ location: { lat: pos.coords.latitude, lon: pos.coords.longitude } }, (results, status) => {
+          // CORREÇÃO: Google espera 'lng' e não 'lon'
+          geocoder.geocode({ 
+              location: { lat: pos.coords.latitude, lng: pos.coords.longitude } 
+          }, (results, status) => {
               if (status === 'OK' && results?.[0]) {
-                  setPickupLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude, display_name: results[0].formatted_address });
+                  setPickupLocation({ 
+                      lat: pos.coords.latitude, 
+                      lon: pos.coords.longitude, 
+                      display_name: results[0].formatted_address 
+                  });
                   showSuccess("Sua localização atualizada!");
+              } else {
+                  showError("Não foi possível identificar o endereço.");
               }
               setGpsLoading(false);
           });
-      }, () => { 
+      }, (error) => { 
           setGpsLoading(false); 
           showError("Ative o GPS do celular."); 
-      });
+      }, { enableHighAccuracy: true, timeout: 5000 });
   };
 
   const isOnTrip = !!ride && ['ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(ride?.status || '');

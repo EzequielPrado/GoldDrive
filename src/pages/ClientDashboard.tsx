@@ -106,7 +106,6 @@ const ClientDashboard = () => {
     }
   }, [activeTab, userProfile?.id]);
 
-  // Lógica principal de navegação de estados baseada na corrida
   useEffect(() => {
     if (rideLoading || isInitialSync) return;
 
@@ -121,11 +120,9 @@ const ClientDashboard = () => {
             setStep('search');
         }
       } else {
-        // Corridas ativas (Searching, Accepted, Arrived, In Progress)
         setStep('waiting');
       }
     } else {
-      // Se não tem corrida nenhuma e estamos num estado de "espera", volta pra busca
       if (!isRequesting && (step === 'waiting' || step === 'rating' || step === 'cancelled')) {
           setStep('search');
       }
@@ -206,17 +203,27 @@ const ClientDashboard = () => {
       setGpsLoading(true);
       navigator.geolocation.getCurrentPosition(async (pos) => {
           const geocoder = new google.maps.Geocoder();
-          geocoder.geocode({ location: { lat: pos.coords.latitude, lon: pos.coords.longitude } }, (results, status) => {
+          // CORREÇÃO: Google espera 'lng' e não 'lon' para geocodificação reversa
+          geocoder.geocode({ 
+              location: { lat: pos.coords.latitude, lng: pos.coords.longitude } 
+          }, (results, status) => {
               if (status === 'OK' && results?.[0]) {
-                  setPickupLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude, display_name: results[0].formatted_address });
+                  setPickupLocation({ 
+                      lat: pos.coords.latitude, 
+                      lon: pos.coords.longitude, 
+                      display_name: results[0].formatted_address 
+                  });
                   showSuccess("Sua localização atualizada!");
+              } else {
+                  showError("Não foi possível identificar seu endereço.");
               }
               setGpsLoading(false);
           });
-      }, () => { 
+      }, (error) => { 
           setGpsLoading(false); 
-          showError("Ative o GPS do celular."); 
-      });
+          if (error.code === 1) showError("Permissão de localização negada.");
+          else showError("Erro ao obter GPS. Ative a localização.");
+      }, { enableHighAccuracy: true, timeout: 5000 });
   };
 
   if (isInitialSync) {
