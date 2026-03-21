@@ -64,6 +64,7 @@ const DriverDashboard = () => {
   const [manualLoading, setManualLoading] = useState(false);
   const [categories, setCategories] = useState<any[]>([]);
   const [pricingTiers, setPricingTiers] = useState<any[]>([]);
+  const [categoryRules, setCategoryRules] = useState<Record<string, any>>({});
 
   useEffect(() => {
     if (!isOnline || !currentUserId) {
@@ -126,12 +127,19 @@ const DriverDashboard = () => {
 
   useEffect(() => {
       const fetchPricing = async () => {
-          const [catsRes, tiersRes] = await Promise.all([
+          const [catsRes, tiersRes, adminConfigRes] = await Promise.all([
               supabase.from('car_categories').select('*').eq('active', true).order('base_fare', { ascending: true }),
-              supabase.from('pricing_tiers').select('*').order('max_distance', { ascending: true })
+              supabase.from('pricing_tiers').select('*').order('max_distance', { ascending: true }),
+              supabase.from('admin_config').select('*')
           ]);
           if (catsRes.data) setCategories(catsRes.data);
           if (tiersRes.data) setPricingTiers(tiersRes.data);
+          if (adminConfigRes.data) {
+              const rules = adminConfigRes.data.find((c: any) => c.key === 'category_rules');
+              if (rules && rules.value) {
+                  try { setCategoryRules(JSON.parse(rules.value)); } catch(e) {}
+              }
+          }
       };
       fetchPricing();
   }, []);
@@ -168,15 +176,48 @@ const DriverDashboard = () => {
           const tier = pricingTiers.find(t => routeDistance <= Number(t.max_distance)) || pricingTiers[pricingTiers.length - 1];
           price = Number(tier?.price || 15);
       } else {
+          const rules = categoryRules[category.name] || {};
+          let isNight = false;
+          
+          if (rules.night_start && rules.night_end) {
+              const currentHour = new Date().getHours();
+              const currentMinute = new Date().getMinutes();
+              const currentTime = currentHour + (currentMinute / 60);
+
+              const startParts = rules.night_start.split(':');
+              const endParts = rules.night_end.split(':');
+              const start = parseInt(startParts[0]) + parseInt(startParts[1]) / 60;
+              const end = parseInt(endParts[0]) + parseInt(endParts[1]) / 60;
+
+              if (start > end) { 
+                  isNight = currentTime >= start || currentTime <= end;
+              } else {
+                  isNight = currentTime >= start && currentTime <= end;
+              }
+          }
+
           if (routeDistance < 1) {
               price = Number(category.min_fare);
           } else {
-              price = Number(category.base_fare) + (routeDistance * Number(category.cost_per_km));
+              let appliedKmPrice = Number(category.cost_per_km);
+              price = Number(category.base_fare);
+              
+              if (isNight && rules.night_km) {
+                  appliedKmPrice = Number(rules.night_km);
+                  price += (routeDistance * appliedKmPrice);
+              } else {
+                  if (routeDistance > 4.5 && rules.km_over_45) {
+                      price += (4.5 * appliedKmPrice) + ((routeDistance - 4.5) * Number(rules.km_over_45));
+                  } else {
+                      price += (routeDistance * appliedKmPrice);
+                  }
+              }
+
               if (price < Number(category.min_fare)) price = Number(category.min_fare);
           }
       }
       return parseFloat(price.toFixed(2));
-  }, [categories, pricingTiers, routeDistance]);
+  }, [categories, pricingTiers, routeDistance, categoryRules]);
 
   const checkProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -234,7 +275,6 @@ const DriverDashboard = () => {
       setGpsLoading(true);
       navigator.geolocation.getCurrentPosition(async (pos) => {
           const geocoder = new google.maps.Geocoder();
-          // CORREÇÃO: Google espera 'lng' e não 'lon'
           geocoder.geocode({ 
               location: { lat: pos.coords.latitude, lng: pos.coords.longitude } 
           }, (results, status) => {

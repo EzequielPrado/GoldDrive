@@ -1,3 +1,4 @@
+4,5 e KM Noturno.">
 import React, { useEffect, useState } from "react";
 import { 
   LayoutDashboard, Users, Car, Settings, Wallet, 
@@ -39,7 +40,7 @@ const AdminDashboard = () => {
   
   // Configurações e Categorias (Taxas)
   const [carCategories, setCarCategories] = useState<any[]>([]);
-  const [categoryRules, setCategoryRules] = useState<Record<string, {min: string, max: string}>>({});
+  const [categoryRules, setCategoryRules] = useState<Record<string, any>>({});
   const [appSettings, setAppSettings] = useState({ enable_cash: true, enable_wallet: true });
   const [minCarYear, setMinCarYear] = useState("2010"); 
   const [savingYear, setSavingYear] = useState(false);
@@ -149,7 +150,7 @@ const AdminDashboard = () => {
       setCategoryRules(prev => ({
           ...prev,
           [catName]: {
-              ...(prev[catName] || { min: '', max: '' }),
+              ...(prev[catName] || {}),
               [field]: val
           }
       }));
@@ -416,7 +417,7 @@ const AdminDashboard = () => {
                       <Card className="rounded-[32px] border border-slate-100 shadow-xl overflow-hidden bg-white">
                           <CardHeader className="p-8 border-b border-slate-100 bg-slate-900 text-white">
                               <CardTitle className="text-2xl font-black">Taxas e Valores por Categoria</CardTitle>
-                              <CardDescription className="text-slate-400">Ajuste os valores cobrados e o ano permitido para cada tipo de veículo.</CardDescription>
+                              <CardDescription className="text-slate-400">Ajuste os valores cobrados, tarifas noturnas e de longas distâncias para cada veículo.</CardDescription>
                           </CardHeader>
                           <CardContent className="p-8 space-y-6">
                               {carCategories.map(cat => (
@@ -433,32 +434,68 @@ const AdminDashboard = () => {
                                               <p className="text-xs font-medium text-slate-500">{cat.description || 'Categoria Premium'}</p>
                                           </div>
                                       </div>
-                                      <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mt-6">
-                                          <div className="space-y-2 col-span-2 md:col-span-1">
-                                              <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Base (R$)</Label>
-                                              <Input type="number" step="0.01" value={cat.base_fare} onChange={e => handleCategoryChange(cat.id, 'base_fare', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-white border-slate-200" />
+                                      
+                                      <div className="mt-6 space-y-4">
+                                          {/* Preços Base */}
+                                          <div className="bg-white p-4 rounded-xl border border-slate-200">
+                                              <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Tarifas Padrão</h5>
+                                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                  <div className="space-y-2">
+                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Base (R$)</Label>
+                                                      <Input type="number" step="0.01" value={cat.base_fare} onChange={e => handleCategoryChange(cat.id, 'base_fare', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-white border-slate-200" />
+                                                  </div>
+                                                  <div className="space-y-2">
+                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">KM Normal (R$)</Label>
+                                                      <Input type="number" step="0.01" value={cat.cost_per_km} onChange={e => handleCategoryChange(cat.id, 'cost_per_km', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-white border-slate-200" />
+                                                  </div>
+                                                  <div className="space-y-2">
+                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Mínimo (R$)</Label>
+                                                      <Input type="number" step="0.01" value={cat.min_fare} onChange={e => handleCategoryChange(cat.id, 'min_fare', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-white border-slate-200" />
+                                                  </div>
+                                              </div>
                                           </div>
-                                          <div className="space-y-2 col-span-2 md:col-span-1">
-                                              <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">KM (R$)</Label>
-                                              <Input type="number" step="0.01" value={cat.cost_per_km} onChange={e => handleCategoryChange(cat.id, 'cost_per_km', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-white border-slate-200" />
+
+                                          {/* Tarifas Dinâmicas */}
+                                          <div className="bg-white p-4 rounded-xl border border-slate-200">
+                                              <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1"><Moon className="w-3 h-3" /> Tarifas Dinâmicas (Opcional)</h5>
+                                              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                                  <div className="space-y-2">
+                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">KM {'>'} 4,5km (R$)</Label>
+                                                      <Input type="number" step="0.01" value={categoryRules[cat.name]?.km_over_45 || ''} onChange={e => handleRuleChange(cat.name, 'km_over_45', e.target.value)} placeholder="Ex: 2.50" className="font-bold text-slate-900 h-12" />
+                                                  </div>
+                                                  <div className="space-y-2">
+                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">KM Noturno (R$)</Label>
+                                                      <Input type="number" step="0.01" value={categoryRules[cat.name]?.night_km || ''} onChange={e => handleRuleChange(cat.name, 'night_km', e.target.value)} placeholder="Ex: 3.00" className="font-bold text-slate-900 h-12" />
+                                                  </div>
+                                                  <div className="space-y-2">
+                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Início Noturno</Label>
+                                                      <Input type="time" value={categoryRules[cat.name]?.night_start || ''} onChange={e => handleRuleChange(cat.name, 'night_start', e.target.value)} className="font-bold text-slate-900 h-12" />
+                                                  </div>
+                                                  <div className="space-y-2">
+                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Fim Noturno</Label>
+                                                      <Input type="time" value={categoryRules[cat.name]?.night_end || ''} onChange={e => handleRuleChange(cat.name, 'night_end', e.target.value)} className="font-bold text-slate-900 h-12" />
+                                                  </div>
+                                              </div>
                                           </div>
-                                          <div className="space-y-2 col-span-2 md:col-span-1">
-                                              <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Mín. (R$)</Label>
-                                              <Input type="number" step="0.01" value={cat.min_fare} onChange={e => handleCategoryChange(cat.id, 'min_fare', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-white border-slate-200" />
+
+                                          {/* Restrições */}
+                                          <div className="bg-white p-4 rounded-xl border border-slate-200">
+                                              <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Restrições de Veículo</h5>
+                                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                  <div className="space-y-2">
+                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Ano Mín</Label>
+                                                      <Input type="number" value={categoryRules[cat.name]?.min || ''} onChange={e => handleRuleChange(cat.name, 'min', e.target.value)} placeholder="Ex: 2010" className="font-bold text-slate-900 h-12" />
+                                                  </div>
+                                                  <div className="space-y-2">
+                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Ano Máx</Label>
+                                                      <Input type="number" value={categoryRules[cat.name]?.max || ''} onChange={e => handleRuleChange(cat.name, 'max', e.target.value)} placeholder="Ex: 2016" className="font-bold text-slate-900 h-12" />
+                                                  </div>
+                                              </div>
                                           </div>
-                                          <div className="space-y-2">
-                                              <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Ano Mín</Label>
-                                              <Input type="number" value={categoryRules[cat.name]?.min || ''} onChange={e => handleRuleChange(cat.name, 'min', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-white border-slate-200 placeholder:text-slate-300" placeholder="Ex: 2010" />
-                                          </div>
-                                          <div className="space-y-2">
-                                              <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Ano Máx</Label>
-                                              <Input type="number" value={categoryRules[cat.name]?.max || ''} onChange={e => handleRuleChange(cat.name, 'max', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-white border-slate-200 placeholder:text-slate-300" placeholder="Ex: 2016" />
-                                          </div>
-                                          <div className="flex items-end col-span-2 md:col-span-1">
-                                              <Button onClick={() => handleSaveCategory(cat)} className="w-full bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl h-12 font-black shadow-md">
-                                                  SALVAR
-                                              </Button>
-                                          </div>
+
+                                          <Button onClick={() => handleSaveCategory(cat)} className="w-full bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl h-12 font-black shadow-md mt-2">
+                                              SALVAR CATEGORIA E REGRAS
+                                          </Button>
                                       </div>
                                   </div>
                               ))}

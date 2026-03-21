@@ -46,6 +46,7 @@ const ClientDashboard = () => {
   const [userProfile, setUserProfile] = useState<any>(null);
   const [pricingTiers, setPricingTiers] = useState<any[]>([]);
   const [appSettings, setAppSettings] = useState({ enableCash: true, enableWallet: true });
+  const [categoryRules, setCategoryRules] = useState<Record<string, any>>({});
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [rating, setRating] = useState(0);
 
@@ -69,21 +70,33 @@ const ClientDashboard = () => {
             }
             const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(); 
             if (profile) setUserProfile(profile); 
-            const [catsRes, tiersRes, settingsRes] = await Promise.all([
+            
+            const [catsRes, tiersRes, settingsRes, adminConfigRes] = await Promise.all([
                 supabase.from('car_categories').select('*').eq('active', true).order('base_fare', { ascending: true }),
                 supabase.from('pricing_tiers').select('*').order('max_distance', { ascending: true }),
-                supabase.from('app_settings').select('*')
+                supabase.from('app_settings').select('*'),
+                supabase.from('admin_config').select('*')
             ]);
+
             if (catsRes.data) {
                 setCategories(catsRes.data); 
                 if (catsRes.data.length > 0) setSelectedCategoryId(catsRes.data[0].id);
             }
             if (tiersRes.data) setPricingTiers(tiersRes.data);
+            
             if (settingsRes.data) {
                 const cash = settingsRes.data.find((s: any) => s.key === 'enable_cash');
                 const wallet = settingsRes.data.find((s: any) => s.key === 'enable_wallet');
                 setAppSettings({ enableCash: cash?.value ?? true, enableWallet: wallet?.value ?? true });
             }
+
+            if (adminConfigRes.data) {
+                const rules = adminConfigRes.data.find((c: any) => c.key === 'category_rules');
+                if (rules && rules.value) {
+                    try { setCategoryRules(JSON.parse(rules.value)); } catch(e) {}
+                }
+            }
+
             dataFetched.current = true;
             setIsInitialSync(false);
         } catch (error) { 
@@ -153,19 +166,53 @@ const ClientDashboard = () => {
       const category = categories.find(c => c.id === (catId || selectedCategoryId));
       if (!category || routeDistance <= 0) return 0;
       let price = 0;
-      if (category.name === 'Gold Driver') {
+      
+      if (category.name === 'Gold Driver' && pricingTiers.length > 0) {
           const tier = pricingTiers.find(t => routeDistance <= Number(t.max_distance)) || pricingTiers[pricingTiers.length - 1];
           price = Number(tier?.price || 15);
       } else {
+          const rules = categoryRules[category.name] || {};
+          let isNight = false;
+          
+          if (rules.night_start && rules.night_end) {
+              const currentHour = new Date().getHours();
+              const currentMinute = new Date().getMinutes();
+              const currentTime = currentHour + (currentMinute / 60);
+
+              const startParts = rules.night_start.split(':');
+              const endParts = rules.night_end.split(':');
+              const start = parseInt(startParts[0]) + parseInt(startParts[1]) / 60;
+              const end = parseInt(endParts[0]) + parseInt(endParts[1]) / 60;
+
+              if (start > end) { 
+                  isNight = currentTime >= start || currentTime <= end;
+              } else {
+                  isNight = currentTime >= start && currentTime <= end;
+              }
+          }
+
           if (routeDistance < 1) {
               price = Number(category.min_fare);
           } else {
-              price = Number(category.base_fare) + (routeDistance * Number(category.cost_per_km));
+              let appliedKmPrice = Number(category.cost_per_km);
+              price = Number(category.base_fare);
+              
+              if (isNight && rules.night_km) {
+                  appliedKmPrice = Number(rules.night_km);
+                  price += (routeDistance * appliedKmPrice);
+              } else {
+                  if (routeDistance > 4.5 && rules.km_over_45) {
+                      price += (4.5 * appliedKmPrice) + ((routeDistance - 4.5) * Number(rules.km_over_45));
+                  } else {
+                      price += (routeDistance * appliedKmPrice);
+                  }
+              }
+
               if (price < Number(category.min_fare)) price = Number(category.min_fare);
           }
       }
       return parseFloat(price.toFixed(2));
-  }, [categories, pricingTiers, routeDistance, selectedCategoryId]);
+  }, [categories, pricingTiers, routeDistance, selectedCategoryId, categoryRules]);
 
   const confirmRide = async () => {
     if (isRequesting || !pickupLocation || !destLocation || !selectedCategoryId) return;
@@ -203,7 +250,6 @@ const ClientDashboard = () => {
       setGpsLoading(true);
       navigator.geolocation.getCurrentPosition(async (pos) => {
           const geocoder = new google.maps.Geocoder();
-          // CORREÇÃO: Google espera 'lng' e não 'lon' para geocodificação reversa
           geocoder.geocode({ 
               location: { lat: pos.coords.latitude, lng: pos.coords.longitude } 
           }, (results, status) => {
