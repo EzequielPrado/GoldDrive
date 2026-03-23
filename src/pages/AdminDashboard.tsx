@@ -1,3 +1,4 @@
+10km) e ajustar design.">
 import React, { useEffect, useState } from "react";
 import { 
   LayoutDashboard, Users, Car, Settings, Wallet, 
@@ -8,7 +9,7 @@ import {
   Menu, Banknote, FileText, Check, X, ExternalLink, Camera, User,
   Moon as MoonIcon, List, Plus, Power, Pencil, Star, Calendar, ArrowUpRight, ArrowDownLeft,
   Activity, BarChart3, PieChart, Coins, Lock, Unlock, Calculator, Info, MapPin, Zap, XCircle,
-  Ban, Percent, Navigation, PlusCircle, UserPlus, Eye
+  Ban, Percent, Navigation, PlusCircle, UserPlus, Eye, Map
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -241,19 +242,19 @@ const AdminDashboard = () => {
              <span className="text-slate-900">Gold<span className="text-yellow-500">Admin</span></span>
          </div>
          <nav className="flex-1 px-4 py-8 space-y-2">
-             <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'overview' ? 'bg-yellow-500 text-black shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
+             <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'overview' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
                  <LayoutDashboard className="w-5 h-5" /> Painel Geral
              </button>
-             <button onClick={() => setActiveTab('requests')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'requests' ? 'bg-yellow-500 text-black shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
+             <button onClick={() => setActiveTab('requests')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'requests' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
                  <FileText className="w-5 h-5" /> Solicitações {stats.pendingDrivers > 0 && <Badge className="ml-auto bg-red-500 text-white">{stats.pendingDrivers}</Badge>}
              </button>
-             <button onClick={() => setActiveTab('rides')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'rides' ? 'bg-yellow-500 text-black shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
+             <button onClick={() => setActiveTab('rides')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'rides' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
                  <MapIcon className="w-5 h-5" /> Corridas
              </button>
-             <button onClick={() => setActiveTab('users')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'users' ? 'bg-yellow-500 text-black shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
+             <button onClick={() => setActiveTab('users')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'users' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
                  <Users className="w-5 h-5" /> Usuários
              </button>
-             <button onClick={() => setActiveTab('config')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'config' ? 'bg-yellow-500 text-black shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
+             <button onClick={() => setActiveTab('config')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'config' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
                  <Settings className="w-5 h-5" /> Taxas e Configurações
              </button>
          </nav>
@@ -362,8 +363,8 @@ const AdminDashboard = () => {
                   <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
                        <Tabs defaultValue="drivers">
                           <TabsList className="h-16 bg-white p-1 rounded-[20px] shadow-sm mb-6 border border-slate-100">
-                              <TabsTrigger value="drivers" className="px-8 font-black rounded-2xl h-full data-[state=active]:bg-yellow-500 data-[state=active]:text-black">Motoristas ({drivers.length})</TabsTrigger>
-                              <TabsTrigger value="clients" className="px-8 font-black rounded-2xl h-full data-[state=active]:bg-yellow-500 data-[state=active]:text-black">Passageiros ({passengers.length})</TabsTrigger>
+                              <TabsTrigger value="drivers" className="px-8 font-black rounded-2xl h-full data-[state=active]:bg-slate-900 data-[state=active]:text-white">Motoristas ({drivers.length})</TabsTrigger>
+                              <TabsTrigger value="clients" className="px-8 font-black rounded-2xl h-full data-[state=active]:bg-slate-900 data-[state=active]:text-white">Passageiros ({passengers.length})</TabsTrigger>
                           </TabsList>
                           <TabsContent value="drivers">
                               <Card className="rounded-[32px] border border-slate-100 shadow-xl overflow-hidden bg-white">
@@ -416,7 +417,10 @@ const AdminDashboard = () => {
                       <Card className="rounded-[32px] border border-slate-100 shadow-xl overflow-hidden bg-white">
                           <CardHeader className="p-8 border-b border-slate-100 bg-slate-900 text-white">
                               <CardTitle className="text-2xl font-black">Taxas e Valores por Categoria</CardTitle>
-                              <CardDescription className="text-slate-400">Ajuste os valores cobrados, tarifas noturnas e de longas distâncias para cada veículo.</CardDescription>
+                              <CardDescription className="text-slate-400">
+                                Cálculo do Preço = Valor Base + (Distância * KM). 
+                                Caso o valor fique menor, cobra-se o Valor Mínimo.
+                              </CardDescription>
                           </CardHeader>
                           <CardContent className="p-8 space-y-6">
                               {carCategories.map(cat => (
@@ -437,63 +441,59 @@ const AdminDashboard = () => {
                                       <div className="mt-6 space-y-4">
                                           {/* Preços Base */}
                                           <div className="bg-white p-4 rounded-xl border border-slate-200">
-                                              <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Tarifas Padrão</h5>
+                                              <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1"><Map className="w-3 h-3" /> Tarifas Principais</h5>
                                               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                                   <div className="space-y-2">
-                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Base (R$)</Label>
-                                                      <Input type="number" step="0.01" value={cat.base_fare} onChange={e => handleCategoryChange(cat.id, 'base_fare', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-slate-50 border-slate-200 focus:bg-white" />
+                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Valor Inicial/Base (R$)</Label>
+                                                      <Input type="number" step="0.01" value={cat.base_fare} onChange={e => handleCategoryChange(cat.id, 'base_fare', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
                                                   </div>
                                                   <div className="space-y-2">
-                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">KM Normal (R$)</Label>
-                                                      <Input type="number" step="0.01" value={cat.cost_per_km} onChange={e => handleCategoryChange(cat.id, 'cost_per_km', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-slate-50 border-slate-200 focus:bg-white" />
+                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">KM Padrão (R$)</Label>
+                                                      <Input type="number" step="0.01" value={cat.cost_per_km} onChange={e => handleCategoryChange(cat.id, 'cost_per_km', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
                                                   </div>
                                                   <div className="space-y-2">
-                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Mínimo (R$)</Label>
-                                                      <Input type="number" step="0.01" value={cat.min_fare} onChange={e => handleCategoryChange(cat.id, 'min_fare', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-slate-50 border-slate-200 focus:bg-white" />
+                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Corrida Mínima (R$)</Label>
+                                                      <Input type="number" step="0.01" value={cat.min_fare} onChange={e => handleCategoryChange(cat.id, 'min_fare', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
                                                   </div>
                                               </div>
                                           </div>
 
-                                          {/* Tarifas Dinâmicas */}
+                                          {/* Tarifas de Distância (Longo) */}
                                           <div className="bg-white p-4 rounded-xl border border-slate-200">
-                                              <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1"><Moon className="w-3 h-3" /> Tarifas Dinâmicas (Opcional)</h5>
-                                              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                                  <div className="space-y-2">
-                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">KM {'>'} 4,5km (R$)</Label>
-                                                      <Input type="number" step="0.01" value={categoryRules[cat.name]?.km_over_45 || ''} onChange={e => handleRuleChange(cat.name, 'km_over_45', e.target.value)} placeholder="Ex: 2.50" className="font-bold text-slate-900 h-12 bg-slate-50 border-slate-200 focus:bg-white" />
-                                                  </div>
-                                                  <div className="space-y-2">
-                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">KM Noturno (R$)</Label>
-                                                      <Input type="number" step="0.01" value={categoryRules[cat.name]?.night_km || ''} onChange={e => handleRuleChange(cat.name, 'night_km', e.target.value)} placeholder="Ex: 3.00" className="font-bold text-slate-900 h-12 bg-slate-50 border-slate-200 focus:bg-white" />
-                                                  </div>
-                                                  <div className="space-y-2">
-                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Início Noturno</Label>
-                                                      <Input type="time" value={categoryRules[cat.name]?.night_start || ''} onChange={e => handleRuleChange(cat.name, 'night_start', e.target.value)} className="font-bold text-slate-900 h-12 bg-slate-50 border-slate-200 focus:bg-white" />
-                                                  </div>
-                                                  <div className="space-y-2">
-                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Fim Noturno</Label>
-                                                      <Input type="time" value={categoryRules[cat.name]?.night_end || ''} onChange={e => handleRuleChange(cat.name, 'night_end', e.target.value)} className="font-bold text-slate-900 h-12 bg-slate-50 border-slate-200 focus:bg-white" />
-                                                  </div>
-                                              </div>
-                                          </div>
-
-                                          {/* Restrições */}
-                                          <div className="bg-white p-4 rounded-xl border border-slate-200">
-                                              <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Restrições de Veículo</h5>
+                                              <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Longas Distâncias (Opcional)</h5>
                                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                   <div className="space-y-2">
-                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Ano Mínimo</Label>
-                                                      <Input type="number" value={categoryRules[cat.name]?.min || ''} onChange={e => handleRuleChange(cat.name, 'min', e.target.value)} placeholder="Ex: 2010" className="font-bold text-slate-900 h-12 bg-slate-50 border-slate-200 focus:bg-white" />
+                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Valor do KM {'>'} 4,5km (R$)</Label>
+                                                      <Input type="number" step="0.01" value={categoryRules[cat.name]?.km_over_45 || ''} onChange={e => handleRuleChange(cat.name, 'km_over_45', e.target.value)} placeholder="Ex: 2.50" className="font-black text-slate-900 h-12 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
                                                   </div>
                                                   <div className="space-y-2">
-                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Ano Máximo</Label>
-                                                      <Input type="number" value={categoryRules[cat.name]?.max || ''} onChange={e => handleRuleChange(cat.name, 'max', e.target.value)} placeholder="Ex: 2016" className="font-bold text-slate-900 h-12 bg-slate-50 border-slate-200 focus:bg-white" />
+                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Valor do KM {'>'} 10km (Baixar preço) (R$)</Label>
+                                                      <Input type="number" step="0.01" value={categoryRules[cat.name]?.km_over_10 || ''} onChange={e => handleRuleChange(cat.name, 'km_over_10', e.target.value)} placeholder="Ex: 1.80" className="font-black text-slate-900 h-12 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+                                                  </div>
+                                              </div>
+                                          </div>
+
+                                          {/* Tarifas Noturnas */}
+                                          <div className="bg-white p-4 rounded-xl border border-slate-200">
+                                              <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1"><Moon className="w-3 h-3 text-slate-700" /> Tarifas Noturnas (Opcional)</h5>
+                                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                  <div className="space-y-2">
+                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Valor do KM Noturno (R$)</Label>
+                                                      <Input type="number" step="0.01" value={categoryRules[cat.name]?.night_km || ''} onChange={e => handleRuleChange(cat.name, 'night_km', e.target.value)} placeholder="Ex: 3.00" className="font-black text-slate-900 h-12 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+                                                  </div>
+                                                  <div className="space-y-2">
+                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Hora de Início (Ex: 22:00)</Label>
+                                                      <Input type="time" value={categoryRules[cat.name]?.night_start || ''} onChange={e => handleRuleChange(cat.name, 'night_start', e.target.value)} className="font-black text-slate-900 h-12 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+                                                  </div>
+                                                  <div className="space-y-2">
+                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Hora de Término (Ex: 06:00)</Label>
+                                                      <Input type="time" value={categoryRules[cat.name]?.night_end || ''} onChange={e => handleRuleChange(cat.name, 'night_end', e.target.value)} className="font-black text-slate-900 h-12 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
                                                   </div>
                                               </div>
                                           </div>
 
                                           <Button onClick={() => handleSaveCategory(cat)} className="w-full bg-slate-900 hover:bg-black text-white rounded-xl h-12 font-black shadow-md mt-2">
-                                              SALVAR CATEGORIA E REGRAS
+                                              SALVAR TAXAS DA CATEGORIA
                                           </Button>
                                       </div>
                                   </div>

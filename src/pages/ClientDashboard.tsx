@@ -165,6 +165,7 @@ const ClientDashboard = () => {
   const calculatePrice = useCallback((catId?: string) => {
       const category = categories.find(c => c.id === (catId || selectedCategoryId));
       if (!category || routeDistance <= 0) return 0;
+      
       let price = 0;
       
       if (category.name === 'Gold Driver' && pricingTiers.length > 0) {
@@ -191,24 +192,24 @@ const ClientDashboard = () => {
               }
           }
 
-          if (routeDistance < 1) {
-              price = Number(category.min_fare);
-          } else {
-              let appliedKmPrice = Number(category.cost_per_km);
-              price = Number(category.base_fare);
-              
-              if (isNight && rules.night_km) {
-                  appliedKmPrice = Number(rules.night_km);
-                  price += (routeDistance * appliedKmPrice);
-              } else {
-                  if (routeDistance > 4.5 && rules.km_over_45) {
-                      price += (4.5 * appliedKmPrice) + ((routeDistance - 4.5) * Number(rules.km_over_45));
-                  } else {
-                      price += (routeDistance * appliedKmPrice);
-                  }
-              }
+          let appliedKmPrice = Number(category.cost_per_km);
+          const baseFare = Number(category.base_fare);
+          
+          // Lógica de Tarifa por KM baseado na distância / horário
+          if (isNight && rules.night_km) {
+              appliedKmPrice = Number(rules.night_km);
+          } else if (routeDistance > 10 && rules.km_over_10) {
+              appliedKmPrice = Number(rules.km_over_10);
+          } else if (routeDistance > 4.5 && rules.km_over_45) {
+              appliedKmPrice = Number(rules.km_over_45);
+          }
 
-              if (price < Number(category.min_fare)) price = Number(category.min_fare);
+          // Preço Final = Base + (Distância * KM Aplicado)
+          price = baseFare + (routeDistance * appliedKmPrice);
+
+          // Verifica se o preço ficou menor que a corrida mínima
+          if (price < Number(category.min_fare)) {
+              price = Number(category.min_fare);
           }
       }
       return parseFloat(price.toFixed(2));
