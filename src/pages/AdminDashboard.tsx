@@ -241,19 +241,19 @@ const AdminDashboard = () => {
              <span className="text-slate-900">Gold<span className="text-yellow-500">Admin</span></span>
          </div>
          <nav className="flex-1 px-4 py-8 space-y-2">
-             <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'overview' ? 'bg-yellow-500 text-black shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
+             <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'overview' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
                  <LayoutDashboard className="w-5 h-5" /> Painel Geral
              </button>
-             <button onClick={() => setActiveTab('requests')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'requests' ? 'bg-yellow-500 text-black shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
+             <button onClick={() => setActiveTab('requests')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'requests' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
                  <FileText className="w-5 h-5" /> Solicitações {stats.pendingDrivers > 0 && <Badge className="ml-auto bg-red-500 text-white">{stats.pendingDrivers}</Badge>}
              </button>
-             <button onClick={() => setActiveTab('rides')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'rides' ? 'bg-yellow-500 text-black shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
+             <button onClick={() => setActiveTab('rides')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'rides' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
                  <MapIcon className="w-5 h-5" /> Corridas
              </button>
-             <button onClick={() => setActiveTab('users')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'users' ? 'bg-yellow-500 text-black shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
+             <button onClick={() => setActiveTab('users')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'users' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
                  <Users className="w-5 h-5" /> Usuários
              </button>
-             <button onClick={() => setActiveTab('config')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'config' ? 'bg-yellow-500 text-black shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
+             <button onClick={() => setActiveTab('config')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'config' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
                  <Settings className="w-5 h-5" /> Taxas e Configurações
              </button>
          </nav>
@@ -440,7 +440,7 @@ const AdminDashboard = () => {
                                       <div className="mt-6 space-y-4">
                                           {/* Preços Base */}
                                           <div className="bg-white p-4 rounded-xl border border-slate-200">
-                                              <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1"><Map className="w-3 h-3" /> Tarifas Principais</h5>
+                                              <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1"><MapIcon className="w-3 h-3" /> Tarifas Principais</h5>
                                               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                                   <div className="space-y-2">
                                                       <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Valor Inicial/Base (R$)</Label>
