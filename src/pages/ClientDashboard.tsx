@@ -195,13 +195,29 @@ const ClientDashboard = () => {
           let appliedKmPrice = Number(category.cost_per_km);
           const baseFare = Number(category.base_fare);
           
-          // Lógica de Tarifa por KM baseado na distância / horário
           if (isNight && rules.night_km) {
               appliedKmPrice = Number(rules.night_km);
-          } else if (routeDistance > 10 && rules.km_over_10) {
-              appliedKmPrice = Number(rules.km_over_10);
-          } else if (routeDistance > 4.5 && rules.km_over_45) {
-              appliedKmPrice = Number(rules.km_over_45);
+          } else {
+              // Lógica de Tarifas Dinâmicas (verificando a maior distância primeiro)
+              const dist1 = Number(rules.dist_1 || 4.5);
+              const price1 = rules.price_1 ? Number(rules.price_1) : (rules.km_over_45 ? Number(rules.km_over_45) : null);
+              
+              const dist2 = Number(rules.dist_2 || 10);
+              const price2 = rules.price_2 ? Number(rules.price_2) : (rules.km_over_10 ? Number(rules.km_over_10) : null);
+
+              let thresholds = [];
+              if (price1 !== null) thresholds.push({ dist: dist1, price: price1 });
+              if (price2 !== null) thresholds.push({ dist: dist2, price: price2 });
+              
+              // Ordena do maior KM para o menor, para sempre aplicar a regra mais alta alcançada
+              thresholds.sort((a, b) => b.dist - a.dist);
+
+              for (const t of thresholds) {
+                  if (routeDistance > t.dist) {
+                      appliedKmPrice = t.price;
+                      break;
+                  }
+              }
           }
 
           // Preço Final = Base + (Distância * KM Aplicado)

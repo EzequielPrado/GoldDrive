@@ -444,31 +444,52 @@ const AdminDashboard = () => {
                                               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                                   <div className="space-y-2">
                                                       <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Valor Inicial/Base (R$)</Label>
-                                                      <Input type="number" step="0.01" value={cat.base_fare} onChange={e => handleCategoryChange(cat.id, 'base_fare', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+                                                      <Input type="number" step="0.01" value={cat.base_fare} onChange={e => handleCategoryChange(cat.id, 'base_fare', e.target.value)} className="font-black text-slate-900 text-lg h-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
                                                   </div>
                                                   <div className="space-y-2">
                                                       <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">KM Padrão (R$)</Label>
-                                                      <Input type="number" step="0.01" value={cat.cost_per_km} onChange={e => handleCategoryChange(cat.id, 'cost_per_km', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+                                                      <Input type="number" step="0.01" value={cat.cost_per_km} onChange={e => handleCategoryChange(cat.id, 'cost_per_km', e.target.value)} className="font-black text-slate-900 text-lg h-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
                                                   </div>
                                                   <div className="space-y-2">
                                                       <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Corrida Mínima (R$)</Label>
-                                                      <Input type="number" step="0.01" value={cat.min_fare} onChange={e => handleCategoryChange(cat.id, 'min_fare', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+                                                      <Input type="number" step="0.01" value={cat.min_fare} onChange={e => handleCategoryChange(cat.id, 'min_fare', e.target.value)} className="font-black text-slate-900 text-lg h-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
                                                   </div>
                                               </div>
                                           </div>
 
-                                          {/* Tarifas de Distância (Longo) */}
+                                          {/* Tarifas de Distância Dinâmicas (Longo) */}
                                           <div className="bg-white p-4 rounded-xl border border-slate-200">
-                                              <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Longas Distâncias (Opcional)</h5>
+                                              <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Tarifas Dinâmicas por Distância (Opcional)</h5>
                                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                  <div className="space-y-2">
-                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Valor do KM {'>'} 4,5km (R$)</Label>
-                                                      <Input type="number" step="0.01" value={categoryRules[cat.name]?.km_over_45 || ''} onChange={e => handleRuleChange(cat.name, 'km_over_45', e.target.value)} placeholder="Ex: 2.50" className="font-black text-slate-900 h-12 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+                                                  
+                                                  <div className="space-y-2 border border-slate-100 bg-slate-50 p-3 rounded-xl">
+                                                      <Label className="text-[10px] font-bold text-slate-700 uppercase tracking-widest">Regra 1</Label>
+                                                      <div className="flex gap-2">
+                                                          <div className="flex-1 space-y-1">
+                                                              <Label className="text-[9px] text-slate-500 uppercase">A partir de (KM)</Label>
+                                                              <Input type="number" step="0.1" value={categoryRules[cat.name]?.dist_1 || ''} onChange={e => handleRuleChange(cat.name, 'dist_1', e.target.value)} placeholder="Ex: 4.5" className="font-black text-slate-900 h-10 bg-white" />
+                                                          </div>
+                                                          <div className="flex-1 space-y-1">
+                                                              <Label className="text-[9px] text-slate-500 uppercase">Valor do KM (R$)</Label>
+                                                              <Input type="number" step="0.01" value={categoryRules[cat.name]?.price_1 || categoryRules[cat.name]?.km_over_45 || ''} onChange={e => handleRuleChange(cat.name, 'price_1', e.target.value)} placeholder="Ex: 2.50" className="font-black text-slate-900 h-10 bg-white" />
+                                                          </div>
+                                                      </div>
                                                   </div>
-                                                  <div className="space-y-2">
-                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Valor do KM {'>'} 10km (Baixar preço) (R$)</Label>
-                                                      <Input type="number" step="0.01" value={categoryRules[cat.name]?.km_over_10 || ''} onChange={e => handleRuleChange(cat.name, 'km_over_10', e.target.value)} placeholder="Ex: 1.80" className="font-black text-slate-900 h-12 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+
+                                                  <div className="space-y-2 border border-slate-100 bg-slate-50 p-3 rounded-xl">
+                                                      <Label className="text-[10px] font-bold text-slate-700 uppercase tracking-widest">Regra 2</Label>
+                                                      <div className="flex gap-2">
+                                                          <div className="flex-1 space-y-1">
+                                                              <Label className="text-[9px] text-slate-500 uppercase">A partir de (KM)</Label>
+                                                              <Input type="number" step="0.1" value={categoryRules[cat.name]?.dist_2 || ''} onChange={e => handleRuleChange(cat.name, 'dist_2', e.target.value)} placeholder="Ex: 10" className="font-black text-slate-900 h-10 bg-white" />
+                                                          </div>
+                                                          <div className="flex-1 space-y-1">
+                                                              <Label className="text-[9px] text-slate-500 uppercase">Valor do KM (R$)</Label>
+                                                              <Input type="number" step="0.01" value={categoryRules[cat.name]?.price_2 || categoryRules[cat.name]?.km_over_10 || ''} onChange={e => handleRuleChange(cat.name, 'price_2', e.target.value)} placeholder="Ex: 1.80" className="font-black text-slate-900 h-10 bg-white" />
+                                                          </div>
+                                                      </div>
                                                   </div>
+
                                               </div>
                                           </div>
 
@@ -478,15 +499,15 @@ const AdminDashboard = () => {
                                               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                                   <div className="space-y-2">
                                                       <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Valor do KM Noturno (R$)</Label>
-                                                      <Input type="number" step="0.01" value={categoryRules[cat.name]?.night_km || ''} onChange={e => handleRuleChange(cat.name, 'night_km', e.target.value)} placeholder="Ex: 3.00" className="font-black text-slate-900 h-12 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+                                                      <Input type="number" step="0.01" value={categoryRules[cat.name]?.night_km || ''} onChange={e => handleRuleChange(cat.name, 'night_km', e.target.value)} placeholder="Ex: 3.00" className="font-black text-slate-900 h-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
                                                   </div>
                                                   <div className="space-y-2">
                                                       <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Hora de Início (Ex: 22:00)</Label>
-                                                      <Input type="time" value={categoryRules[cat.name]?.night_start || ''} onChange={e => handleRuleChange(cat.name, 'night_start', e.target.value)} className="font-black text-slate-900 h-12 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+                                                      <Input type="time" value={categoryRules[cat.name]?.night_start || ''} onChange={e => handleRuleChange(cat.name, 'night_start', e.target.value)} className="font-black text-slate-900 h-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
                                                   </div>
                                                   <div className="space-y-2">
                                                       <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Hora de Término (Ex: 06:00)</Label>
-                                                      <Input type="time" value={categoryRules[cat.name]?.night_end || ''} onChange={e => handleRuleChange(cat.name, 'night_end', e.target.value)} className="font-black text-slate-900 h-12 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+                                                      <Input type="time" value={categoryRules[cat.name]?.night_end || ''} onChange={e => handleRuleChange(cat.name, 'night_end', e.target.value)} className="font-black text-slate-900 h-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
                                                   </div>
                                               </div>
                                           </div>
