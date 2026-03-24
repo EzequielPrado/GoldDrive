@@ -550,7 +550,7 @@ const AdminDashboard = () => {
                           <CardHeader className="p-8 border-b border-slate-100 bg-slate-900 text-white">
                               <CardTitle className="text-2xl font-black">Taxas e Valores por Categoria</CardTitle>
                               <CardDescription className="text-slate-400">
-                                Cálculo Base: Valor Inicial + (Distância * KM) + (Tempo * Minuto). Tudo multiplicado pela Tarifa Dinâmica.
+                                Cálculo Base: Valor Inicial Fixo + (Distância * KM) + (Tempo * Minuto). Tudo multiplicado pela Tarifa Dinâmica.
                               </CardDescription>
                           </CardHeader>
                           <CardContent className="p-8 space-y-6">
@@ -575,7 +575,7 @@ const AdminDashboard = () => {
                                               <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1"><MapIcon className="w-3 h-3" /> Tarifas Principais</h5>
                                               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                                   <div className="space-y-2">
-                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Valor Inicial/Base</Label>
+                                                      <Label className="text-[10px] font-bold text-slate-900 uppercase tracking-widest">Valor Inicial Fixo (Embarque) (R$)</Label>
                                                       <Input type="number" step="0.01" value={cat.base_fare} onChange={e => handleCategoryChange(cat.id, 'base_fare', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
                                                   </div>
                                                   <div className="space-y-2">
@@ -859,4 +859,4 @@ const AdminDashboard = () => {
   );
 };
 
-export default AdminDashboard;
+export default DriverDashboard;
