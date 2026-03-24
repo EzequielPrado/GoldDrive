@@ -46,7 +46,8 @@ interface RideContextType {
 
 const RideContext = createContext<RideContextType | undefined>(undefined);
 
-const NOTIFICATION_SOUND = "https://assets.mixkit.co/active_storage/sfx/2530/2530-preview.mp3";
+// Usando o novo arquivo de áudio carregado
+const NOTIFICATION_SOUND = "/notification.mpeg";
 
 export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   const [ride, setRide] = useState<any | null>(null);
@@ -74,10 +75,24 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       }
   }, [userRole, currentUserId]);
 
-  const playNotification = () => {
+  const playNotification = (title = "Nova Corrida!", body = "Passageiro aguardando motorista") => {
+      // 1. Tenta tocar o áudio personalizado se o app estiver aberto
       if (audioRef.current) {
           audioRef.current.currentTime = 0;
-          audioRef.current.play().catch(() => {});
+          audioRef.current.play().catch(() => console.log("Áudio bloqueado pelo navegador"));
+      }
+
+      // 2. Dispara a notificação de sistema (funciona em segundo plano no Android)
+      if ('Notification' in window && Notification.permission === 'granted') {
+          try {
+              new Notification(title, {
+                  body: body,
+                  icon: '/app-logo.png',
+                  vibrate: [200, 100, 200, 100, 200, 100, 200]
+              });
+          } catch (e) {
+              console.error("Erro ao exibir notificação:", e);
+          }
       }
   };
 
@@ -148,7 +163,10 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
                   const hasNewRide = validRides.some(r => !alertedRideIds.current.has(r.id));
                   if (hasNewRide) {
                       validRides.forEach(r => alertedRideIds.current.add(r.id));
-                      playNotification();
+                      
+                      // Adiciona o endereço na notificação
+                      const newRideDetails = validRides.find(r => !alertedRideIds.current.has(r.id)) || validRides[0];
+                      playNotification("Nova Corrida Disponível!", `📍 ${newRideDetails.pickup_address}`);
                   }
               }
               setAvailableRides(validRides);

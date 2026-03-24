@@ -278,6 +278,12 @@ const DriverDashboard = () => {
 
   const toggleOnline = async (val: boolean) => { 
       setIsOnline(val);
+      
+      // Quando fica online, solicita permissão para enviar Notificações Push
+      if (val && 'Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+          Notification.requestPermission();
+      }
+      
       if (driverProfile?.id) {
           await supabase.from('profiles').update({ is_online: val, last_active: new Date().toISOString() }).eq('id', driverProfile.id);
       }
