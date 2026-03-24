@@ -31,7 +31,7 @@ const ClientDashboard = () => {
   
   const [pickupLocation, setPickupLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
   const [destLocation, setDestLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
-  const [stops, setStops] = useState<any[]>([]); // Paradas intermediárias
+  const [stops, setStops] = useState<any[]>([]); 
 
   const [routeDistance, setRouteDistance] = useState<number>(0); 
   const [routeDuration, setRouteDuration] = useState<number>(0); 
@@ -46,7 +46,6 @@ const ClientDashboard = () => {
   const [showBalanceAlert, setShowBalanceAlert] = useState(false);
   const [missingAmount, setMissingAmount] = useState(0);
 
-  // Cupons & Dinâmica & Taxas
   const [globalMultiplier, setGlobalMultiplier] = useState(1.0);
   const [costPerStop, setCostPerStop] = useState(2.50);
   const [couponCode, setCouponCode] = useState("");
@@ -146,6 +145,7 @@ const ClientDashboard = () => {
         setStep('waiting');
       }
     } else {
+      // Evita voltar para 'search' bruscamente se estivermos no meio de uma solicitação
       if (!isRequesting && (step === 'waiting' || step === 'rating' || step === 'cancelled')) {
           setStep('search');
       }
@@ -157,7 +157,6 @@ const ClientDashboard = () => {
         setCalculatingRoute(true);
         const service = new google.maps.DirectionsService();
         
-        // Passar as paradas como waypoints para a API do Google Directions calcular a distância total real
         const validStops = stops.filter(s => s && s.lat && s.lon);
         const waypoints = validStops.map(s => ({
             location: { lat: s.lat, lng: s.lon },
@@ -259,23 +258,18 @@ const ClientDashboard = () => {
               }
           }
 
-          // Preço Final = Base + (Distância * KM Aplicado) + (Tempo * Minuto)
           price = baseFare + (routeDistance * appliedKmPrice) + (routeDuration * costPerMinute);
       }
 
-      // Adiciona o custo das paradas
       const validStops = stops.filter(s => s && s.lat && s.lon);
       price += validStops.length * costPerStop;
 
-      // Aplica Multiplicador Dinâmico Global (Chuva/Eventos)
       price = price * globalMultiplier;
 
-      // Verifica mínimo antes de aplicar cupom (se aplicável, para proteger a base)
       if (price < Number(category.min_fare)) {
           price = Number(category.min_fare);
       }
 
-      // Aplica Cupom
       if (appliedCoupon) {
           if (appliedCoupon.discount_type === 'PERCENTAGE') {
               price = price - (price * (Number(appliedCoupon.discount_value) / 100));
@@ -290,9 +284,7 @@ const ClientDashboard = () => {
   const confirmRide = async () => {
     if (isRequesting || !pickupLocation || !destLocation || !selectedCategoryId) return;
     
-    // Verifica se tem alguma parada vazia no array e limpa antes de enviar
     const validStops = stops.filter(s => s && s.lat && s.lon);
-    
     const price = calculatePrice();
     const category = categories.find(c => c.id === selectedCategoryId);
     
@@ -303,7 +295,7 @@ const ClientDashboard = () => {
     }
     
     setIsRequesting(true);
-    setStep('waiting');
+    
     try { 
         const success = await requestRide(
             pickupLocation.display_name, 
@@ -317,16 +309,15 @@ const ClientDashboard = () => {
             validStops
         ); 
         
-        if (!success) setStep('confirm');
-        else {
+        if (success) {
             showSuccess("Motorista solicitado!");
             if (appliedCoupon) {
                 await supabase.from('coupons').update({ current_uses: appliedCoupon.current_uses + 1 }).eq('id', appliedCoupon.id);
             }
+            setStep('waiting'); // Só muda o step se realmente der sucesso
         }
     } catch (e: any) { 
         showError(e.message); 
-        setStep('confirm');
     } finally { 
         setIsRequesting(false); 
     }
@@ -604,7 +595,7 @@ const ClientDashboard = () => {
       <AlertDialog open={showCancelAlert} onOpenChange={setShowCancelAlert}>
           <AlertDialogContent className="rounded-3xl border-0 shadow-2xl">
               <AlertDialogHeader><AlertDialogTitle className="text-2xl font-black text-slate-900">Cancelar Viagem?</AlertDialogTitle><AlertDialogDescription className="text-gray-500">O cancelamento pode gerar cobrança de taxa se o motorista já estiver chegando.</AlertDialogDescription></AlertDialogHeader>
-              <AlertDialogFooter className="mt-4 flex gap-3"><AlertDialogCancel className="rounded-xl h-12 flex-1 font-bold">Voltar</AlertDialogCancel><AlertDialogAction className="bg-red-600 hover:bg-red-700 text-white rounded-xl h-12 flex-1 font-bold" onClick={async () => { if(ride) await cancelRide(ride.id, "Cancelado"); setShowCancelAlert(false); setStep('search'); }}>Confirmar</AlertDialogAction></AlertDialogFooter>
+              <AlertDialogFooter className="mt-4 flex gap-3"><AlertDialogCancel className="rounded-xl h-12 flex-1 font-bold">Voltar</AlertDialogCancel><AlertDialogAction className="bg-red-600 hover:bg-red-700 text-white rounded-xl h-12 flex-1 font-bold" onClick={async () => { if(ride) await cancelRide(ride.id); setShowCancelAlert(false); setStep('search'); }}>Confirmar</AlertDialogAction></AlertDialogFooter>
           </AlertDialogContent>
       </AlertDialog>
 

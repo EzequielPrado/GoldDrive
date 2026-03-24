@@ -76,13 +76,11 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   }, [userRole, currentUserId]);
 
   const playNotification = (title = "Nova Corrida!", body = "Passageiro aguardando motorista") => {
-      // 1. Tenta tocar o áudio personalizado se o app estiver aberto
       if (audioRef.current) {
           audioRef.current.currentTime = 0;
           audioRef.current.play().catch(() => console.log("Áudio bloqueado pelo navegador"));
       }
 
-      // 2. Dispara a notificação de sistema (funciona em segundo plano no Android)
       if ('Notification' in window && Notification.permission === 'granted') {
           try {
               new Notification(title, {
@@ -132,7 +130,17 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
               return;
           }
       }
-      setRide(null);
+      
+      // Proteção: Se não encontrou corrida no banco, mas a local diz que está 'SEARCHING' há pouco tempo,
+      // não anula a corrida (evita que a tela do passageiro pisque e volte para o início)
+      setRide((prev: any) => {
+          if (prev && prev.status === 'SEARCHING') {
+              const age = (new Date().getTime() - new Date(prev.created_at).getTime()) / 1000;
+              if (age < 10) return prev; // Mantém local por até 10 segundos até o banco sincronizar
+          }
+          return null;
+      });
+
     } catch (err) {
       console.error("Erro ao buscar corrida ativa:", err);
     }
@@ -164,7 +172,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
                   if (hasNewRide) {
                       validRides.forEach(r => alertedRideIds.current.add(r.id));
                       
-                      // Adiciona o endereço na notificação
                       const newRideDetails = validRides.find(r => !alertedRideIds.current.has(r.id)) || validRides[0];
                       playNotification("Nova Corrida Disponível!", `📍 ${newRideDetails.pickup_address}`);
                   }
@@ -264,7 +271,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       }).select().single();
       
       if (error) throw error;
-      setRide(data);
+      setRide(data); // Salva na tela instantaneamente
       return true;
     } catch (e: any) { 
         toast({ title: "Erro ao solicitar", description: e.message, variant: "destructive" }); 
