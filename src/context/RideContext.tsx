@@ -34,6 +34,7 @@ interface RideContextType {
   rejectRide: (rideId: string) => Promise<void>;
   startRide: (rideId: string) => Promise<void>;
   finishRide: (rideId: string) => Promise<void>;
+  completeStop: (rideId: string, stopIndex: number, currentStops: any[]) => Promise<void>;
   rateRide: (rideId: string, rating: number, isDriver: boolean, comment?: string) => Promise<void>;
   confirmArrival: (rideId: string) => Promise<void>;
   addBalance: (amount: number) => Promise<void>;
@@ -319,6 +320,18 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
 
   const confirmArrival = async (rideId: string) => { await supabase.from('rides').update({ status: 'ARRIVED' }).eq('id', rideId); };
   const startRide = async (rideId: string) => { await supabase.from('rides').update({ status: 'IN_PROGRESS' }).eq('id', rideId); };
+  
+  const completeStop = async (rideId: string, stopIndex: number, currentStops: any[]) => {
+      try {
+          const newStops = [...currentStops];
+          newStops[stopIndex] = { ...newStops[stopIndex], completed: true };
+          const { error } = await supabase.from('rides').update({ stops: newStops }).eq('id', rideId);
+          if (error) throw error;
+      } catch (e: any) {
+          toast({ title: "Erro ao confirmar parada", description: e.message, variant: "destructive" });
+      }
+  };
+
   const finishRide = async (rideId: string) => { await supabase.from('rides').update({ status: 'COMPLETED' }).eq('id', rideId); };
 
   const rateRide = async (rideId: string, rating: number, isDriver: boolean, comment?: string) => {
@@ -347,7 +360,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   return (
     <RideContext.Provider value={{ 
         ride, availableRides, loading, requestRide, createManualRide, cancelRide, acceptRide, rejectRide, 
-        startRide, finishRide, rateRide, confirmArrival, addBalance, clearRide, refreshAvailableRides, currentUserId, userRole 
+        startRide, finishRide, completeStop, rateRide, confirmArrival, addBalance, clearRide, refreshAvailableRides, currentUserId, userRole 
     }}>
       {children}
     </RideContext.Provider>

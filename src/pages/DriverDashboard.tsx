@@ -28,7 +28,7 @@ const NavigationBlock = ({ label, lat, lng, address, icon: Icon = MapPin }: any)
         window.open(url, '_blank');
     };
     return (
-        <div className="w-full mb-4">
+        <div className="w-full mb-4 animate-in fade-in slide-in-from-bottom-2">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1"><Icon className="w-3 h-3" /> {label}</p>
             <div className="flex gap-3 mb-2">
                 <Button className="flex-1 bg-[#3b82f6] text-white font-bold rounded-xl h-12" onClick={() => openMap('waze')}><Navigation className="w-4 h-4 mr-2" /> Waze</Button>
@@ -42,7 +42,7 @@ const NavigationBlock = ({ label, lat, lng, address, icon: Icon = MapPin }: any)
 const DriverDashboard = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { ride, availableRides, acceptRide, rejectRide, confirmArrival, finishRide, startRide, rateRide, clearRide, currentUserId, createManualRide, refreshAvailableRides } = useRide();
+  const { ride, availableRides, acceptRide, rejectRide, confirmArrival, finishRide, startRide, completeStop, rateRide, clearRide, currentUserId, createManualRide, refreshAvailableRides } = useRide();
   
   const [activeTab, setActiveTab] = useState('home');
   const [isOnline, setIsOnline] = useState(false);
@@ -349,7 +349,11 @@ const DriverDashboard = () => {
   const isCompleted = ride?.status === 'COMPLETED';
   const isCancelled = ride?.status === 'CANCELLED';
   const hasAvailableRides = availableRides.length > 0;
+  
+  // Lógica das Paradas
   const currentStops = ride?.stops && Array.isArray(ride.stops) ? ride.stops : [];
+  const nextStopIndex = currentStops.findIndex((s: any) => !s.completed);
+  const nextStop = nextStopIndex !== -1 ? currentStops[nextStopIndex] : null;
 
   return (
     <div className="h-screen flex flex-col bg-slate-50 relative overflow-hidden font-sans">
@@ -434,7 +438,7 @@ const DriverDashboard = () => {
                             <span className="font-black text-lg">R$ {Number(ride?.price).toFixed(2)}</span>
                         </div>
                         
-                        <ScrollArea className="max-h-[30vh] custom-scrollbar -mr-4 pr-4">
+                        <ScrollArea className="max-h-[35vh] custom-scrollbar -mr-4 pr-4">
                             {ride?.status === 'ACCEPTED' && <NavigationBlock label="Buscar Passageiro" lat={ride.pickup_lat} lng={ride.pickup_lng} address={ride.pickup_address} />}
                             
                             {ride?.status === 'ARRIVED' && (
@@ -450,17 +454,38 @@ const DriverDashboard = () => {
                             {ride?.status === 'IN_PROGRESS' && (
                                 <>
                                     {currentStops.length > 0 && (
-                                        <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 mb-4">
-                                            <p className="text-[10px] font-bold text-gray-400 uppercase mb-2">Paradas Adicionais ({currentStops.length})</p>
+                                        <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 mb-4 animate-in fade-in">
+                                            <p className="text-[10px] font-bold text-gray-400 uppercase mb-2 flex items-center gap-1"><MapPin className="w-3 h-3" /> Roteiro da Viagem</p>
                                             {currentStops.map((stop: any, idx: number) => (
-                                                <p key={idx} className="text-xs font-bold text-slate-700 line-clamp-1 flex items-center gap-2 mb-1">
-                                                    <span className="w-4 h-4 bg-yellow-100 text-yellow-700 rounded-full flex items-center justify-center text-[9px] shrink-0">{idx+1}</span>
+                                                <p key={idx} className={`text-xs font-bold line-clamp-1 flex items-center gap-2 mb-2 ${stop.completed ? 'text-green-600 line-through opacity-60' : 'text-slate-700'}`}>
+                                                    {stop.completed ? (
+                                                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                                                    ) : (
+                                                        <span className="w-4 h-4 bg-yellow-100 text-yellow-700 rounded-full flex items-center justify-center text-[9px] shrink-0">{idx+1}</span>
+                                                    )}
                                                     {stop.display_name}
                                                 </p>
                                             ))}
                                         </div>
                                     )}
-                                    <NavigationBlock label="Destino Final" lat={ride.destination_lat} lng={ride.destination_lng} address={ride.destination_address} icon={Flag} />
+
+                                    {nextStop ? (
+                                        <NavigationBlock 
+                                            label={`Próxima Parada (${nextStopIndex + 1})`} 
+                                            lat={nextStop.lat} 
+                                            lng={nextStop.lon || nextStop.lng} 
+                                            address={nextStop.display_name} 
+                                            icon={MapPin} 
+                                        />
+                                    ) : (
+                                        <NavigationBlock 
+                                            label="Destino Final" 
+                                            lat={ride.destination_lat} 
+                                            lng={ride.destination_lng} 
+                                            address={ride.destination_address} 
+                                            icon={Flag} 
+                                        />
+                                    )}
                                 </>
                             )}
                         </ScrollArea>
@@ -474,7 +499,17 @@ const DriverDashboard = () => {
                         
                         {ride?.status === 'ACCEPTED' && <Button className="w-full h-16 bg-slate-900 text-white font-black text-lg rounded-2xl shadow-xl" onClick={() => confirmArrival(ride.id)}>CHEGUEI NO LOCAL</Button>}
                         {ride?.status === 'ARRIVED' && <Button className="w-full h-16 bg-green-600 hover:bg-green-700 text-white font-black text-lg rounded-2xl shadow-xl" onClick={() => startRide(ride.id)}>INICIAR VIAGEM</Button>}
-                        {ride?.status === 'IN_PROGRESS' && <Button className="w-full h-16 bg-blue-600 hover:bg-blue-700 text-white font-black text-lg rounded-2xl shadow-xl" onClick={() => finishRide(ride.id)}>FINALIZAR CORRIDA</Button>}
+                        {ride?.status === 'IN_PROGRESS' && (
+                            nextStop ? (
+                                <Button className="w-full h-16 bg-blue-600 hover:bg-blue-700 text-white font-black text-lg rounded-2xl shadow-xl transition-all active:scale-95" onClick={() => completeStop(ride.id, nextStopIndex, currentStops)}>
+                                    CHEGUEI NA PARADA {nextStopIndex + 1}
+                                </Button>
+                            ) : (
+                                <Button className="w-full h-16 bg-blue-600 hover:bg-blue-700 text-white font-black text-lg rounded-2xl shadow-xl transition-all active:scale-95" onClick={() => finishRide(ride.id)}>
+                                    FINALIZAR CORRIDA
+                                </Button>
+                            )
+                        )}
                     </div>
                 )}
             </div>
