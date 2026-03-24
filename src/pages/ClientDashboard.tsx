@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import GoogleMapComponent from "@/components/GoogleMapComponent";
 import { 
-  MapPin, Car, Loader2, Star, ChevronRight, Clock, Wallet, ArrowLeft, History, MessageCircle, CheckCircle2, AlertTriangle, Banknote, CreditCard, XCircle, Ticket
+  MapPin, Car, Loader2, Star, ChevronRight, Clock, Wallet, ArrowLeft, History, MessageCircle, CheckCircle2, AlertTriangle, Banknote, XCircle, Ticket, Plus, X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,8 @@ const ClientDashboard = () => {
   
   const [pickupLocation, setPickupLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
   const [destLocation, setDestLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
+  const [stops, setStops] = useState<any[]>([]); // Paradas intermediárias
+
   const [routeDistance, setRouteDistance] = useState<number>(0); 
   const [routeDuration, setRouteDuration] = useState<number>(0); 
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
@@ -44,8 +46,9 @@ const ClientDashboard = () => {
   const [showBalanceAlert, setShowBalanceAlert] = useState(false);
   const [missingAmount, setMissingAmount] = useState(0);
 
-  // Cupons & Dinâmica
+  // Cupons & Dinâmica & Taxas
   const [globalMultiplier, setGlobalMultiplier] = useState(1.0);
+  const [costPerStop, setCostPerStop] = useState(2.50);
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
   const [applyingCoupon, setApplyingCoupon] = useState(false);
@@ -102,9 +105,10 @@ const ClientDashboard = () => {
                     try { setCategoryRules(JSON.parse(rules.value)); } catch(e) {}
                 }
                 const multRes = adminConfigRes.data.find((c: any) => c.key === 'global_multiplier');
-                if (multRes && multRes.value) {
-                    setGlobalMultiplier(Number(multRes.value) || 1.0);
-                }
+                if (multRes && multRes.value) setGlobalMultiplier(Number(multRes.value) || 1.0);
+
+                const stopRes = adminConfigRes.data.find((c: any) => c.key === 'cost_per_stop');
+                if (stopRes && stopRes.value) setCostPerStop(Number(stopRes.value) || 2.50);
             }
 
             dataFetched.current = true;
@@ -151,15 +155,30 @@ const ClientDashboard = () => {
   useEffect(() => {
     if (pickupLocation && destLocation && step === 'confirm') {
         setCalculatingRoute(true);
-        const service = new google.maps.DistanceMatrixService();
-        service.getDistanceMatrix({
-            origins: [{ lat: pickupLocation.lat, lng: pickupLocation.lon }],
-            destinations: [{ lat: destLocation.lat, lng: destLocation.lon }],
+        const service = new google.maps.DirectionsService();
+        
+        // Passar as paradas como waypoints para a API do Google Directions calcular a distância total real
+        const validStops = stops.filter(s => s && s.lat && s.lon);
+        const waypoints = validStops.map(s => ({
+            location: { lat: s.lat, lng: s.lon },
+            stopover: true
+        }));
+
+        service.route({
+            origin: { lat: pickupLocation.lat, lng: pickupLocation.lon },
+            destination: { lat: destLocation.lat, lng: destLocation.lon },
+            waypoints: waypoints,
             travelMode: google.maps.TravelMode.DRIVING
-        }, (response, status) => {
-            if (status === 'OK' && response?.rows[0].elements[0].distance) {
-                setRouteDistance(response.rows[0].elements[0].distance.value / 1000);
-                setRouteDuration(response.rows[0].elements[0].duration.value / 60); // Em minutos
+        }, (result, status) => {
+            if (status === 'OK' && result) {
+                let totalDist = 0;
+                let totalDur = 0;
+                result.routes[0].legs.forEach(leg => {
+                    totalDist += leg.distance?.value || 0;
+                    totalDur += leg.duration?.value || 0;
+                });
+                setRouteDistance(totalDist / 1000);
+                setRouteDuration(totalDur / 60);
             } else {
                 showError("Localização inacessível para veículos.");
                 setStep('search');
@@ -167,7 +186,7 @@ const ClientDashboard = () => {
             setCalculatingRoute(false);
         });
     }
-  }, [pickupLocation, destLocation, step]);
+  }, [pickupLocation, destLocation, stops, step]);
 
   const applyCoupon = async () => {
       setApplyingCoupon(true);
@@ -244,6 +263,10 @@ const ClientDashboard = () => {
           price = baseFare + (routeDistance * appliedKmPrice) + (routeDuration * costPerMinute);
       }
 
+      // Adiciona o custo das paradas
+      const validStops = stops.filter(s => s && s.lat && s.lon);
+      price += validStops.length * costPerStop;
+
       // Aplica Multiplicador Dinâmico Global (Chuva/Eventos)
       price = price * globalMultiplier;
 
@@ -262,17 +285,23 @@ const ClientDashboard = () => {
       }
 
       return parseFloat(Math.max(price, 0).toFixed(2));
-  }, [categories, pricingTiers, routeDistance, routeDuration, selectedCategoryId, categoryRules, globalMultiplier, appliedCoupon]);
+  }, [categories, pricingTiers, routeDistance, routeDuration, selectedCategoryId, categoryRules, globalMultiplier, appliedCoupon, stops, costPerStop]);
 
   const confirmRide = async () => {
     if (isRequesting || !pickupLocation || !destLocation || !selectedCategoryId) return;
+    
+    // Verifica se tem alguma parada vazia no array e limpa antes de enviar
+    const validStops = stops.filter(s => s && s.lat && s.lon);
+    
     const price = calculatePrice();
     const category = categories.find(c => c.id === selectedCategoryId);
+    
     if (paymentMethod === 'WALLET' && (userProfile?.balance || 0) < price) { 
         setMissingAmount(price - (userProfile?.balance || 0)); 
         setShowBalanceAlert(true); 
         return; 
     }
+    
     setIsRequesting(true);
     setStep('waiting');
     try { 
@@ -284,13 +313,13 @@ const ClientDashboard = () => {
             price, 
             `${routeDistance.toFixed(1)} km`, 
             category.name, 
-            paymentMethod
+            paymentMethod,
+            validStops
         ); 
         
         if (!success) setStep('confirm');
         else {
             showSuccess("Motorista solicitado!");
-            // Incrementa uso do cupom se foi usado
             if (appliedCoupon) {
                 await supabase.from('coupons').update({ current_uses: appliedCoupon.current_uses + 1 }).eq('id', appliedCoupon.id);
             }
@@ -329,6 +358,26 @@ const ClientDashboard = () => {
       }, { enableHighAccuracy: true, timeout: 5000 });
   };
 
+  const addStop = () => {
+      if (stops.length >= 2) {
+          showError("Você só pode adicionar até 2 paradas.");
+          return;
+      }
+      setStops([...stops, null]);
+  };
+
+  const removeStop = (index: number) => {
+      const newStops = [...stops];
+      newStops.splice(index, 1);
+      setStops(newStops);
+  };
+
+  const updateStopLocation = (index: number, location: any) => {
+      const newStops = [...stops];
+      newStops[index] = location;
+      setStops(newStops);
+  };
+
   if (isInitialSync) {
       return (
           <div className="h-screen w-full flex items-center justify-center bg-zinc-950">
@@ -347,6 +396,7 @@ const ClientDashboard = () => {
             pickupLocation={showRouteOnMap ? pickupLocation : null} 
             destinationLocation={showRouteOnMap ? destLocation : null} 
             driverLocation={driverLiveLocation}
+            stops={showRouteOnMap ? stops : null}
         />
       </div>
 
@@ -371,18 +421,41 @@ const ClientDashboard = () => {
         {activeTab === 'home' && (
             <div className="w-full max-w-md mx-auto pointer-events-auto">
                 {step === 'search' && (
-                    <div className="bg-white/95 backdrop-blur-xl p-6 rounded-[32px] shadow-2xl border border-white/40 animate-in fade-in zoom-in-95 duration-300">
+                    <div className="bg-white/95 backdrop-blur-xl p-6 rounded-[32px] shadow-2xl border border-white/40 animate-in fade-in zoom-in-95 duration-300 max-h-[80vh] flex flex-col">
                         <h2 className="text-2xl font-black text-slate-900 mb-6 text-center">Para onde vamos?</h2>
-                        <div className="space-y-4">
-                            <div className="flex gap-2">
+                        <ScrollArea className="flex-1 -mr-2 pr-4 space-y-4">
+                            <div className="flex gap-2 mb-4">
                                 <GoogleLocationSearch placeholder="Local de embarque" onSelect={(l) => setPickupLocation(l)} initialValue={pickupLocation?.display_name} className="flex-1" />
                                 <Button size="icon" variant="outline" className="h-14 w-14 rounded-2xl shrink-0 border-slate-200 bg-slate-50 hover:bg-slate-100" onClick={getCurrentLocation} disabled={gpsLoading}>
                                     {gpsLoading ? <Loader2 className="animate-spin text-slate-400" /> : <MapPin className="w-5 h-5 text-slate-600" />}
                                 </Button>
                             </div>
-                            <GoogleLocationSearch placeholder="Para onde você vai?" onSelect={(l) => setDestLocation(l)} initialValue={destLocation?.display_name} />
-                        </div>
-                        <Button className="w-full mt-6 h-14 text-lg font-bold rounded-2xl bg-black text-white hover:bg-zinc-800 shadow-xl" onClick={() => { if(!pickupLocation || !destLocation) showError("Defina os pontos da viagem."); else setStep('confirm'); }}>
+                            
+                            {/* Paradas */}
+                            {stops.map((stop, index) => (
+                                <div key={index} className="flex gap-2 mb-4 animate-in slide-in-from-left">
+                                    <div className="relative flex-1">
+                                        <GoogleLocationSearch 
+                                            placeholder={`Parada ${index + 1}`} 
+                                            onSelect={(l) => updateStopLocation(index, l)} 
+                                            initialValue={stop?.display_name} 
+                                        />
+                                    </div>
+                                    <Button size="icon" variant="outline" className="h-14 w-14 rounded-2xl shrink-0 border-red-200 bg-red-50 text-red-500 hover:bg-red-100" onClick={() => removeStop(index)}>
+                                        <X className="w-5 h-5" />
+                                    </Button>
+                                </div>
+                            ))}
+
+                            <GoogleLocationSearch placeholder="Para onde você vai?" onSelect={(l) => setDestLocation(l)} initialValue={destLocation?.display_name} className="mb-4" />
+                            
+                            {stops.length < 2 && (
+                                <Button variant="ghost" className="w-full text-slate-500 font-bold border border-dashed border-slate-200 rounded-xl h-12 mt-2" onClick={addStop}>
+                                    <Plus className="w-4 h-4 mr-2" /> Adicionar Parada
+                                </Button>
+                            )}
+                        </ScrollArea>
+                        <Button className="w-full mt-6 h-14 text-lg font-bold rounded-2xl bg-black text-white hover:bg-zinc-800 shadow-xl shrink-0" onClick={() => { if(!pickupLocation || !destLocation) showError("Defina os pontos da viagem."); else setStep('confirm'); }}>
                             Ver Preços <ChevronRight className="ml-1 w-5 h-5" />
                         </Button>
                     </div>
@@ -394,8 +467,12 @@ const ClientDashboard = () => {
                             <div className="bg-gray-100 p-2 rounded-full"><ArrowLeft className="w-5 h-5" /></div>
                             <h2 className="text-xl font-black text-slate-900">Confirmar Pedido</h2>
                         </div>
+                        
                         <div className="bg-gray-50 rounded-2xl p-4 mb-4 border border-gray-100 space-y-2 text-[13px]">
                             <p className="font-medium text-slate-600 line-clamp-1 truncate flex items-center gap-2">📍 {pickupLocation?.display_name}</p>
+                            {stops.filter(s => s).map((stop, idx) => (
+                                <p key={idx} className="font-medium text-slate-600 line-clamp-1 truncate flex items-center gap-2 text-[11px] pl-6 border-l-2 border-dashed border-slate-200 ml-1.5">🛑 {stop.display_name}</p>
+                            ))}
                             <p className="font-bold text-slate-900 line-clamp-1 truncate flex items-center gap-2">🏁 {destLocation?.display_name}</p>
                         </div>
 
@@ -407,9 +484,10 @@ const ClientDashboard = () => {
                         ) : (
                             <>
                                 <div className="space-y-3 mb-4 overflow-y-auto custom-scrollbar flex-1 pr-1">
-                                    {globalMultiplier > 1.0 && (
-                                        <div className="bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold p-3 rounded-xl flex items-center gap-2 mb-2 animate-pulse">
-                                            <AlertTriangle className="w-4 h-4" /> Demanda Alta: Preços levemente ajustados.
+                                    {(globalMultiplier > 1.0 || stops.filter(s=>s).length > 0) && (
+                                        <div className="bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold p-3 rounded-xl flex flex-col gap-1 mb-2 animate-pulse">
+                                            {globalMultiplier > 1.0 && <p className="flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Demanda Alta: Preços ajustados.</p>}
+                                            {stops.filter(s=>s).length > 0 && <p className="flex items-center gap-2"><MapPin className="w-4 h-4" /> Inclui taxa de R$ {costPerStop.toFixed(2)} por parada extra.</p>}
                                         </div>
                                     )}
 

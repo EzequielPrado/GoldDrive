@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Wallet, MapPin, Navigation, DollarSign, Star, History, Car, ArrowRight, MessageCircle, Phone, Smartphone, Map, Flag, CheckCircle2, UserPlus, Clock, X, MousePointer2, Loader2, ChevronRight, Banknote, XCircle, Zap } from "lucide-react";
+import { Wallet, MapPin, Navigation, DollarSign, Star, History, Car, ArrowRight, MessageCircle, Phone, Smartphone, Map, Flag, CheckCircle2, UserPlus, Clock, X, MousePointer2, Loader2, ChevronRight, Banknote, XCircle, Zap, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -60,10 +60,12 @@ const DriverDashboard = () => {
   const [passengerName, setPassengerName] = useState("");
   const [pickupLocation, setPickupLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
   const [destLocation, setDestLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
+  const [stops, setStops] = useState<any[]>([]);
   
   const [routeDistance, setRouteDistance] = useState<number>(0);
   const [routeDuration, setRouteDuration] = useState<number>(0);
   const [globalMultiplier, setGlobalMultiplier] = useState(1.0);
+  const [costPerStop, setCostPerStop] = useState(2.50);
 
   const [manualLoading, setManualLoading] = useState(false);
   const [categories, setCategories] = useState<any[]>([]);
@@ -144,9 +146,10 @@ const DriverDashboard = () => {
                   try { setCategoryRules(JSON.parse(rules.value)); } catch(e) {}
               }
               const multRes = adminConfigRes.data.find((c: any) => c.key === 'global_multiplier');
-              if (multRes && multRes.value) {
-                  setGlobalMultiplier(Number(multRes.value) || 1.0);
-              }
+              if (multRes && multRes.value) setGlobalMultiplier(Number(multRes.value) || 1.0);
+
+              const stopRes = adminConfigRes.data.find((c: any) => c.key === 'cost_per_stop');
+              if (stopRes && stopRes.value) setCostPerStop(Number(stopRes.value) || 2.50);
           }
       };
       fetchPricing();
@@ -155,25 +158,39 @@ const DriverDashboard = () => {
   const calculateRouteDistance = useCallback(() => {
       if (!pickupLocation || !destLocation) return;
       setManualLoading(true);
-      const service = new google.maps.DistanceMatrixService();
-      service.getDistanceMatrix({
-          origins: [{ lat: pickupLocation.lat, lng: pickupLocation.lon }],
-          destinations: [{ lat: destLocation.lat, lng: destLocation.lon }],
+      const service = new google.maps.DirectionsService();
+      
+      const validStops = stops.filter(s => s && s.lat && s.lon);
+      const waypoints = validStops.map(s => ({
+          location: { lat: s.lat, lng: s.lon },
+          stopover: true
+      }));
+
+      service.route({
+          origin: { lat: pickupLocation.lat, lng: pickupLocation.lon },
+          destination: { lat: destLocation.lat, lng: destLocation.lon },
+          waypoints: waypoints,
           travelMode: google.maps.TravelMode.DRIVING
       }, (response, status) => {
-          if (status === 'OK' && response?.rows[0].elements[0].distance) {
-              setRouteDistance(response.rows[0].elements[0].distance.value / 1000);
-              setRouteDuration(response.rows[0].elements[0].duration.value / 60);
+          if (status === 'OK' && response) {
+              let totalDist = 0;
+              let totalDur = 0;
+              response.routes[0].legs.forEach(leg => {
+                  totalDist += leg.distance?.value || 0;
+                  totalDur += leg.duration?.value || 0;
+              });
+              setRouteDistance(totalDist / 1000);
+              setRouteDuration(totalDur / 60);
           }
           setManualLoading(false);
       });
-  }, [pickupLocation, destLocation]);
+  }, [pickupLocation, destLocation, stops]);
 
   useEffect(() => {
       if (pickupLocation && destLocation && showManualRide) {
           calculateRouteDistance();
       }
-  }, [pickupLocation, destLocation, showManualRide, calculateRouteDistance]);
+  }, [pickupLocation, destLocation, stops, showManualRide, calculateRouteDistance]);
 
   const calculatePrice = useCallback(() => {
       if (routeDistance <= 0 || categories.length === 0) return 0;
@@ -235,6 +252,10 @@ const DriverDashboard = () => {
           price = baseFare + (routeDistance * appliedKmPrice) + (routeDuration * costPerMinute);
       }
 
+      // Adiciona o custo das paradas
+      const validStops = stops.filter(s => s && s.lat && s.lon);
+      price += validStops.length * costPerStop;
+
       price = price * globalMultiplier;
 
       if (price < Number(category.min_fare)) {
@@ -242,7 +263,7 @@ const DriverDashboard = () => {
       }
       
       return parseFloat(price.toFixed(2));
-  }, [categories, pricingTiers, routeDistance, routeDuration, categoryRules, globalMultiplier]);
+  }, [categories, pricingTiers, routeDistance, routeDuration, categoryRules, globalMultiplier, stops, costPerStop]);
 
   const checkProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -275,18 +296,21 @@ const DriverDashboard = () => {
       try {
           const price = calculatePrice();
           const category = categories.find(c => c.name === 'Gold Driver') || categories.find(c => c.name.toLowerCase().includes('go')) || categories[0];
-          
+          const validStops = stops.filter(s => s && s.lat && s.lon);
+
           await createManualRide(
               passengerName, "", 
               pickupLocation.display_name, destLocation.display_name,
               { lat: pickupLocation.lat, lng: pickupLocation.lon },
               { lat: destLocation.lat, lng: destLocation.lon },
-              price, `${routeDistance.toFixed(1)} km`, category?.name || 'Manual'
+              price, `${routeDistance.toFixed(1)} km`, category?.name || 'Manual',
+              validStops
           );
           setShowManualRide(false);
           setPassengerName("");
           setPickupLocation(null);
           setDestLocation(null);
+          setStops([]);
           setRouteDistance(0);
           showSuccess("Viagem manual iniciada!");
       } catch (e: any) {
@@ -325,13 +349,19 @@ const DriverDashboard = () => {
   const isCompleted = ride?.status === 'COMPLETED';
   const isCancelled = ride?.status === 'CANCELLED';
   const hasAvailableRides = availableRides.length > 0;
+  const currentStops = ride?.stops && Array.isArray(ride.stops) ? ride.stops : [];
 
   return (
     <div className="h-screen flex flex-col bg-slate-50 relative overflow-hidden font-sans">
       <img src="/app-logo.png" alt="Logo" className="fixed top-4 left-1/2 -translate-x-1/2 h-8 opacity-90 z-50 pointer-events-none drop-shadow-md rounded-lg" />
       
       <div className="absolute inset-0 z-0">
-          <GoogleMapComponent className="h-full w-full" pickupLocation={pickupCoord} destinationLocation={destCoord} />
+          <GoogleMapComponent 
+            className="h-full w-full" 
+            pickupLocation={pickupCoord} 
+            destinationLocation={destCoord} 
+            stops={isOnTrip ? currentStops : null}
+          />
       </div>
 
       <div className="absolute top-0 left-0 right-0 p-6 z-20 flex justify-between items-start pointer-events-none mt-4">
@@ -404,23 +434,40 @@ const DriverDashboard = () => {
                             <span className="font-black text-lg">R$ {Number(ride?.price).toFixed(2)}</span>
                         </div>
                         
-                        {ride?.status === 'ACCEPTED' && <NavigationBlock label="Buscar Passageiro" lat={ride.pickup_lat} lng={ride.pickup_lng} address={ride.pickup_address} />}
+                        <ScrollArea className="max-h-[30vh] custom-scrollbar -mr-4 pr-4">
+                            {ride?.status === 'ACCEPTED' && <NavigationBlock label="Buscar Passageiro" lat={ride.pickup_lat} lng={ride.pickup_lng} address={ride.pickup_address} />}
+                            
+                            {ride?.status === 'ARRIVED' && (
+                                <>
+                                    <div className="bg-green-50 p-4 rounded-2xl text-center mb-4 border border-green-100 animate-pulse">
+                                        <p className="font-black text-green-800 text-sm">Aguardando passageiro embarcar...</p>
+                                        {trackingActive && <p className="text-[10px] text-green-600 mt-1">Rastreamento ativo</p>}
+                                    </div>
+                                    <NavigationBlock label="Destino Final" lat={ride.destination_lat} lng={ride.destination_lng} address={ride.destination_address} icon={Flag} />
+                                </>
+                            )}
+                            
+                            {ride?.status === 'IN_PROGRESS' && (
+                                <>
+                                    {currentStops.length > 0 && (
+                                        <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 mb-4">
+                                            <p className="text-[10px] font-bold text-gray-400 uppercase mb-2">Paradas Adicionais ({currentStops.length})</p>
+                                            {currentStops.map((stop: any, idx: number) => (
+                                                <p key={idx} className="text-xs font-bold text-slate-700 line-clamp-1 flex items-center gap-2 mb-1">
+                                                    <span className="w-4 h-4 bg-yellow-100 text-yellow-700 rounded-full flex items-center justify-center text-[9px] shrink-0">{idx+1}</span>
+                                                    {stop.display_name}
+                                                </p>
+                                            ))}
+                                        </div>
+                                    )}
+                                    <NavigationBlock label="Destino Final" lat={ride.destination_lat} lng={ride.destination_lng} address={ride.destination_address} icon={Flag} />
+                                </>
+                            )}
+                        </ScrollArea>
                         
-                        {ride?.status === 'ARRIVED' && (
-                            <>
-                                <div className="bg-green-50 p-4 rounded-2xl text-center mb-4 border border-green-100 animate-pulse">
-                                    <p className="font-black text-green-800 text-sm">Aguardando passageiro embarcar...</p>
-                                    {trackingActive && <p className="text-[10px] text-green-600 mt-1">Rastreamento ativo</p>}
-                                </div>
-                                <NavigationBlock label="Destino Final" lat={ride.destination_lat} lng={ride.destination_lng} address={ride.destination_address} icon={Flag} />
-                            </>
-                        )}
-                        
-                        {ride?.status === 'IN_PROGRESS' && <NavigationBlock label="Destino Final" lat={ride.destination_lat} lng={ride.destination_lng} address={ride.destination_address} icon={Flag} />}
-                        
-                        <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100 mb-6 mt-2">
-                             <Avatar className="w-12 h-12 border-2 border-white"><AvatarImage src={ride?.client_details?.avatar_url} /><AvatarFallback>{ride?.client_details?.first_name?.[0]}</AvatarFallback></Avatar>
-                             <div className="flex-1"><h3 className="font-black text-slate-900 leading-tight">{ride?.client_details?.first_name} {ride?.client_details?.last_name}</h3><p className="text-[10px] text-gray-500 font-bold uppercase mt-0.5">Nota: 5.0 ⭐</p></div>
+                        <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100 mb-6 mt-4">
+                             <Avatar className="w-12 h-12 border-2 border-white"><AvatarImage src={ride?.client_details?.avatar_url} /><AvatarFallback>{ride?.client_details?.first_name?.[0] || 'G'}</AvatarFallback></Avatar>
+                             <div className="flex-1"><h3 className="font-black text-slate-900 leading-tight">{ride?.client_details?.first_name || ride?.guest_name || 'Passageiro'} {ride?.client_details?.last_name}</h3><p className="text-[10px] text-gray-500 font-bold uppercase mt-0.5">Nota: 5.0 ⭐</p></div>
                              <Button size="icon" variant="outline" className="h-10 w-10 rounded-xl" onClick={() => setShowChat(true)}><MessageCircle className="w-4 h-4" /></Button>
                              {ride?.client_details?.phone && <Button size="icon" variant="outline" className="h-10 w-10 rounded-xl" onClick={() => window.open(`tel:${ride.client_details.phone}`)}><Phone className="w-4 h-4" /></Button>}
                         </div>
@@ -486,6 +533,16 @@ const DriverDashboard = () => {
                                       <p className="text-xs font-bold text-slate-700 line-clamp-1">{r.pickup_address}</p>
                                   </div>
                               </div>
+                              {r.stops && Array.isArray(r.stops) && r.stops.length > 0 && (
+                                  <div className="flex items-start gap-3 border-l-2 border-dashed border-slate-200 ml-3 pl-3">
+                                      <div>
+                                          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Paradas Extra</p>
+                                          {r.stops.map((stop: any, idx: number) => (
+                                              <p key={idx} className="text-[10px] font-bold text-slate-600 line-clamp-1">🛑 {stop.display_name}</p>
+                                          ))}
+                                      </div>
+                                  </div>
+                              )}
                               <div className="flex items-start gap-3">
                                   <div className="p-1.5 bg-yellow-100 rounded-full shadow-sm mt-0.5"><Flag className="w-3.5 h-3.5 text-yellow-600" /></div>
                                   <div>
@@ -516,8 +573,8 @@ const DriverDashboard = () => {
                   <DialogDescription className="text-slate-400">Preencha os dados da corrida manual abaixo.</DialogDescription>
               </DialogHeader>
               
-              <div className="p-6 space-y-6 bg-white rounded-b-[32px]">
-                  <div className="space-y-4">
+              <div className="p-6 bg-white rounded-b-[32px] max-h-[70vh] overflow-y-auto custom-scrollbar">
+                  <div className="space-y-4 mb-4">
                       <div className="space-y-1.5">
                           <Label className="text-xs font-black uppercase text-slate-400 ml-1">Nome do Passageiro</Label>
                           <Input 
@@ -550,13 +607,44 @@ const DriverDashboard = () => {
                               </Button>
                           </div>
                       </div>
+
+                      {/* Paradas */}
+                      {stops.map((stop, index) => (
+                          <div key={index} className="flex gap-2 animate-in slide-in-from-left">
+                              <div className="relative flex-1">
+                                  <GoogleLocationSearch 
+                                      placeholder={`Parada ${index + 1}`} 
+                                      onSelect={(l) => {
+                                          const newStops = [...stops];
+                                          newStops[index] = l;
+                                          setStops(newStops);
+                                      }} 
+                                      initialValue={stop?.display_name} 
+                                  />
+                              </div>
+                              <Button size="icon" variant="outline" className="h-14 w-14 rounded-2xl shrink-0 border-red-200 bg-red-50 text-red-500 hover:bg-red-100" onClick={() => {
+                                  const newStops = [...stops];
+                                  newStops.splice(index, 1);
+                                  setStops(newStops);
+                              }}>
+                                  <X className="w-5 h-5" />
+                              </Button>
+                          </div>
+                      ))}
+
                       <div className="space-y-1.5">
-                          <Label className="text-xs font-black uppercase text-slate-400 ml-1">Para onde ele vai?</Label>
-                          <GoogleLocationSearch placeholder="Destino final" onSelect={setDestLocation} initialValue={destLocation?.display_name} />
+                          <Label className="text-xs font-black uppercase text-slate-400 ml-1">Destino Final</Label>
+                          <GoogleLocationSearch placeholder="Para onde ele vai?" onSelect={setDestLocation} initialValue={destLocation?.display_name} />
                       </div>
+
+                      {stops.length < 2 && (
+                          <Button variant="ghost" className="w-full text-slate-500 font-bold border border-dashed border-slate-200 rounded-xl h-12 mt-2" onClick={() => setStops([...stops, null])}>
+                              <Plus className="w-4 h-4 mr-2" /> Adicionar Parada
+                          </Button>
+                      )}
                   </div>
 
-                  <div className="pt-4 space-y-4">
+                  <div className="pt-6 space-y-4">
                       {pickupLocation && destLocation && (
                           <div className="bg-yellow-50 p-4 rounded-2xl border border-yellow-200 text-center animate-in zoom-in-95">
                               {manualLoading ? (
@@ -567,6 +655,7 @@ const DriverDashboard = () => {
                               ) : (
                                   <>
                                       {globalMultiplier > 1.0 && <Badge className="mb-2 bg-blue-100 text-blue-700 hover:bg-blue-100 border-0">Tarifa Dinâmica Ativa</Badge>}
+                                      {stops.filter(s=>s).length > 0 && <p className="text-[9px] font-bold text-yellow-700 uppercase mb-1">Inclui taxa de parada</p>}
                                       <p className="text-[10px] font-bold text-yellow-700 uppercase mb-1 tracking-widest">Valor da Corrida</p>
                                       <h3 className="text-4xl font-black text-black tracking-tighter">R$ {calculatePrice().toFixed(2)}</h3>
                                       <p className="text-[10px] text-yellow-600 font-bold mt-1">Distância: {routeDistance.toFixed(1)} km</p>

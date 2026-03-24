@@ -43,7 +43,8 @@ const AdminDashboard = () => {
   const [appSettings, setAppSettings] = useState({ enable_cash: true, enable_wallet: true });
   const [minCarYear, setMinCarYear] = useState("2010"); 
   const [globalMultiplier, setGlobalMultiplier] = useState("1.0");
-  const [savingYear, setSavingYear] = useState(false);
+  const [costPerStop, setCostPerStop] = useState("2.50");
+  const [savingSettings, setSavingSettings] = useState(false);
 
   // Cupons
   const [coupons, setCoupons] = useState<any[]>([]);
@@ -104,6 +105,9 @@ const AdminDashboard = () => {
 
             const multObj = adminConfigs.find(c => c.key === 'global_multiplier');
             if (multObj && multObj.value) setGlobalMultiplier(multObj.value);
+            
+            const stopObj = adminConfigs.find(c => c.key === 'cost_per_stop');
+            if (stopObj && stopObj.value) setCostPerStop(stopObj.value);
 
             const rulesObj = adminConfigs.find(c => c.key === 'category_rules');
             if (rulesObj && rulesObj.value) {
@@ -111,7 +115,6 @@ const AdminDashboard = () => {
             }
         }
 
-        // Buscar Cupons (Só tenta buscar se a tabela existir, evita quebrar se o SQL não rodou ainda)
         try {
             const { data: couponsData, error: couponError } = await supabase.from('coupons').select('*').order('created_at', { ascending: false });
             if (couponsData && !couponError) setCoupons(couponsData);
@@ -201,31 +204,31 @@ const AdminDashboard = () => {
       }
   };
 
-  const handleSaveMinYear = async () => {
-      setSavingYear(true);
+  const saveAdminConfig = async (key: string, value: string, description: string) => {
+      const { data } = await supabase.from('admin_config').select('key').eq('key', key).maybeSingle();
+      if (data) {
+          await supabase.from('admin_config').update({ value }).eq('key', key);
+      } else {
+          await supabase.from('admin_config').insert({ key, value, description });
+      }
+  };
+
+  const handleSaveGlobalConfigs = async () => {
+      setSavingSettings(true);
       try {
-          const { data } = await supabase.from('admin_config').select('key').eq('key', 'min_car_year').maybeSingle();
-          if (data) {
-              await supabase.from('admin_config').update({ value: minCarYear }).eq('key', 'min_car_year');
-          } else {
-              await supabase.from('admin_config').insert({ key: 'min_car_year', value: minCarYear, description: 'Ano mínimo permitido para cadastro de veículos' });
-          }
-          showSuccess("Ano mínimo atualizado!");
+          await saveAdminConfig('min_car_year', minCarYear, 'Ano mínimo permitido para cadastro de veículos');
+          await saveAdminConfig('cost_per_stop', costPerStop, 'Custo adicional cobrado por cada parada extra');
+          showSuccess("Configurações salvas!");
       } catch (e: any) {
-          showError("Erro ao salvar ano.");
+          showError("Erro ao salvar configurações.");
       } finally {
-          setSavingYear(false);
+          setSavingSettings(false);
       }
   };
 
   const handleSaveMultiplier = async () => {
     try {
-        const { data } = await supabase.from('admin_config').select('key').eq('key', 'global_multiplier').maybeSingle();
-        if (data) {
-            await supabase.from('admin_config').update({ value: globalMultiplier }).eq('key', 'global_multiplier');
-        } else {
-            await supabase.from('admin_config').insert({ key: 'global_multiplier', value: globalMultiplier, description: 'Multiplicador Dinâmico' });
-        }
+        await saveAdminConfig('global_multiplier', globalMultiplier, 'Multiplicador Dinâmico Global');
         showSuccess("Tarifa dinâmica atualizada!");
     } catch(e: any) { showError(e.message); }
   };
@@ -665,6 +668,18 @@ const AdminDashboard = () => {
                                   <CardDescription className="text-slate-500">Habilite ou desabilite recursos globais do aplicativo.</CardDescription>
                               </CardHeader>
                               <CardContent className="p-8 space-y-4">
+                                  <div className="space-y-3 mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                                      <Label className="text-xs font-bold text-slate-900 uppercase tracking-widest">Taxa por Parada Extra (R$)</Label>
+                                      <Input 
+                                          type="number" 
+                                          step="0.01"
+                                          value={costPerStop} 
+                                          onChange={(e) => setCostPerStop(e.target.value)} 
+                                          className="h-12 font-black text-slate-900 text-lg border-slate-300 bg-white"
+                                      />
+                                      <p className="text-[10px] text-slate-500">Valor cobrado do passageiro e repassado ao motorista por cada parada adicionada no trajeto.</p>
+                                  </div>
+                              
                                   <div className="flex items-center justify-between p-5 bg-slate-50 rounded-2xl border border-slate-200 transition-colors hover:bg-slate-100">
                                       <div className="flex gap-4 items-center">
                                           <div className="p-3 bg-white rounded-xl shadow-sm border border-slate-200"><Banknote className="w-6 h-6 text-green-600" /></div>
@@ -697,23 +712,22 @@ const AdminDashboard = () => {
                               <CardContent className="p-8 space-y-6">
                                   <div className="space-y-3">
                                       <Label className="text-sm font-bold text-slate-900">Ano Mínimo Permitido na Plataforma</Label>
-                                      <div className="flex gap-3">
-                                          <Input 
-                                              type="number" 
-                                              value={minCarYear} 
-                                              onChange={(e) => setMinCarYear(e.target.value)} 
-                                              className="h-14 font-black text-slate-900 text-xl text-center border-slate-200 bg-slate-50"
-                                          />
-                                          <Button 
-                                              onClick={handleSaveMinYear} 
-                                              className="h-14 bg-slate-900 hover:bg-black text-white font-bold rounded-xl px-8"
-                                              disabled={savingYear}
-                                          >
-                                              {savingYear ? <Loader2 className="w-5 h-5 animate-spin" /> : "Salvar Regra"}
-                                          </Button>
-                                      </div>
+                                      <Input 
+                                          type="number" 
+                                          value={minCarYear} 
+                                          onChange={(e) => setMinCarYear(e.target.value)} 
+                                          className="h-14 font-black text-slate-900 text-xl border-slate-200 bg-slate-50"
+                                      />
                                       <p className="text-xs text-slate-500">Ao analisar um novo cadastro, você receberá um alerta se o veículo for mais antigo que {minCarYear}.</p>
                                   </div>
+                                  
+                                  <Button 
+                                      onClick={handleSaveGlobalConfigs} 
+                                      className="w-full h-14 bg-slate-900 hover:bg-black text-white font-bold rounded-xl shadow-md mt-4"
+                                      disabled={savingSettings}
+                                  >
+                                      {savingSettings ? <Loader2 className="w-5 h-5 animate-spin" /> : "Salvar Todas as Regras"}
+                                  </Button>
                               </CardContent>
                           </Card>
                       </div>

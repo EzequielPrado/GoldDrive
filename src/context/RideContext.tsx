@@ -14,7 +14,8 @@ interface RideContextType {
       price: number, 
       distance: string, 
       category: string, 
-      paymentMethod: string
+      paymentMethod: string,
+      stops?: any[]
   ) => Promise<boolean>;
   createManualRide: (
       passengerName: string,
@@ -25,7 +26,8 @@ interface RideContextType {
       destCoords: { lat: number, lng: number },
       price: number,
       distance: string,
-      category: string
+      category: string,
+      stops?: any[]
   ) => Promise<void>;
   cancelRide: (rideId: string, reason?: string) => Promise<void>;
   acceptRide: (rideId: string) => Promise<void>;
@@ -81,7 +83,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   const fetchActiveRide = async (userId: string) => {
     if (!userId) return;
     try {
-      // Busca as corridas mais recentes que envolvem este usuário
       const { data: ridesData, error } = await supabase
         .from('rides')
         .select(`*, driver_details:profiles!public_rides_driver_id_fkey(*), client_details:profiles!public_rides_customer_id_fkey(*)`)
@@ -92,10 +93,8 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       if (error) throw error;
 
       if (ridesData && ridesData.length > 0) {
-          // Procura por qualquer corrida que não esteja finalizada ou cancelada
           let activeRide = ridesData.find(r => ['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(r.status));
           
-          // Se não achar ativa, vê se tem uma finalizada que precisa de avaliação
           if (!activeRide) {
               const mostRecent = ridesData[0];
               const isDismissed = dismissedRidesRef.current.includes(mostRecent.id);
@@ -164,7 +163,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       await fetchAvailableRides(false);
   };
 
-  // SUBSCRIPTION GLOBAL PARA MUDANÇAS DE STATUS
   useEffect(() => {
     const channel = supabase.channel('ride_monitor_v4')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rides' }, async (payload) => {
@@ -174,12 +172,10 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
             const newRecord = payload.new as any;
             const oldRecord = payload.old as any;
 
-            // 1. Lógica para Motorista: Novas corridas
             if (userRoleRef.current === 'driver' && newRecord?.status === 'SEARCHING' && !newRecord?.driver_id) {
                 await fetchAvailableRides(true);
             }
 
-            // 2. Lógica Geral: Minha corrida mudou?
             const isMyRide = 
                 newRecord?.customer_id === uid || 
                 newRecord?.driver_id === uid || 
@@ -187,7 +183,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
                 oldRecord?.driver_id === uid;
 
             if (isMyRide) {
-                // Força atualização imediata
                 await fetchActiveRide(uid);
             }
       })
@@ -218,7 +213,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
     init();
   }, []);
 
-  // Polling de segurança a cada 3 segundos
   useEffect(() => {
       let interval: any;
       if (currentUserId) {
@@ -230,7 +224,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       return () => clearInterval(interval);
   }, [currentUserId]);
 
-  const requestRide = async (pickup: string, destination: string, pickupCoords: any, destCoords: any, price: number, distance: string, category: string, paymentMethod: string): Promise<boolean> => {
+  const requestRide = async (pickup: string, destination: string, pickupCoords: any, destCoords: any, price: number, distance: string, category: string, paymentMethod: string, stops: any[] = []): Promise<boolean> => {
     const userId = currentUserIdRef.current;
     if (!userId) return false;
     try {
@@ -242,6 +236,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           pickup_lng: pickupCoords.lng,
           destination_lat: destCoords.lat, 
           destination_lng: destCoords.lng,
+          stops: stops,
           price, 
           distance, 
           status: 'SEARCHING', 
@@ -250,8 +245,6 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       }).select().single();
       
       if (error) throw error;
-      
-      // Atualiza estado local imediatamente
       setRide(data);
       return true;
     } catch (e: any) { 
@@ -260,7 +253,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const createManualRide = async (passengerName: string, passengerPhone: string, pickup: string, destination: string, pickupCoords: any, destCoords: any, price: number, distance: string, category: string) => {
+  const createManualRide = async (passengerName: string, passengerPhone: string, pickup: string, destination: string, pickupCoords: any, destCoords: any, price: number, distance: string, category: string, stops: any[] = []) => {
       const userId = currentUserIdRef.current;
       if (!userId) return;
       try {
@@ -273,6 +266,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
               pickup_lng: pickupCoords.lng, 
               destination_lat: destCoords.lat, 
               destination_lng: destCoords.lng,
+              stops: stops,
               price, 
               distance, 
               status: 'IN_PROGRESS', 
