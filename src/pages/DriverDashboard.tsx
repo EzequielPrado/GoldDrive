@@ -42,7 +42,7 @@ const NavigationBlock = ({ label, lat, lng, address, icon: Icon = MapPin }: any)
 const DriverDashboard = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { ride, availableRides, acceptRide, rejectRide, confirmArrival, finishRide, startRide, completeStop, rateRide, clearRide, currentUserId, createManualRide, refreshAvailableRides } = useRide();
+  const { ride, availableRides, acceptRide, rejectRide, confirmArrival, finishRide, startRide, completeStop, rateRide, clearRide, currentUserId, createManualRide, refreshAvailableRides, unlockAudio } = useRide();
   
   const [activeTab, setActiveTab] = useState('home');
   const [isOnline, setIsOnline] = useState(false);
@@ -279,9 +279,13 @@ const DriverDashboard = () => {
   const toggleOnline = async (val: boolean) => { 
       setIsOnline(val);
       
-      // Quando fica online, solicita permissão para enviar Notificações Push
-      if (val && 'Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
-          Notification.requestPermission();
+      if (val) {
+          // Destrava as políticas de áudio do navegador ao clicar
+          unlockAudio();
+          
+          if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+              Notification.requestPermission();
+          }
       }
       
       if (driverProfile?.id) {

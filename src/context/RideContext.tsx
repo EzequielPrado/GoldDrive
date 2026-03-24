@@ -40,13 +40,14 @@ interface RideContextType {
   addBalance: (amount: number) => Promise<void>;
   clearRide: () => void;
   refreshAvailableRides: () => Promise<void>;
+  unlockAudio: () => void;
   currentUserId: string | null;
   userRole: 'client' | 'driver' | null;
 }
 
 const RideContext = createContext<RideContextType | undefined>(undefined);
 
-// Usando o novo arquivo de áudio carregado
+// Caminho do áudio na pasta public/
 const NOTIFICATION_SOUND = "/notification.mpeg";
 
 export const RideProvider = ({ children }: { children: React.ReactNode }) => {
@@ -75,12 +76,25 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       }
   }, [userRole, currentUserId]);
 
+  // Função para "destravar" o bloqueio de áudio dos navegadores (chamada em ação de clique do usuário)
+  const unlockAudio = () => {
+      if (audioRef.current) {
+          // Play e pause imediato libera a engine de áudio para este elemento
+          audioRef.current.play().then(() => {
+              audioRef.current?.pause();
+              if (audioRef.current) audioRef.current.currentTime = 0;
+          }).catch(e => console.log("Unlock audio failed", e));
+      }
+  };
+
   const playNotification = (title = "Nova Corrida!", body = "Passageiro aguardando motorista") => {
+      // 1. Toca o áudio
       if (audioRef.current) {
           audioRef.current.currentTime = 0;
-          audioRef.current.play().catch(() => console.log("Áudio bloqueado pelo navegador"));
+          audioRef.current.play().catch(e => console.log("Áudio bloqueado pelo navegador", e));
       }
 
+      // 2. Dispara a notificação de sistema (Push)
       if ('Notification' in window && Notification.permission === 'granted') {
           try {
               new Notification(title, {
@@ -131,12 +145,10 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           }
       }
       
-      // Proteção: Se não encontrou corrida no banco, mas a local diz que está 'SEARCHING' há pouco tempo,
-      // não anula a corrida (evita que a tela do passageiro pisque e volte para o início)
       setRide((prev: any) => {
           if (prev && prev.status === 'SEARCHING') {
               const age = (new Date().getTime() - new Date(prev.created_at).getTime()) / 1000;
-              if (age < 10) return prev; // Mantém local por até 10 segundos até o banco sincronizar
+              if (age < 10) return prev;
           }
           return null;
       });
@@ -271,7 +283,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       }).select().single();
       
       if (error) throw error;
-      setRide(data); // Salva na tela instantaneamente
+      setRide(data); 
       return true;
     } catch (e: any) { 
         toast({ title: "Erro ao solicitar", description: e.message, variant: "destructive" }); 
@@ -385,7 +397,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   return (
     <RideContext.Provider value={{ 
         ride, availableRides, loading, requestRide, createManualRide, cancelRide, acceptRide, rejectRide, 
-        startRide, finishRide, completeStop, rateRide, confirmArrival, addBalance, clearRide, refreshAvailableRides, currentUserId, userRole 
+        startRide, finishRide, completeStop, rateRide, confirmArrival, addBalance, clearRide, refreshAvailableRides, unlockAudio, currentUserId, userRole 
     }}>
       {children}
     </RideContext.Provider>
