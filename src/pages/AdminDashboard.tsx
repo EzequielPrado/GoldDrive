@@ -712,22 +712,23 @@ const AdminDashboard = () => {
                               <CardContent className="p-8 space-y-6">
                                   <div className="space-y-3">
                                       <Label className="text-sm font-bold text-slate-900">Ano Mínimo Permitido na Plataforma</Label>
-                                      <Input 
-                                          type="number" 
-                                          value={minCarYear} 
-                                          onChange={(e) => setMinCarYear(e.target.value)} 
-                                          className="h-14 font-black text-slate-900 text-xl border-slate-200 bg-slate-50"
-                                      />
+                                      <div className="flex gap-3">
+                                          <Input 
+                                              type="number" 
+                                              value={minCarYear} 
+                                              onChange={(e) => setMinCarYear(e.target.value)} 
+                                              className="h-14 font-black text-slate-900 text-xl text-center border-slate-200 bg-slate-50"
+                                          />
+                                          <Button 
+                                              onClick={handleSaveGlobalConfigs} 
+                                              className="h-14 bg-slate-900 hover:bg-black text-white font-bold rounded-xl px-8"
+                                              disabled={savingSettings}
+                                          >
+                                              {savingSettings ? <Loader2 className="w-5 h-5 animate-spin" /> : "Salvar Regra"}
+                                          </Button>
+                                      </div>
                                       <p className="text-xs text-slate-500">Ao analisar um novo cadastro, você receberá um alerta se o veículo for mais antigo que {minCarYear}.</p>
                                   </div>
-                                  
-                                  <Button 
-                                      onClick={handleSaveGlobalConfigs} 
-                                      className="w-full h-14 bg-slate-900 hover:bg-black text-white font-bold rounded-xl shadow-md mt-4"
-                                      disabled={savingSettings}
-                                  >
-                                      {savingSettings ? <Loader2 className="w-5 h-5 animate-spin" /> : "Salvar Todas as Regras"}
-                                  </Button>
                               </CardContent>
                           </Card>
                       </div>
