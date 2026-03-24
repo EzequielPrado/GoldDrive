@@ -859,4 +859,4 @@ const AdminDashboard = () => {
   );
 };
 
-export default DriverDashboard;
+export default AdminDashboard;
