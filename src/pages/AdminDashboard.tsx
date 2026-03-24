@@ -175,14 +175,16 @@ const AdminDashboard = () => {
 
           const { data } = await supabase.from('admin_config').select('key').eq('key', 'category_rules').maybeSingle();
           if (data) {
-              await supabase.from('admin_config').update({ value: JSON.stringify(categoryRules) }).eq('key', 'category_rules');
+              const { error: errUpdate } = await supabase.from('admin_config').update({ value: JSON.stringify(categoryRules) }).eq('key', 'category_rules');
+              if (errUpdate) throw errUpdate;
           } else {
-              await supabase.from('admin_config').insert({ key: 'category_rules', value: JSON.stringify(categoryRules) });
+              const { error: errInsert } = await supabase.from('admin_config').insert({ key: 'category_rules', value: JSON.stringify(categoryRules) });
+              if (errInsert) throw errInsert;
           }
 
           showSuccess("Categoria e regras salvas com sucesso!");
       } catch (e: any) {
-          showError("Erro ao salvar categoria.");
+          showError(e.message || "Erro ao salvar categoria.");
       }
   };
 
@@ -192,9 +194,11 @@ const AdminDashboard = () => {
           const { data } = await supabase.from('app_settings').select('key').eq('key', key).maybeSingle();
           
           if (data) {
-              await supabase.from('app_settings').update({ value: newValue }).eq('key', key);
+              const { error } = await supabase.from('app_settings').update({ value: newValue }).eq('key', key);
+              if (error) throw error;
           } else {
-              await supabase.from('app_settings').insert({ key, value: newValue });
+              const { error } = await supabase.from('app_settings').insert({ key, value: newValue });
+              if (error) throw error;
           }
           
           setAppSettings(prev => ({ ...prev, [key]: newValue }));
@@ -207,9 +211,11 @@ const AdminDashboard = () => {
   const saveAdminConfig = async (key: string, value: string, description: string) => {
       const { data } = await supabase.from('admin_config').select('key').eq('key', key).maybeSingle();
       if (data) {
-          await supabase.from('admin_config').update({ value }).eq('key', key);
+          const { error } = await supabase.from('admin_config').update({ value }).eq('key', key);
+          if (error) throw error;
       } else {
-          await supabase.from('admin_config').insert({ key, value, description });
+          const { error } = await supabase.from('admin_config').insert({ key, value, description });
+          if (error) throw error;
       }
   };
 
@@ -218,9 +224,9 @@ const AdminDashboard = () => {
       try {
           await saveAdminConfig('min_car_year', minCarYear, 'Ano mínimo permitido para cadastro de veículos');
           await saveAdminConfig('cost_per_stop', costPerStop, 'Custo adicional cobrado por cada parada extra');
-          showSuccess("Configurações salvas!");
+          showSuccess("Configurações salvas com sucesso!");
       } catch (e: any) {
-          showError("Erro ao salvar configurações.");
+          showError(e.message || "Erro ao salvar configurações.");
       } finally {
           setSavingSettings(false);
       }
@@ -230,7 +236,9 @@ const AdminDashboard = () => {
     try {
         await saveAdminConfig('global_multiplier', globalMultiplier, 'Multiplicador Dinâmico Global');
         showSuccess("Tarifa dinâmica atualizada!");
-    } catch(e: any) { showError(e.message); }
+    } catch(e: any) { 
+        showError(e.message || "Erro ao atualizar tarifa."); 
+    }
   };
 
   const handleCreateCoupon = async () => {
@@ -253,7 +261,8 @@ const AdminDashboard = () => {
 
   const handleToggleCoupon = async (id: string, active: boolean) => {
       try {
-          await supabase.from('coupons').update({ active }).eq('id', id);
+          const { error } = await supabase.from('coupons').update({ active }).eq('id', id);
+          if (error) throw error;
           setCoupons(prev => prev.map(c => c.id === id ? { ...c, active } : c));
       } catch(e) { showError("Erro ao atualizar cupom"); }
   };
@@ -663,29 +672,59 @@ const AdminDashboard = () => {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                           {/* Configurações Globais */}
                           <Card className="rounded-[32px] border border-slate-100 shadow-xl overflow-hidden bg-white">
-                              <CardHeader className="p-8 border-b border-slate-100">
-                                  <CardTitle className="text-xl font-black text-slate-900">Configurações Gerais</CardTitle>
-                                  <CardDescription className="text-slate-500">Habilite ou desabilite recursos globais do aplicativo.</CardDescription>
+                              <CardHeader className="p-8 border-b border-slate-100 bg-yellow-50">
+                                  <CardTitle className="text-xl font-black text-slate-900 flex items-center gap-2"><Settings className="w-5 h-5 text-yellow-600" /> Configurações Gerais</CardTitle>
+                                  <CardDescription className="text-slate-600">Ajuste regras globais e opções de pagamento do aplicativo.</CardDescription>
                               </CardHeader>
-                              <CardContent className="p-8 space-y-4">
-                                  <div className="space-y-3 mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                              <CardContent className="p-8 space-y-6">
+                                  <div className="space-y-3 bg-white p-4 rounded-2xl border border-slate-100">
                                       <Label className="text-xs font-bold text-slate-900 uppercase tracking-widest">Taxa por Parada Extra (R$)</Label>
                                       <Input 
                                           type="number" 
                                           step="0.01"
                                           value={costPerStop} 
                                           onChange={(e) => setCostPerStop(e.target.value)} 
-                                          className="h-12 font-black text-slate-900 text-lg border-slate-300 bg-white"
+                                          className="h-14 font-black text-slate-900 text-xl border-slate-200 bg-slate-50"
                                       />
-                                      <p className="text-[10px] text-slate-500">Valor cobrado do passageiro e repassado ao motorista por cada parada adicionada no trajeto.</p>
+                                      <p className="text-xs text-slate-500">Valor somado automaticamente caso o usuário adicione paradas extras no trajeto.</p>
                                   </div>
-                              
+
+                                  <div className="space-y-3 bg-white p-4 rounded-2xl border border-slate-100">
+                                      <Label className="text-sm font-bold text-slate-900">Ano Mínimo do Veículo</Label>
+                                      <Input 
+                                          type="number" 
+                                          value={minCarYear} 
+                                          onChange={(e) => setMinCarYear(e.target.value)} 
+                                          className="h-14 font-black text-slate-900 text-xl border-slate-200 bg-slate-50"
+                                      />
+                                      <p className="text-xs text-slate-500">Alerta de aprovação se o carro for mais antigo que o ano informado.</p>
+                                  </div>
+
+                                  <div className="pt-2">
+                                      <Button 
+                                          onClick={handleSaveGlobalConfigs} 
+                                          className="w-full h-14 bg-slate-900 hover:bg-black text-white font-bold rounded-xl shadow-md"
+                                          disabled={savingSettings}
+                                      >
+                                          {savingSettings ? <Loader2 className="w-5 h-5 animate-spin" /> : "Salvar Configurações Gerais"}
+                                      </Button>
+                                  </div>
+                              </CardContent>
+                          </Card>
+
+                          {/* Formas de Pagamento */}
+                          <Card className="rounded-[32px] border border-slate-100 shadow-xl overflow-hidden bg-white">
+                              <CardHeader className="p-8 border-b border-slate-100">
+                                  <CardTitle className="text-xl font-black text-slate-900 flex items-center gap-2"><CreditCard className="w-5 h-5 text-slate-900" /> Formas de Pagamento</CardTitle>
+                                  <CardDescription className="text-slate-500">Habilite ou desabilite opções de pagamento no app.</CardDescription>
+                              </CardHeader>
+                              <CardContent className="p-8 space-y-4">
                                   <div className="flex items-center justify-between p-5 bg-slate-50 rounded-2xl border border-slate-200 transition-colors hover:bg-slate-100">
                                       <div className="flex gap-4 items-center">
                                           <div className="p-3 bg-white rounded-xl shadow-sm border border-slate-200"><Banknote className="w-6 h-6 text-green-600" /></div>
                                           <div>
-                                              <h4 className="font-black text-slate-900">Dinheiro</h4>
-                                              <p className="text-sm font-medium text-slate-500">Permitir pagamentos em dinheiro.</p>
+                                              <h4 className="font-black text-slate-900">Dinheiro Físico</h4>
+                                              <p className="text-sm font-medium text-slate-500">Permitir pagamentos diretos.</p>
                                           </div>
                                       </div>
                                       <Switch checked={appSettings.enable_cash} onCheckedChange={() => handleToggleSetting('enable_cash', appSettings.enable_cash)} />
@@ -695,39 +734,10 @@ const AdminDashboard = () => {
                                           <div className="p-3 bg-white rounded-xl shadow-sm border border-slate-200"><Wallet className="w-6 h-6 text-blue-600" /></div>
                                           <div>
                                               <h4 className="font-black text-slate-900">Carteira (Wallet)</h4>
-                                              <p className="text-sm font-medium text-slate-500">Permitir pagamentos com saldo.</p>
+                                              <p className="text-sm font-medium text-slate-500">Permitir usar saldo do app.</p>
                                           </div>
                                       </div>
                                       <Switch checked={appSettings.enable_wallet} onCheckedChange={() => handleToggleSetting('enable_wallet', appSettings.enable_wallet)} />
-                                  </div>
-                              </CardContent>
-                          </Card>
-
-                          {/* Restrições de Veículo Genéricas */}
-                          <Card className="rounded-[32px] border border-slate-100 shadow-xl overflow-hidden bg-white">
-                              <CardHeader className="p-8 border-b border-slate-100 bg-yellow-50">
-                                  <CardTitle className="text-xl font-black text-slate-900 flex items-center gap-2"><Shield className="w-5 h-5 text-yellow-600" /> Padrão Global de Veículos</CardTitle>
-                                  <CardDescription className="text-slate-600">Alerta automático para novos motoristas durante aprovação.</CardDescription>
-                              </CardHeader>
-                              <CardContent className="p-8 space-y-6">
-                                  <div className="space-y-3">
-                                      <Label className="text-sm font-bold text-slate-900">Ano Mínimo Permitido na Plataforma</Label>
-                                      <div className="flex gap-3">
-                                          <Input 
-                                              type="number" 
-                                              value={minCarYear} 
-                                              onChange={(e) => setMinCarYear(e.target.value)} 
-                                              className="h-14 font-black text-slate-900 text-xl text-center border-slate-200 bg-slate-50"
-                                          />
-                                          <Button 
-                                              onClick={handleSaveGlobalConfigs} 
-                                              className="h-14 bg-slate-900 hover:bg-black text-white font-bold rounded-xl px-8"
-                                              disabled={savingSettings}
-                                          >
-                                              {savingSettings ? <Loader2 className="w-5 h-5 animate-spin" /> : "Salvar Regra"}
-                                          </Button>
-                                      </div>
-                                      <p className="text-xs text-slate-500">Ao analisar um novo cadastro, você receberá um alerta se o veículo for mais antigo que {minCarYear}.</p>
                                   </div>
                               </CardContent>
                           </Card>
