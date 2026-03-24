@@ -8,7 +8,7 @@ import {
   Menu, Banknote, FileText, Check, X, ExternalLink, Camera, User,
   Moon as MoonIcon, List, Plus, Power, Pencil, Star, Calendar, ArrowUpRight, ArrowDownLeft,
   Activity, BarChart3, PieChart, Coins, Lock, Unlock, Calculator, Info, MapPin, Zap, XCircle,
-  Ban, Percent, Navigation, PlusCircle, UserPlus, Eye
+  Ban, Percent, Navigation, PlusCircle, UserPlus, Eye, Ticket
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -42,7 +42,12 @@ const AdminDashboard = () => {
   const [categoryRules, setCategoryRules] = useState<Record<string, any>>({});
   const [appSettings, setAppSettings] = useState({ enable_cash: true, enable_wallet: true });
   const [minCarYear, setMinCarYear] = useState("2010"); 
+  const [globalMultiplier, setGlobalMultiplier] = useState("1.0");
   const [savingYear, setSavingYear] = useState(false);
+
+  // Cupons
+  const [coupons, setCoupons] = useState<any[]>([]);
+  const [newCoupon, setNewCoupon] = useState({ code: '', type: 'PERCENTAGE', value: '', max_uses: '100' });
 
   // Estados de Gerenciamento
   const [selectedUser, setSelectedUser] = useState<any>(null);
@@ -58,9 +63,7 @@ const AdminDashboard = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return; 
 
-        // 1. Busca perfis e separa por categorias
         const { data: profiles } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-        
         if (profiles) {
             setPassengers(profiles.filter((p: any) => p.role === 'client'));
             const allDrivers = profiles.filter((p: any) => p.role === 'driver');
@@ -68,14 +71,11 @@ const AdminDashboard = () => {
             setPendingDrivers(allDrivers.filter((p: any) => p.driver_status === 'PENDING'));
         }
 
-        // 2. Busca corridas recentes
         const { data: ridesData } = await supabase.from('rides')
             .select(`*, driver:profiles!public_rides_driver_id_fkey(*), customer:profiles!public_rides_customer_id_fkey(*)`)
             .order('created_at', { ascending: false });
-        
         if (ridesData) setRides(ridesData);
 
-        // 3. Estatísticas rápidas
         const completedRides = ridesData?.filter(r => r.status === 'COMPLETED') || [];
         setStats({
             revenue: completedRides.reduce((a, r) => a + Number(r.price), 0),
@@ -84,11 +84,9 @@ const AdminDashboard = () => {
             pendingDrivers: profiles?.filter(p => p.role === 'driver' && p.driver_status === 'PENDING').length || 0
         });
 
-        // 4. Buscar Categorias de Veículos (Taxas)
         const { data: cats } = await supabase.from('car_categories').select('*').order('base_fare', { ascending: true });
         if (cats) setCarCategories(cats);
 
-        // 5. Buscar Configurações App
         const { data: settings } = await supabase.from('app_settings').select('*');
         if (settings) {
             const cashObj = settings.find(s => s.key === 'enable_cash');
@@ -99,21 +97,25 @@ const AdminDashboard = () => {
             });
         }
 
-        // 6. Buscar Admin Config (Ano mínimo e Regras de Categoria)
         const { data: adminConfigs } = await supabase.from('admin_config').select('*');
         if (adminConfigs) {
             const minYearObj = adminConfigs.find(c => c.key === 'min_car_year');
             if (minYearObj && minYearObj.value) setMinCarYear(minYearObj.value);
 
+            const multObj = adminConfigs.find(c => c.key === 'global_multiplier');
+            if (multObj && multObj.value) setGlobalMultiplier(multObj.value);
+
             const rulesObj = adminConfigs.find(c => c.key === 'category_rules');
             if (rulesObj && rulesObj.value) {
-                try {
-                    setCategoryRules(JSON.parse(rulesObj.value));
-                } catch (e) {
-                    setCategoryRules({});
-                }
+                try { setCategoryRules(JSON.parse(rulesObj.value)); } catch (e) { setCategoryRules({}); }
             }
         }
+
+        // Buscar Cupons (Só tenta buscar se a tabela existir, evita quebrar se o SQL não rodou ainda)
+        try {
+            const { data: couponsData, error: couponError } = await supabase.from('coupons').select('*').order('created_at', { ascending: false });
+            if (couponsData && !couponError) setCoupons(couponsData);
+        } catch (e) {}
 
     } catch (e: any) { 
         showError(e.message); 
@@ -162,6 +164,7 @@ const AdminDashboard = () => {
                   base_fare: cat.base_fare, 
                   cost_per_km: cat.cost_per_km, 
                   min_fare: cat.min_fare,
+                  cost_per_minute: cat.cost_per_minute,
                   active: cat.active 
               })
               .eq('id', cat.id);
@@ -215,6 +218,43 @@ const AdminDashboard = () => {
       }
   };
 
+  const handleSaveMultiplier = async () => {
+    try {
+        const { data } = await supabase.from('admin_config').select('key').eq('key', 'global_multiplier').maybeSingle();
+        if (data) {
+            await supabase.from('admin_config').update({ value: globalMultiplier }).eq('key', 'global_multiplier');
+        } else {
+            await supabase.from('admin_config').insert({ key: 'global_multiplier', value: globalMultiplier, description: 'Multiplicador Dinâmico' });
+        }
+        showSuccess("Tarifa dinâmica atualizada!");
+    } catch(e: any) { showError(e.message); }
+  };
+
+  const handleCreateCoupon = async () => {
+    if(!newCoupon.code || !newCoupon.value) {
+        showError("Preencha o código e o valor do cupom."); return;
+    }
+    try {
+        const { data, error } = await supabase.from('coupons').insert({
+            code: newCoupon.code.toUpperCase(),
+            discount_type: newCoupon.type,
+            discount_value: Number(newCoupon.value),
+            max_uses: Number(newCoupon.max_uses)
+        }).select().single();
+        if (error) throw error;
+        setCoupons([data, ...coupons]);
+        showSuccess("Cupom criado!");
+        setNewCoupon({ code: '', type: 'PERCENTAGE', value: '', max_uses: '100' });
+    } catch(e: any) { showError("Erro ao criar cupom. Verifique se o código já existe."); }
+  };
+
+  const handleToggleCoupon = async (id: string, active: boolean) => {
+      try {
+          await supabase.from('coupons').update({ active }).eq('id', id);
+          setCoupons(prev => prev.map(c => c.id === id ? { ...c, active } : c));
+      } catch(e) { showError("Erro ao atualizar cupom"); }
+  };
+
   const handleLogout = async () => {
       await supabase.auth.signOut();
       navigate('/');
@@ -240,7 +280,7 @@ const AdminDashboard = () => {
              <div className="w-10 h-10 bg-yellow-500 rounded-xl flex items-center justify-center text-black shadow-md">G</div>
              <span className="text-slate-900">Gold<span className="text-yellow-500">Admin</span></span>
          </div>
-         <nav className="flex-1 px-4 py-8 space-y-2">
+         <nav className="flex-1 px-4 py-8 space-y-2 overflow-y-auto">
              <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'overview' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
                  <LayoutDashboard className="w-5 h-5" /> Painel Geral
              </button>
@@ -256,6 +296,9 @@ const AdminDashboard = () => {
              <button onClick={() => setActiveTab('config')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'config' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
                  <Settings className="w-5 h-5" /> Taxas e Configurações
              </button>
+             <button onClick={() => setActiveTab('coupons')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'coupons' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
+                 <Ticket className="w-5 h-5" /> Cupons de Desconto
+             </button>
          </nav>
          <div className="p-4 border-t border-slate-100">
              <Button variant="ghost" className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-50 font-bold h-12 rounded-xl" onClick={handleLogout}><LogOut className="mr-3 w-5 h-5" /> Sair</Button>
@@ -270,7 +313,7 @@ const AdminDashboard = () => {
               <div className="flex justify-between items-center bg-white p-6 rounded-[32px] shadow-sm border border-slate-100">
                   <div>
                       <h1 className="text-3xl font-black tracking-tight text-slate-900">
-                          {activeTab === 'overview' ? 'Painel Geral' : activeTab === 'requests' ? 'Solicitações de Motoristas' : activeTab === 'rides' ? 'Monitor de Corridas' : activeTab === 'users' ? 'Gestão de Usuários' : 'Taxas e Configurações'}
+                          {activeTab === 'overview' ? 'Painel Geral' : activeTab === 'requests' ? 'Solicitações de Motoristas' : activeTab === 'rides' ? 'Monitor de Corridas' : activeTab === 'users' ? 'Gestão de Usuários' : activeTab === 'coupons' ? 'Promoções e Descontos' : 'Taxas e Configurações'}
                       </h1>
                       <p className="text-slate-500 font-medium mt-1 text-sm">Bem-vindo de volta, Administrador.</p>
                   </div>
@@ -408,17 +451,106 @@ const AdminDashboard = () => {
                   </div>
               )}
 
+              {/* CUPONS */}
+              {activeTab === 'coupons' && (
+                  <div className="space-y-8 animate-in fade-in duration-500">
+                      <Card className="rounded-[32px] border border-slate-100 shadow-xl overflow-hidden bg-white">
+                          <CardHeader className="p-8 border-b border-slate-100 bg-slate-900 text-white">
+                              <CardTitle className="text-2xl font-black flex items-center gap-2"><Ticket className="w-6 h-6" /> Cupons de Desconto</CardTitle>
+                              <CardDescription className="text-slate-400">Crie códigos promocionais para seus passageiros usarem no app.</CardDescription>
+                          </CardHeader>
+                          <CardContent className="p-8">
+                              <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 mb-8">
+                                  <h4 className="font-bold text-slate-900 mb-4 text-lg">Criar Novo Cupom</h4>
+                                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                                      <div className="md:col-span-2">
+                                          <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Código (Ex: BEMVINDO)</Label>
+                                          <Input value={newCoupon.code} onChange={e => setNewCoupon({...newCoupon, code: e.target.value.toUpperCase()})} className="uppercase h-12 mt-1 font-black text-lg bg-white" placeholder="BEMVINDO20" />
+                                      </div>
+                                      <div>
+                                          <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Tipo de Desconto</Label>
+                                          <select value={newCoupon.type} onChange={e => setNewCoupon({...newCoupon, type: e.target.value})} className="w-full mt-1 h-12 rounded-xl border border-input bg-white px-3 font-bold text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                                              <option value="PERCENTAGE">Porcentagem (%)</option>
+                                              <option value="FIXED">Valor Fixo (R$)</option>
+                                          </select>
+                                      </div>
+                                      <div>
+                                          <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Valor</Label>
+                                          <Input type="number" step="0.01" value={newCoupon.value} onChange={e => setNewCoupon({...newCoupon, value: e.target.value})} className="h-12 mt-1 font-black text-lg bg-white" placeholder="Ex: 10" />
+                                      </div>
+                                      <div>
+                                          <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Qtd. Limite</Label>
+                                          <Input type="number" value={newCoupon.max_uses} onChange={e => setNewCoupon({...newCoupon, max_uses: e.target.value})} className="h-12 mt-1 font-black text-lg bg-white" />
+                                      </div>
+                                  </div>
+                                  <Button onClick={handleCreateCoupon} className="mt-6 bg-yellow-500 hover:bg-yellow-400 text-black h-12 px-8 font-black shadow-md rounded-xl">Criar Cupom</Button>
+                              </div>
+
+                              <Table>
+                                  <TableHeader><TableRow className="bg-slate-50"><TableHead className="pl-6">Código Promocional</TableHead><TableHead>Desconto</TableHead><TableHead>Usos</TableHead><TableHead>Criado Em</TableHead><TableHead className="text-right pr-6">Status (Ativo)</TableHead></TableRow></TableHeader>
+                                  <TableBody>
+                                      {coupons.map(c => (
+                                          <TableRow key={c.id} className={c.active ? '' : 'opacity-50'}>
+                                              <TableCell className="pl-6 font-black text-slate-900 text-lg">{c.code}</TableCell>
+                                              <TableCell className="font-bold text-green-600 bg-green-50 px-3 py-1 rounded-lg inline-block mt-3">{c.discount_type === 'PERCENTAGE' ? `${c.discount_value}% OFF` : `R$ ${c.discount_value} OFF`}</TableCell>
+                                              <TableCell className="font-medium text-slate-600">{c.current_uses} / {c.max_uses}</TableCell>
+                                              <TableCell className="text-slate-500 text-xs">{new Date(c.created_at).toLocaleDateString()}</TableCell>
+                                              <TableCell className="text-right pr-6">
+                                                  <Switch checked={c.active} onCheckedChange={(val) => handleToggleCoupon(c.id, val)} />
+                                              </TableCell>
+                                          </TableRow>
+                                      ))}
+                                      {coupons.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-10 text-slate-400">Nenhum cupom criado ainda.</TableCell></TableRow>}
+                                  </TableBody>
+                              </Table>
+                          </CardContent>
+                      </Card>
+                  </div>
+              )}
+
               {/* CONFIG / TAXAS */}
               {activeTab === 'config' && (
                   <div className="space-y-8 animate-in fade-in duration-500">
                       
+                      {/* TARIFA DINÂMICA MULTIPLICADOR */}
+                      <Card className="rounded-[32px] border border-slate-100 shadow-xl overflow-hidden bg-white mb-8">
+                          <CardHeader className="p-8 border-b border-slate-100 bg-blue-50">
+                              <CardTitle className="text-xl font-black text-slate-900 flex items-center gap-2"><Zap className="w-5 h-5 text-blue-600" /> Tarifa Dinâmica Manual (Multiplicador Global)</CardTitle>
+                              <CardDescription className="text-slate-600">Aumente o preço de todas as corridas do aplicativo instantaneamente (ideal para dias de chuva ou grandes eventos).</CardDescription>
+                          </CardHeader>
+                          <CardContent className="p-8">
+                              <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+                                  <div className="flex-1 max-w-sm w-full">
+                                      <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Multiplicador (Padrão é 1.0)</Label>
+                                      <Input 
+                                          type="number" 
+                                          step="0.1" 
+                                          value={globalMultiplier} 
+                                          onChange={(e) => setGlobalMultiplier(e.target.value)} 
+                                          className="h-14 font-black text-blue-600 text-2xl border-slate-200 bg-slate-50 mt-2"
+                                      />
+                                  </div>
+                                  <Button 
+                                      onClick={handleSaveMultiplier} 
+                                      className="h-14 mt-0 md:mt-7 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl px-8 w-full md:w-auto shadow-md"
+                                  >
+                                      Aplicar Multiplicador
+                                  </Button>
+                              </div>
+                              <div className="flex gap-4 mt-4 text-xs font-bold text-slate-500">
+                                  <Badge variant="outline" className="bg-white">1.0 = Preço Normal</Badge>
+                                  <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">1.5 = 50% Mais Caro</Badge>
+                                  <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">2.0 = O Dobro do Preço</Badge>
+                              </div>
+                          </CardContent>
+                      </Card>
+
                       {/* Tabela de Preços e Taxas */}
                       <Card className="rounded-[32px] border border-slate-100 shadow-xl overflow-hidden bg-white">
                           <CardHeader className="p-8 border-b border-slate-100 bg-slate-900 text-white">
                               <CardTitle className="text-2xl font-black">Taxas e Valores por Categoria</CardTitle>
                               <CardDescription className="text-slate-400">
-                                Cálculo do Preço = Valor Base + (Distância * KM). 
-                                Caso o valor fique menor, cobra-se o Valor Mínimo.
+                                Cálculo Base: Valor Inicial + (Distância * KM) + (Tempo * Minuto). Tudo multiplicado pela Tarifa Dinâmica.
                               </CardDescription>
                           </CardHeader>
                           <CardContent className="p-8 space-y-6">
@@ -441,23 +573,27 @@ const AdminDashboard = () => {
                                           {/* Preços Base */}
                                           <div className="bg-white p-4 rounded-xl border border-slate-200">
                                               <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1"><MapIcon className="w-3 h-3" /> Tarifas Principais</h5>
-                                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                                   <div className="space-y-2">
-                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Valor Inicial/Base (R$)</Label>
-                                                      <Input type="number" step="0.01" value={cat.base_fare} onChange={e => handleCategoryChange(cat.id, 'base_fare', e.target.value)} className="font-black text-slate-900 text-lg h-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Valor Inicial/Base</Label>
+                                                      <Input type="number" step="0.01" value={cat.base_fare} onChange={e => handleCategoryChange(cat.id, 'base_fare', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
                                                   </div>
                                                   <div className="space-y-2">
                                                       <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">KM Padrão (R$)</Label>
-                                                      <Input type="number" step="0.01" value={cat.cost_per_km} onChange={e => handleCategoryChange(cat.id, 'cost_per_km', e.target.value)} className="font-black text-slate-900 text-lg h-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+                                                      <Input type="number" step="0.01" value={cat.cost_per_km} onChange={e => handleCategoryChange(cat.id, 'cost_per_km', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+                                                  </div>
+                                                  <div className="space-y-2">
+                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Valor por Minuto (R$)</Label>
+                                                      <Input type="number" step="0.01" value={cat.cost_per_minute || ''} onChange={e => handleCategoryChange(cat.id, 'cost_per_minute', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-slate-50 border-slate-200 focus:bg-white transition-colors" placeholder="Ex: 0.20" />
                                                   </div>
                                                   <div className="space-y-2">
                                                       <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Corrida Mínima (R$)</Label>
-                                                      <Input type="number" step="0.01" value={cat.min_fare} onChange={e => handleCategoryChange(cat.id, 'min_fare', e.target.value)} className="font-black text-slate-900 text-lg h-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+                                                      <Input type="number" step="0.01" value={cat.min_fare} onChange={e => handleCategoryChange(cat.id, 'min_fare', e.target.value)} className="font-black text-slate-900 text-lg h-12 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
                                                   </div>
                                               </div>
                                           </div>
 
-                                          {/* Tarifas de Distância Dinâmicas (Longo) */}
+                                          {/* Tarifas de Distância (Longo) */}
                                           <div className="bg-white p-4 rounded-xl border border-slate-200">
                                               <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Tarifas Dinâmicas por Distância (Opcional)</h5>
                                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

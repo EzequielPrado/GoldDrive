@@ -60,7 +60,11 @@ const DriverDashboard = () => {
   const [passengerName, setPassengerName] = useState("");
   const [pickupLocation, setPickupLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
   const [destLocation, setDestLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
+  
   const [routeDistance, setRouteDistance] = useState<number>(0);
+  const [routeDuration, setRouteDuration] = useState<number>(0);
+  const [globalMultiplier, setGlobalMultiplier] = useState(1.0);
+
   const [manualLoading, setManualLoading] = useState(false);
   const [categories, setCategories] = useState<any[]>([]);
   const [pricingTiers, setPricingTiers] = useState<any[]>([]);
@@ -139,6 +143,10 @@ const DriverDashboard = () => {
               if (rules && rules.value) {
                   try { setCategoryRules(JSON.parse(rules.value)); } catch(e) {}
               }
+              const multRes = adminConfigRes.data.find((c: any) => c.key === 'global_multiplier');
+              if (multRes && multRes.value) {
+                  setGlobalMultiplier(Number(multRes.value) || 1.0);
+              }
           }
       };
       fetchPricing();
@@ -155,6 +163,7 @@ const DriverDashboard = () => {
       }, (response, status) => {
           if (status === 'OK' && response?.rows[0].elements[0].distance) {
               setRouteDistance(response.rows[0].elements[0].distance.value / 1000);
+              setRouteDuration(response.rows[0].elements[0].duration.value / 60);
           }
           setManualLoading(false);
       });
@@ -199,22 +208,19 @@ const DriverDashboard = () => {
 
           let appliedKmPrice = Number(category.cost_per_km);
           const baseFare = Number(category.base_fare);
+          const costPerMinute = Number(category.cost_per_minute || 0);
           
           if (isNight && rules.night_km) {
               appliedKmPrice = Number(rules.night_km);
           } else {
-              // Lógica de Tarifas Dinâmicas (verificando a maior distância primeiro)
               const dist1 = Number(rules.dist_1 || 4.5);
               const price1 = rules.price_1 ? Number(rules.price_1) : (rules.km_over_45 ? Number(rules.km_over_45) : null);
-              
               const dist2 = Number(rules.dist_2 || 10);
               const price2 = rules.price_2 ? Number(rules.price_2) : (rules.km_over_10 ? Number(rules.km_over_10) : null);
 
               let thresholds = [];
               if (price1 !== null) thresholds.push({ dist: dist1, price: price1 });
               if (price2 !== null) thresholds.push({ dist: dist2, price: price2 });
-              
-              // Ordena do maior KM para o menor, para sempre aplicar a regra mais alta alcançada
               thresholds.sort((a, b) => b.dist - a.dist);
 
               for (const t of thresholds) {
@@ -225,16 +231,18 @@ const DriverDashboard = () => {
               }
           }
 
-          // Preço Final = Base + (Distância * KM Aplicado)
-          price = baseFare + (routeDistance * appliedKmPrice);
-
-          // Verifica se o preço ficou menor que a corrida mínima
-          if (price < Number(category.min_fare)) {
-              price = Number(category.min_fare);
-          }
+          // Base + (KM) + (Tempo)
+          price = baseFare + (routeDistance * appliedKmPrice) + (routeDuration * costPerMinute);
       }
+
+      price = price * globalMultiplier;
+
+      if (price < Number(category.min_fare)) {
+          price = Number(category.min_fare);
+      }
+      
       return parseFloat(price.toFixed(2));
-  }, [categories, pricingTiers, routeDistance, categoryRules]);
+  }, [categories, pricingTiers, routeDistance, routeDuration, categoryRules, globalMultiplier]);
 
   const checkProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -558,6 +566,7 @@ const DriverDashboard = () => {
                                   </div>
                               ) : (
                                   <>
+                                      {globalMultiplier > 1.0 && <Badge className="mb-2 bg-blue-100 text-blue-700 hover:bg-blue-100 border-0">Tarifa Dinâmica Ativa</Badge>}
                                       <p className="text-[10px] font-bold text-yellow-700 uppercase mb-1 tracking-widest">Valor da Corrida</p>
                                       <h3 className="text-4xl font-black text-black tracking-tighter">R$ {calculatePrice().toFixed(2)}</h3>
                                       <p className="text-[10px] text-yellow-600 font-bold mt-1">Distância: {routeDistance.toFixed(1)} km</p>

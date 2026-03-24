@@ -3,9 +3,10 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import GoogleMapComponent from "@/components/GoogleMapComponent";
 import { 
-  MapPin, Car, Loader2, Star, ChevronRight, Clock, Wallet, ArrowLeft, History, MessageCircle, CheckCircle2, AlertTriangle, Banknote, CreditCard, XCircle
+  MapPin, Car, Loader2, Star, ChevronRight, Clock, Wallet, ArrowLeft, History, MessageCircle, CheckCircle2, AlertTriangle, Banknote, CreditCard, XCircle, Ticket
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useRide } from "@/context/RideContext";
 import { showSuccess, showError } from "@/utils/toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -31,6 +32,7 @@ const ClientDashboard = () => {
   const [pickupLocation, setPickupLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
   const [destLocation, setDestLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
   const [routeDistance, setRouteDistance] = useState<number>(0); 
+  const [routeDuration, setRouteDuration] = useState<number>(0); 
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
   const [paymentMethod, setPaymentMethod] = useState<'WALLET' | 'CASH'>('CASH');
   
@@ -41,6 +43,12 @@ const ClientDashboard = () => {
   const [showCancelAlert, setShowCancelAlert] = useState(false);
   const [showBalanceAlert, setShowBalanceAlert] = useState(false);
   const [missingAmount, setMissingAmount] = useState(0);
+
+  // Cupons & Dinâmica
+  const [globalMultiplier, setGlobalMultiplier] = useState(1.0);
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
+  const [applyingCoupon, setApplyingCoupon] = useState(false);
 
   const [categories, setCategories] = useState<any[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
@@ -64,10 +72,8 @@ const ClientDashboard = () => {
     const fetchInitialData = async () => {
         try {
             const { data: { user } } = await supabase.auth.getUser();
-            if(!user) {
-                navigate('/login');
-                return;
-            }
+            if(!user) { navigate('/login'); return; }
+            
             const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(); 
             if (profile) setUserProfile(profile); 
             
@@ -94,6 +100,10 @@ const ClientDashboard = () => {
                 const rules = adminConfigRes.data.find((c: any) => c.key === 'category_rules');
                 if (rules && rules.value) {
                     try { setCategoryRules(JSON.parse(rules.value)); } catch(e) {}
+                }
+                const multRes = adminConfigRes.data.find((c: any) => c.key === 'global_multiplier');
+                if (multRes && multRes.value) {
+                    setGlobalMultiplier(Number(multRes.value) || 1.0);
                 }
             }
 
@@ -126,12 +136,8 @@ const ClientDashboard = () => {
       if (ride.status === 'CANCELLED') {
           setStep('cancelled');
       } else if (ride.status === 'COMPLETED') {
-        if (!ride.driver_rating) {
-            setStep('rating');
-        } else {
-            clearRide();
-            setStep('search');
-        }
+        if (!ride.driver_rating) setStep('rating');
+        else { clearRide(); setStep('search'); }
       } else {
         setStep('waiting');
       }
@@ -153,6 +159,7 @@ const ClientDashboard = () => {
         }, (response, status) => {
             if (status === 'OK' && response?.rows[0].elements[0].distance) {
                 setRouteDistance(response.rows[0].elements[0].distance.value / 1000);
+                setRouteDuration(response.rows[0].elements[0].duration.value / 60); // Em minutos
             } else {
                 showError("Localização inacessível para veículos.");
                 setStep('search');
@@ -161,6 +168,22 @@ const ClientDashboard = () => {
         });
     }
   }, [pickupLocation, destLocation, step]);
+
+  const applyCoupon = async () => {
+      setApplyingCoupon(true);
+      try {
+          const { data, error } = await supabase.from('coupons').select('*').eq('code', couponCode.toUpperCase()).eq('active', true).maybeSingle();
+          if (error || !data) throw new Error("Cupom inválido ou expirado.");
+          if (data.current_uses >= data.max_uses) throw new Error("Cupom esgotado.");
+          setAppliedCoupon(data);
+          showSuccess("Cupom aplicado!");
+      } catch (e: any) {
+          showError(e.message);
+          setAppliedCoupon(null);
+      } finally {
+          setApplyingCoupon(false);
+      }
+  };
 
   const calculatePrice = useCallback((catId?: string) => {
       const category = categories.find(c => c.id === (catId || selectedCategoryId));
@@ -194,22 +217,19 @@ const ClientDashboard = () => {
 
           let appliedKmPrice = Number(category.cost_per_km);
           const baseFare = Number(category.base_fare);
+          const costPerMinute = Number(category.cost_per_minute || 0);
           
           if (isNight && rules.night_km) {
               appliedKmPrice = Number(rules.night_km);
           } else {
-              // Lógica de Tarifas Dinâmicas (verificando a maior distância primeiro)
               const dist1 = Number(rules.dist_1 || 4.5);
               const price1 = rules.price_1 ? Number(rules.price_1) : (rules.km_over_45 ? Number(rules.km_over_45) : null);
-              
               const dist2 = Number(rules.dist_2 || 10);
               const price2 = rules.price_2 ? Number(rules.price_2) : (rules.km_over_10 ? Number(rules.km_over_10) : null);
 
               let thresholds = [];
               if (price1 !== null) thresholds.push({ dist: dist1, price: price1 });
               if (price2 !== null) thresholds.push({ dist: dist2, price: price2 });
-              
-              // Ordena do maior KM para o menor, para sempre aplicar a regra mais alta alcançada
               thresholds.sort((a, b) => b.dist - a.dist);
 
               for (const t of thresholds) {
@@ -220,16 +240,29 @@ const ClientDashboard = () => {
               }
           }
 
-          // Preço Final = Base + (Distância * KM Aplicado)
-          price = baseFare + (routeDistance * appliedKmPrice);
+          // Preço Final = Base + (Distância * KM Aplicado) + (Tempo * Minuto)
+          price = baseFare + (routeDistance * appliedKmPrice) + (routeDuration * costPerMinute);
+      }
 
-          // Verifica se o preço ficou menor que a corrida mínima
-          if (price < Number(category.min_fare)) {
-              price = Number(category.min_fare);
+      // Aplica Multiplicador Dinâmico Global (Chuva/Eventos)
+      price = price * globalMultiplier;
+
+      // Verifica mínimo antes de aplicar cupom (se aplicável, para proteger a base)
+      if (price < Number(category.min_fare)) {
+          price = Number(category.min_fare);
+      }
+
+      // Aplica Cupom
+      if (appliedCoupon) {
+          if (appliedCoupon.discount_type === 'PERCENTAGE') {
+              price = price - (price * (Number(appliedCoupon.discount_value) / 100));
+          } else {
+              price = price - Number(appliedCoupon.discount_value);
           }
       }
-      return parseFloat(price.toFixed(2));
-  }, [categories, pricingTiers, routeDistance, selectedCategoryId, categoryRules]);
+
+      return parseFloat(Math.max(price, 0).toFixed(2));
+  }, [categories, pricingTiers, routeDistance, routeDuration, selectedCategoryId, categoryRules, globalMultiplier, appliedCoupon]);
 
   const confirmRide = async () => {
     if (isRequesting || !pickupLocation || !destLocation || !selectedCategoryId) return;
@@ -253,8 +286,15 @@ const ClientDashboard = () => {
             category.name, 
             paymentMethod
         ); 
+        
         if (!success) setStep('confirm');
-        else showSuccess("Motorista solicitado!");
+        else {
+            showSuccess("Motorista solicitado!");
+            // Incrementa uso do cupom se foi usado
+            if (appliedCoupon) {
+                await supabase.from('coupons').update({ current_uses: appliedCoupon.current_uses + 1 }).eq('id', appliedCoupon.id);
+            }
+        }
     } catch (e: any) { 
         showError(e.message); 
         setStep('confirm');
@@ -349,15 +389,16 @@ const ClientDashboard = () => {
                 )}
 
                 {step === 'confirm' && (
-                    <div className="bg-white/95 backdrop-blur-xl p-6 rounded-[32px] shadow-2xl border border-white/40 flex flex-col max-h-[70vh] animate-in slide-in-from-bottom duration-300">
+                    <div className="bg-white/95 backdrop-blur-xl p-6 rounded-[32px] shadow-2xl border border-white/40 flex flex-col max-h-[75vh] animate-in slide-in-from-bottom duration-300">
                         <div className="flex items-center gap-3 mb-6 cursor-pointer" onClick={() => setStep('search')}>
                             <div className="bg-gray-100 p-2 rounded-full"><ArrowLeft className="w-5 h-5" /></div>
                             <h2 className="text-xl font-black text-slate-900">Confirmar Pedido</h2>
                         </div>
-                        <div className="bg-gray-50 rounded-2xl p-4 mb-6 border border-gray-100 space-y-2 text-[13px]">
+                        <div className="bg-gray-50 rounded-2xl p-4 mb-4 border border-gray-100 space-y-2 text-[13px]">
                             <p className="font-medium text-slate-600 line-clamp-1 truncate flex items-center gap-2">📍 {pickupLocation?.display_name}</p>
                             <p className="font-bold text-slate-900 line-clamp-1 truncate flex items-center gap-2">🏁 {destLocation?.display_name}</p>
                         </div>
+
                         {calculatingRoute ? (
                             <div className="py-12 flex flex-col items-center gap-3">
                                 <Loader2 className="animate-spin text-yellow-500 w-8 h-8" />
@@ -365,7 +406,13 @@ const ClientDashboard = () => {
                             </div>
                         ) : (
                             <>
-                                <div className="space-y-3 mb-6 overflow-y-auto custom-scrollbar flex-1 pr-1">
+                                <div className="space-y-3 mb-4 overflow-y-auto custom-scrollbar flex-1 pr-1">
+                                    {globalMultiplier > 1.0 && (
+                                        <div className="bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold p-3 rounded-xl flex items-center gap-2 mb-2 animate-pulse">
+                                            <AlertTriangle className="w-4 h-4" /> Demanda Alta: Preços levemente ajustados.
+                                        </div>
+                                    )}
+
                                     {categories.map(cat => {
                                         const price = calculatePrice(cat.id);
                                         const isSelected = selectedCategoryId === cat.id;
@@ -375,14 +422,34 @@ const ClientDashboard = () => {
                                                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isSelected ? 'bg-yellow-500 text-black' : 'bg-gray-100 text-slate-400'}`}><Car className="w-6 h-6" /></div>
                                                     <div><h4 className="font-black text-slate-900">{cat.name}</h4><p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">{cat.description || 'Premium'}</p></div>
                                                 </div>
-                                                <div className="text-right"><span className="font-black text-lg text-slate-900">R$ {price.toFixed(2)}</span></div>
+                                                <div className="text-right">
+                                                    {appliedCoupon && isSelected && <span className="block text-[10px] font-bold text-green-600 mb-0.5 line-through opacity-60">Cupom Aplicado</span>}
+                                                    <span className="font-black text-lg text-slate-900">R$ {price.toFixed(2)}</span>
+                                                </div>
                                             </div>
                                         );
                                     })}
                                 </div>
+                                
+                                {/* CUPOM */}
+                                <div className="mb-4">
+                                    <div className="flex gap-2">
+                                        <div className="relative flex-1">
+                                            <Ticket className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                            <Input placeholder="Código de desconto" value={couponCode} onChange={e => setCouponCode(e.target.value.toUpperCase())} className="uppercase bg-white pl-9 h-12 rounded-xl font-bold" disabled={!!appliedCoupon} />
+                                        </div>
+                                        {appliedCoupon ? (
+                                            <Button variant="outline" className="text-red-500 font-bold border-red-200 bg-red-50 h-12 rounded-xl" onClick={() => { setAppliedCoupon(null); setCouponCode(""); }}>Remover</Button>
+                                        ) : (
+                                            <Button variant="secondary" className="font-bold bg-slate-900 text-white hover:bg-black h-12 rounded-xl" onClick={applyCoupon} disabled={!couponCode || applyingCoupon}>{applyingCoupon ? <Loader2 className="w-4 h-4 animate-spin" /> : "Aplicar"}</Button>
+                                        )}
+                                    </div>
+                                    {appliedCoupon && <p className="text-[10px] font-bold text-green-600 mt-2 ml-1 animate-in slide-in-from-top-2">✅ Cupom aplicado com sucesso!</p>}
+                                </div>
+
                                 <div className="grid grid-cols-2 gap-3 mb-6">
-                                    {appSettings.enableWallet && <button onClick={() => setPaymentMethod('WALLET')} className={`h-14 rounded-2xl border-2 flex items-center justify-center gap-2 font-bold transition-all ${paymentMethod === 'WALLET' ? 'border-slate-900 bg-slate-900 text-white shadow-lg' : 'border-gray-200 text-slate-500'}`}><Wallet className="w-4 h-4" /> Carteira</button>}
-                                    <button onClick={() => setPaymentMethod('CASH')} className={`h-14 rounded-2xl border-2 flex items-center justify-center gap-2 font-bold transition-all ${paymentMethod === 'CASH' ? 'border-slate-900 bg-slate-900 text-white shadow-lg' : 'border-gray-200 text-slate-500'}`}><Banknote className="w-4 h-4" /> Dinheiro</button>
+                                    {appSettings.enableWallet && <button onClick={() => setPaymentMethod('WALLET')} className={`h-12 rounded-2xl border-2 flex items-center justify-center gap-2 font-bold transition-all ${paymentMethod === 'WALLET' ? 'border-slate-900 bg-slate-900 text-white shadow-md' : 'border-gray-200 text-slate-500'}`}><Wallet className="w-4 h-4" /> Carteira</button>}
+                                    <button onClick={() => setPaymentMethod('CASH')} className={`h-12 rounded-2xl border-2 flex items-center justify-center gap-2 font-bold transition-all ${paymentMethod === 'CASH' ? 'border-slate-900 bg-slate-900 text-white shadow-md' : 'border-gray-200 text-slate-500'}`}><Banknote className="w-4 h-4" /> Dinheiro</button>
                                 </div>
                                 <Button className="w-full h-14 text-lg font-black rounded-2xl bg-yellow-500 hover:bg-yellow-400 text-black shadow-xl" onClick={confirmRide} disabled={isRequesting}>{isRequesting ? <Loader2 className="animate-spin" /> : "PEDIR AGORA"}</Button>
                             </>
