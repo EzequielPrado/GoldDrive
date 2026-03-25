@@ -28,7 +28,7 @@ interface RideContextType {
       distance: string,
       category: string,
       stops?: any[]
-  ) => Promise<any>; // Alterado para retornar a corrida criada
+  ) => Promise<any>;
   cancelRide: (rideId: string, reason?: string) => Promise<void>;
   acceptRide: (rideId: string) => Promise<void>;
   rejectRide: (rideId: string) => Promise<void>;
@@ -47,7 +47,7 @@ interface RideContextType {
 
 const RideContext = createContext<RideContextType | undefined>(undefined);
 
-// Usando o novo arquivo de áudio carregado
+// Usando o arquivo de áudio carregado
 const NOTIFICATION_SOUND = "/notification.mpeg";
 
 export const RideProvider = ({ children }: { children: React.ReactNode }) => {
@@ -86,11 +86,21 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const playNotification = (title = "Nova Corrida!", body = "Passageiro aguardando motorista") => {
+      // 1. Toca o Som
       if (audioRef.current) {
           audioRef.current.currentTime = 0;
           audioRef.current.play().catch(() => console.log("Áudio bloqueado pelo navegador"));
       }
 
+      // 2. Mostra um Popup Chamativo dentro do próprio App (Toast)
+      toast({
+          title: "🚨 " + title,
+          description: body,
+          className: "bg-yellow-500 text-black border-2 border-black font-black shadow-2xl",
+          duration: 10000,
+      });
+
+      // 3. Mostra Notificação Nativa do Sistema Operacional (Se permitido)
       if ('Notification' in window && Notification.permission === 'granted') {
           try {
               new Notification(title, {
