@@ -381,32 +381,53 @@ const DriverDashboard = () => {
       </div>
 
       <div className="absolute top-0 left-0 right-0 p-6 z-20 flex justify-between items-start pointer-events-none mt-4">
-          {!isOnTrip && !isCompleted && !isCancelled && (
-              <div className={`pointer-events-auto backdrop-blur-xl border border-white/20 p-2 pr-4 rounded-full flex items-center gap-3 shadow-lg transition-colors ${isOnline ? 'bg-black/80' : 'bg-white/80'}`}>
+          {/* Top Switch - Só exibe se já estiver online para poder ficar offline */}
+          {isOnline && !isOnTrip && !isCompleted && !isCancelled ? (
+              <div className={`pointer-events-auto backdrop-blur-xl border border-white/20 p-2 pr-4 rounded-full flex items-center gap-3 shadow-lg transition-colors bg-black/80`}>
                  <Switch checked={isOnline} onCheckedChange={toggleOnline} />
-                 <span className={`text-xs font-bold uppercase ${isOnline ? 'text-white' : 'text-slate-500'}`}>{isOnline ? 'Online' : 'Offline'}</span>
-                 {isOnline && trackingActive && <Zap className="w-3 h-3 text-yellow-500 animate-pulse" />}
+                 <span className={`text-xs font-bold uppercase text-white`}>Online</span>
+                 {trackingActive && <Zap className="w-3 h-3 text-yellow-500 animate-pulse" />}
               </div>
-          )}
+          ) : <div />}
+
           <div className="pointer-events-auto bg-white/10 backdrop-blur-xl p-1 rounded-full shadow-lg cursor-pointer" onClick={() => navigate('/profile')}>
              <Avatar className="h-10 w-10 border-2 border-white"><AvatarImage src={driverProfile?.avatar_url} /><AvatarFallback className="bg-slate-900 text-white font-bold">{driverProfile?.first_name?.[0]}</AvatarFallback></Avatar>
           </div>
       </div>
 
+      {/* Botão flutuante do GPS (Canto inferior direito) */}
+      <div className="absolute bottom-28 right-4 z-40 pointer-events-auto">
+          <Button 
+              size="icon" 
+              className="w-14 h-14 rounded-full bg-white text-slate-700 shadow-2xl border border-slate-100 hover:bg-slate-50" 
+              onClick={getCurrentLocation}
+          >
+              {gpsLoading ? <Loader2 className="w-6 h-6 animate-spin text-blue-600" /> : <Navigation className="w-6 h-6 text-blue-600 fill-blue-600/20" />}
+          </Button>
+      </div>
+
       <div className="absolute inset-0 z-10 flex flex-col justify-end pb-32 pointer-events-none p-4">
          {activeTab === 'home' && (
-            <div className="w-full max-w-md mx-auto pointer-events-auto">
+            <div className="w-full max-w-md mx-auto pointer-events-auto flex flex-col h-full">
+                
+                {/* BOTÃO FLUTUANTE INICIAR (TIPO UBER) */}
                 {!ride && !isOnline && (
-                    <div className="bg-white/95 backdrop-blur-xl p-8 rounded-[32px] shadow-2xl text-center border border-white/40">
-                        <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-6 text-slate-400"><Car className="w-8 h-8" /></div>
-                        <h2 className="text-3xl font-black text-slate-900 mb-2">Bora rodar hoje?</h2>
-                        <p className="text-gray-500 mb-8">Fique online para começar a receber pedidos de corridas próximas.</p>
-                        <Button size="lg" className="w-full h-14 bg-slate-900 text-white font-bold rounded-2xl shadow-xl" onClick={() => toggleOnline(true)}>FICAR ONLINE</Button>
+                    <div className="flex flex-col items-center w-full mt-auto mb-10 pointer-events-auto animate-in zoom-in-95 duration-500">
+                        <div className="bg-white/95 backdrop-blur-xl px-6 py-3 rounded-full shadow-lg mb-8 text-sm font-black text-slate-800 uppercase tracking-widest border border-slate-100 flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span>
+                            VOCÊ ESTÁ OFFLINE
+                        </div>
+                        <button 
+                            onClick={() => toggleOnline(true)}
+                            className="w-28 h-28 bg-[#276ef1] rounded-full flex flex-col items-center justify-center text-white font-black shadow-[0_10px_40px_rgba(39,110,241,0.6)] border-[6px] border-white transition-transform active:scale-90"
+                        >
+                            <span className="text-xl tracking-widest mt-1">INICIAR</span>
+                        </button>
                     </div>
                 )}
 
                 {!ride && isOnline && !hasAvailableRides && (
-                    <div className="flex flex-col gap-4 items-center">
+                    <div className="flex flex-col gap-4 items-center w-full mt-auto mb-10 pointer-events-auto">
                         <div className="bg-black/80 backdrop-blur-xl px-8 py-4 rounded-full shadow-2xl flex items-center gap-4 animate-pulse border border-white/10">
                             <div className="w-3 h-3 bg-green-500 rounded-full" />
                             <p className="text-white font-black uppercase tracking-widest text-xs">Procurando pedidos...</p>
@@ -422,7 +443,7 @@ const DriverDashboard = () => {
                 )}
 
                 {isCancelled && (
-                    <div className="bg-white p-8 rounded-[32px] shadow-2xl text-center animate-in zoom-in-95 duration-300 border border-gray-100">
+                    <div className="bg-white p-8 rounded-[32px] shadow-2xl text-center animate-in zoom-in-95 duration-300 border border-gray-100 mt-auto">
                         <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6"><XCircle className="w-10 h-10 text-red-600" /></div>
                         <h2 className="text-3xl font-black text-slate-900 mb-2">Corrida Cancelada</h2>
                         <p className="text-gray-500 mb-6 font-medium">O passageiro cancelou a solicitação desta corrida.</p>
@@ -431,7 +452,7 @@ const DriverDashboard = () => {
                 )}
 
                 {isCompleted && (
-                    <div className="bg-white p-8 rounded-[32px] shadow-2xl text-center animate-in zoom-in-95 duration-300 border border-gray-100">
+                    <div className="bg-white p-8 rounded-[32px] shadow-2xl text-center animate-in zoom-in-95 duration-300 border border-gray-100 mt-auto">
                         <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"><DollarSign className="w-10 h-10 text-green-600" /></div>
                         <h2 className="text-3xl font-black text-slate-900 mb-2">R$ {Number(ride.price).toFixed(2)}</h2>
                         <p className="text-gray-500 mb-6 font-medium">Corrida finalizada com sucesso!</p>
@@ -444,7 +465,7 @@ const DriverDashboard = () => {
                 )}
 
                 {isOnTrip && (
-                    <div className="bg-white p-6 rounded-[32px] shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-300">
+                    <div className="bg-white p-6 rounded-[32px] shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-300 mt-auto">
                         <div className="flex items-center justify-between mb-6">
                             <Badge className="bg-yellow-500 text-black font-black uppercase tracking-widest text-[10px] px-3 py-1">{ride?.status === 'ACCEPTED' ? 'A CAMINHO' : ride?.status === 'ARRIVED' ? 'NO LOCAL' : 'EM VIAGEM'}</Badge>
                             <span className="font-black text-lg">R$ {Number(ride?.price).toFixed(2)}</span>
