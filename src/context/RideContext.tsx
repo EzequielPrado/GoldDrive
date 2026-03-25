@@ -83,6 +83,15 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
               if (audioRef.current) audioRef.current.currentTime = 0;
           }).catch(e => console.log("Unlock audio failed", e));
       }
+
+      // Pedir permissão de Notificação Nativa quando o motorista interage com a tela
+      if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+          Notification.requestPermission().then(permission => {
+              if (permission === 'granted') {
+                 console.log("Permissão para notificações Push concedida!");
+              }
+          });
+      }
   };
 
   const playNotification = (title = "Nova Corrida!", body = "Passageiro aguardando motorista") => {
@@ -96,20 +105,21 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       toast({
           title: "🚨 " + title,
           description: body,
-          className: "bg-yellow-500 text-black border-2 border-black font-black shadow-2xl",
+          className: "bg-yellow-500 text-black border-2 border-black font-black shadow-2xl z-[9999]",
           duration: 10000,
       });
 
-      // 3. Mostra Notificação Nativa do Sistema Operacional (Se permitido)
-      if ('Notification' in window && Notification.permission === 'granted') {
-          try {
-              new Notification(title, {
-                  body: body,
-                  icon: '/app-logo.png',
-                  vibrate: [200, 100, 200, 100, 200, 100, 200]
-              } as any);
-          } catch (e) {
-              console.error("Erro ao exibir notificação:", e);
+      // 3. Mostra Notificação Nativa do Sistema Operacional via Service Worker
+      if ('Notification' in window && navigator.serviceWorker) {
+          if (Notification.permission === 'granted') {
+              navigator.serviceWorker.ready.then(function(registration) {
+                  registration.showNotification(title, {
+                      body: body,
+                      icon: '/app-logo.png',
+                      badge: '/app-logo.png',
+                      vibrate: [200, 100, 200, 100, 200, 100, 200]
+                  });
+              });
           }
       }
   };
