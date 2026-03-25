@@ -316,6 +316,7 @@ const DriverDashboard = () => {
               price, `${routeDistance.toFixed(1)} km`, category?.name || 'Manual',
               validStops
           );
+          
           setShowManualRide(false);
           setPassengerName("");
           setPickupLocation(null);
@@ -324,7 +325,8 @@ const DriverDashboard = () => {
           setRouteDistance(0);
           showSuccess("Viagem manual iniciada!");
       } catch (e: any) {
-          showError("Erro ao lançar corrida.");
+          console.error("Erro manual:", e);
+          showError(e.message || "Erro ao iniciar corrida manual.");
       } finally {
           setManualLoading(false);
       }

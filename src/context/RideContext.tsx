@@ -28,7 +28,7 @@ interface RideContextType {
       distance: string,
       category: string,
       stops?: any[]
-  ) => Promise<void>;
+  ) => Promise<any>; // Alterado para retornar a corrida criada
   cancelRide: (rideId: string, reason?: string) => Promise<void>;
   acceptRide: (rideId: string) => Promise<void>;
   rejectRide: (rideId: string) => Promise<void>;
@@ -289,32 +289,35 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
 
   const createManualRide = async (passengerName: string, passengerPhone: string, pickup: string, destination: string, pickupCoords: any, destCoords: any, price: number, distance: string, category: string, stops: any[] = []) => {
       const userId = currentUserIdRef.current;
-      if (!userId) return;
-      try {
-          const { data, error } = await supabase.from('rides').insert({
-              customer_id: userId, 
-              driver_id: userId, 
-              pickup_address: pickup, 
-              destination_address: destination,
-              pickup_lat: pickupCoords.lat, 
-              pickup_lng: pickupCoords.lng, 
-              destination_lat: destCoords.lat, 
-              destination_lng: destCoords.lng,
-              stops: stops,
-              price, 
-              distance, 
-              status: 'IN_PROGRESS', 
-              category, 
-              payment_method: 'CASH', 
-              ride_type: 'MANUAL', 
-              guest_name: passengerName, 
-              driver_earnings: price
-          }).select().single();
-          if (error) throw error;
-          setRide(data);
-      } catch (e: any) { 
-          toast({ title: "Erro ao criar corrida manual", description: e.message, variant: "destructive" }); 
+      if (!userId) throw new Error("Usuário não autenticado");
+      
+      const { data, error } = await supabase.from('rides').insert({
+          customer_id: userId, 
+          driver_id: userId, 
+          pickup_address: pickup, 
+          destination_address: destination,
+          pickup_lat: pickupCoords.lat, 
+          pickup_lng: pickupCoords.lng, 
+          destination_lat: destCoords.lat, 
+          destination_lng: destCoords.lng,
+          stops: stops,
+          price, 
+          distance, 
+          status: 'IN_PROGRESS', 
+          category, 
+          payment_method: 'CASH', 
+          ride_type: 'MANUAL', 
+          guest_name: passengerName, 
+          driver_earnings: price
+      }).select(`*, driver_details:profiles!public_rides_driver_id_fkey(*), client_details:profiles!public_rides_customer_id_fkey(*)`).single();
+      
+      if (error) {
+          console.error("Erro no insert manual:", error);
+          throw new Error("Não foi possível criar a corrida manual. Verifique sua conexão.");
       }
+      
+      setRide(data);
+      return data;
   };
 
   const cancelRide = async (rideId: string) => {
