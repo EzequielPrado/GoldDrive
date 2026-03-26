@@ -644,19 +644,39 @@ const AdminDashboard = () => {
                                           {/* Tarifas Noturnas */}
                                           <div className="bg-white p-4 rounded-xl border border-slate-200">
                                               <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1"><Moon className="w-3 h-3 text-slate-700" /> Tarifas Noturnas (Opcional)</h5>
-                                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                                  <div className="space-y-2">
-                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Valor do KM Noturno (R$)</Label>
-                                                      <Input type="number" step="0.01" value={categoryRules[cat.name]?.night_km || ''} onChange={e => handleRuleChange(cat.name, 'night_km', e.target.value)} placeholder="Ex: 3.00" className="font-black text-slate-900 h-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
-                                                  </div>
-                                                  <div className="space-y-2">
-                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Hora de Início (Ex: 22:00)</Label>
-                                                      <Input type="time" value={categoryRules[cat.name]?.night_start || ''} onChange={e => handleRuleChange(cat.name, 'night_start', e.target.value)} className="font-black text-slate-900 h-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
-                                                  </div>
-                                                  <div className="space-y-2">
-                                                      <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Hora de Término (Ex: 06:00)</Label>
-                                                      <Input type="time" value={categoryRules[cat.name]?.night_end || ''} onChange={e => handleRuleChange(cat.name, 'night_end', e.target.value)} className="font-black text-slate-900 h-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
-                                                  </div>
+                                              
+                                              <div className="space-y-6">
+                                                {/* Primeiro Horário */}
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pb-4 border-b border-slate-100">
+                                                    <div className="space-y-2">
+                                                        <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Valor KM Noturno 1 (R$)</Label>
+                                                        <Input type="number" step="0.01" value={categoryRules[cat.name]?.night_km || ''} onChange={e => handleRuleChange(cat.name, 'night_km', e.target.value)} placeholder="Ex: 3.00" className="font-black text-slate-900 h-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Início 1 (Ex: 22:00)</Label>
+                                                        <Input type="time" value={categoryRules[cat.name]?.night_start || ''} onChange={e => handleRuleChange(cat.name, 'night_start', e.target.value)} className="font-black text-slate-900 h-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Término 1 (Ex: 06:00)</Label>
+                                                        <Input type="time" value={categoryRules[cat.name]?.night_end || ''} onChange={e => handleRuleChange(cat.name, 'night_end', e.target.value)} className="font-black text-slate-900 h-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+                                                    </div>
+                                                </div>
+
+                                                {/* Segundo Horário */}
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in slide-in-from-top-2">
+                                                    <div className="space-y-2">
+                                                        <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Valor KM Noturno 2 (R$)</Label>
+                                                        <Input type="number" step="0.01" value={categoryRules[cat.name]?.night_km_2 || ''} onChange={e => handleRuleChange(cat.name, 'night_km_2', e.target.value)} placeholder="Ex: 4.00" className="font-black text-slate-900 h-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Início 2 (Ex: 00:00)</Label>
+                                                        <Input type="time" value={categoryRules[cat.name]?.night_start_2 || ''} onChange={e => handleRuleChange(cat.name, 'night_start_2', e.target.value)} className="font-black text-slate-900 h-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Término 2 (Ex: 05:00)</Label>
+                                                        <Input type="time" value={categoryRules[cat.name]?.night_end_2 || ''} onChange={e => handleRuleChange(cat.name, 'night_end_2', e.target.value)} className="font-black text-slate-900 h-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+                                                    </div>
+                                                </div>
                                               </div>
                                           </div>
 

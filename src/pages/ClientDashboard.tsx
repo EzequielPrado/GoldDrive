@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import GoogleMapComponent from "@/components/GoogleMapComponent";
 import { 
-  MapPin, Car, Loader2, Star, ChevronRight, Clock, Wallet, ArrowLeft, History, MessageCircle, CheckCircle2, AlertTriangle, Banknote, XCircle, Ticket, Plus, X, Search, MousePointer2, Gift, Phone, Flag, User
+  MapPin, Car, Loader2, Star, ChevronRight, Clock, Wallet, ArrowLeft, History, MessageCircle, CheckCircle2, AlertTriangle, Banknote, XCircle, Ticket, Plus, X, Search, MousePointer2, Gift, Phone, Flag, User, ArrowRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -210,30 +210,41 @@ const ClientDashboard = () => {
       } else {
           const rules = categoryRules[category.name] || {};
           let isNight = false;
-          
-          if (rules.night_start && rules.night_end) {
+          let nightKmPrice = 0;
+
+          const checkNightPeriod = (startStr: string, endStr: string, kmVal: any) => {
+              if (!startStr || !endStr || !kmVal) return false;
               const currentHour = new Date().getHours();
               const currentMinute = new Date().getMinutes();
               const currentTime = currentHour + (currentMinute / 60);
 
-              const startParts = rules.night_start.split(':');
-              const endParts = rules.night_end.split(':');
+              const startParts = startStr.split(':');
+              const endParts = endStr.split(':');
               const start = parseInt(startParts[0]) + parseInt(startParts[1]) / 60;
               const end = parseInt(endParts[0]) + parseInt(endParts[1]) / 60;
 
               if (start > end) { 
-                  isNight = currentTime >= start || currentTime <= end;
+                  return currentTime >= start || currentTime <= end;
               } else {
-                  isNight = currentTime >= start && currentTime <= end;
+                  return currentTime >= start && currentTime <= end;
               }
+          };
+
+          // Prioridade para o horário noturno 2, depois o 1
+          if (checkNightPeriod(rules.night_start_2, rules.night_end_2, rules.night_km_2)) {
+              isNight = true;
+              nightKmPrice = Number(rules.night_km_2);
+          } else if (checkNightPeriod(rules.night_start, rules.night_end, rules.night_km)) {
+              isNight = true;
+              nightKmPrice = Number(rules.night_km);
           }
 
           let appliedKmPrice = Number(category.cost_per_km);
           const baseFare = Number(category.base_fare);
           const costPerMinute = Number(category.cost_per_minute || 0);
           
-          if (isNight && rules.night_km) {
-              appliedKmPrice = Number(rules.night_km);
+          if (isNight) {
+              appliedKmPrice = nightKmPrice;
           } else {
               const dist1 = Number(rules.dist_1 || 0);
               const price1 = (rules.price_1 || rules.km_over_45) ? Number(rules.price_1 || rules.km_over_45) : null;
