@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Wallet, MapPin, Navigation, DollarSign, Star, History, Car, ArrowRight, MessageCircle, Phone, Smartphone, Map, Flag, CheckCircle2, UserPlus, Clock, X, MousePointer2, Loader2, ChevronRight, Banknote, XCircle, Zap, Plus, StickyNote } from "lucide-react";
+import { Wallet, MapPin, Navigation, DollarSign, Star, History, Car, ArrowRight, MessageCircle, Phone, Smartphone, Map, Flag, CheckCircle2, UserPlus, Clock, X, MousePointer2, Loader2, ChevronRight, Banknote, XCircle, Zap, Plus, StickyNote, TrendingUp, Calendar, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -18,6 +18,7 @@ import RideChat from "@/components/RideChat";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import GoogleLocationSearch from "@/components/GoogleLocationSearch";
+import { cn } from "@/lib/utils";
 
 const NavigationBlock = ({ label, lat, lng, address, icon: Icon = MapPin }: any) => {
     const openMap = (app: 'waze' | 'google') => {
@@ -72,6 +73,16 @@ const DriverDashboard = () => {
   const [pricingTiers, setPricingTiers] = useState<any[]>([]);
   const [categoryRules, setCategoryRules] = useState<Record<string, any>>({});
 
+  // Driver Stats
+  const [stats, setStats] = useState({
+      todayEarnings: 0,
+      todayRides: 0,
+      weekEarnings: 0,
+      totalRides: 0,
+      avgRating: 5.0
+  });
+  const [historyFilter, setHistoryFilter] = useState<'today' | 'week' | 'all'>('all');
+
   useEffect(() => {
     if (!isOnline || !currentUserId) {
         setTrackingActive(false);
@@ -118,18 +129,81 @@ const DriverDashboard = () => {
 
   useEffect(() => { checkProfile(); }, [activeTab]);
 
+  const fetchStats = useCallback(async () => {
+      if (!currentUserId) return;
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      weekAgo.setHours(0, 0, 0, 0);
+
+      const { data: rides } = await supabase.from('rides')
+          .select('price, driver_earnings, created_at, status, customer_rating')
+          .eq('driver_id', currentUserId)
+          .eq('status', 'COMPLETED');
+
+      if (rides) {
+          let todayE = 0;
+          let todayR = 0;
+          let weekE = 0;
+          let totalR = rides.length;
+          let ratings = rides.filter(r => r.customer_rating).map(r => r.customer_rating);
+          let avgR = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 5.0;
+
+          rides.forEach(r => {
+              const rideDate = new Date(r.created_at);
+              const earnings = Number(r.driver_earnings || r.price * 0.8); // Fallback if driver_earnings is null
+              
+              if (rideDate >= today) {
+                  todayE += earnings;
+                  todayR += 1;
+              }
+              if (rideDate >= weekAgo) {
+                  weekE += earnings;
+              }
+          });
+
+          setStats({
+              todayEarnings: todayE,
+              todayRides: todayR,
+              weekEarnings: weekE,
+              totalRides: totalR,
+              avgRating: avgR
+          });
+      }
+  }, [currentUserId]);
+
+  useEffect(() => {
+      if (currentUserId) fetchStats();
+  }, [currentUserId, fetchStats, ride?.status]);
+
   useEffect(() => {
       if (activeTab === 'history' && driverProfile?.id) {
           const fetchHistory = async () => {
-               const { data } = await supabase.from('rides')
+               let query = supabase.from('rides')
                   .select('*, client_details:profiles!public_rides_customer_id_fkey(*)')
                   .eq('driver_id', driverProfile.id)
                   .order('created_at', { ascending: false });
+
+               if (historyFilter === 'today') {
+                   const today = new Date();
+                   today.setHours(0, 0, 0, 0);
+                   query = query.gte('created_at', today.toISOString());
+               } else if (historyFilter === 'week') {
+                   const weekAgo = new Date();
+                   weekAgo.setDate(weekAgo.getDate() - 7);
+                   weekAgo.setHours(0, 0, 0, 0);
+                   query = query.gte('created_at', weekAgo.toISOString());
+               }
+
+               const { data } = await query;
                if (data) setHistoryItems(data);
           };
           fetchHistory();
       }
-  }, [activeTab, driverProfile?.id]);
+  }, [activeTab, driverProfile?.id, historyFilter]);
 
   useEffect(() => {
       const fetchPricing = async () => {
@@ -384,6 +458,31 @@ const DriverDashboard = () => {
           </div>
       </div>
 
+      {/* Driver Stats Overlay (Home Tab) */}
+      {activeTab === 'home' && !isOnTrip && !isCompleted && !isCancelled && isOnline && (
+          <div className="absolute top-24 left-4 right-4 z-20 pointer-events-auto animate-in slide-in-from-top-4">
+              <div className="bg-white/90 backdrop-blur-xl rounded-3xl p-4 shadow-xl border border-white/50 flex justify-between items-center">
+                  <div className="flex flex-col">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ganhos Hoje</p>
+                      <p className="text-xl font-black text-slate-900">R$ {stats.todayEarnings.toFixed(2)}</p>
+                  </div>
+                  <div className="h-8 w-px bg-slate-200" />
+                  <div className="flex flex-col items-center">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Viagens</p>
+                      <p className="text-xl font-black text-slate-900">{stats.todayRides}</p>
+                  </div>
+                  <div className="h-8 w-px bg-slate-200" />
+                  <div className="flex flex-col items-end">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Avaliação</p>
+                      <div className="flex items-center gap-1">
+                          <Star className="w-4 h-4 fill-yellow-500 text-yellow-500" />
+                          <p className="text-xl font-black text-slate-900">{stats.avgRating.toFixed(1)}</p>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
       <div className="absolute bottom-28 right-4 z-40 pointer-events-auto">
           <Button size="icon" className="w-14 h-14 rounded-full bg-white text-slate-700 shadow-2xl border border-slate-100 hover:bg-slate-50" onClick={getCurrentLocation}>
               {gpsLoading ? <Loader2 className="w-6 h-6 animate-spin text-blue-600" /> : <Navigation className="w-6 h-6 text-blue-600 fill-blue-600/20" />}
@@ -472,10 +571,56 @@ const DriverDashboard = () => {
             </div>
          )}
          {activeTab === 'history' && (
-             <div className="w-full max-w-md mx-auto pointer-events-auto bg-white/95 backdrop-blur-xl p-6 rounded-[32px] shadow-2xl border border-white/40 h-[60vh] flex flex-col">
-                <h2 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-2"><History className="w-6 h-6" /> Histórico</h2>
+             <div className="w-full max-w-md mx-auto pointer-events-auto bg-white/95 backdrop-blur-xl p-6 rounded-[32px] shadow-2xl border border-white/40 h-[75vh] flex flex-col animate-in slide-in-from-bottom-8">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-black text-slate-900 flex items-center gap-2"><History className="w-6 h-6" /> Relatório</h2>
+                    <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+                        <button onClick={() => setHistoryFilter('today')} className={cn("px-3 py-1.5 text-[10px] font-black rounded-lg transition-all", historyFilter === 'today' ? "bg-white text-black shadow-sm" : "text-slate-400")}>HOJE</button>
+                        <button onClick={() => setHistoryFilter('week')} className={cn("px-3 py-1.5 text-[10px] font-black rounded-lg transition-all", historyFilter === 'week' ? "bg-white text-black shadow-sm" : "text-slate-400")}>SEMANA</button>
+                        <button onClick={() => setHistoryFilter('all')} className={cn("px-3 py-1.5 text-[10px] font-black rounded-lg transition-all", historyFilter === 'all' ? "bg-white text-black shadow-sm" : "text-slate-400")}>TUDO</button>
+                    </div>
+                </div>
+
+                {/* Summary Card in History */}
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                    <div className="bg-slate-900 p-4 rounded-2xl text-white">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Ganhos</p>
+                        <p className="text-xl font-black">R$ {historyItems.reduce((acc, item) => acc + Number(item.driver_earnings || item.price * 0.8), 0).toFixed(2)}</p>
+                    </div>
+                    <div className="bg-yellow-500 p-4 rounded-2xl text-black">
+                        <p className="text-[10px] font-black text-yellow-900 uppercase tracking-widest mb-1">Total Viagens</p>
+                        <p className="text-xl font-black">{historyItems.length}</p>
+                    </div>
+                </div>
+
                 <ScrollArea className="flex-1">
-                    {historyItems.length === 0 ? <div className="py-12 text-center text-gray-400">Sem viagens recentes.</div> : historyItems.map(item => (<div key={item.id} className="mb-3 p-4 bg-gray-50 rounded-2xl border border-gray-100"><div className="flex justify-between items-start mb-2"><div><p className="text-[10px] font-bold text-gray-400 uppercase">{new Date(item.created_at).toLocaleDateString()}</p><p className="font-black text-slate-900 text-sm mt-0.5">{item.client_details?.first_name || item.guest_name}</p></div><span className="font-black text-green-600">R$ {Number(item.price).toFixed(2)}</span></div><div className="flex items-center gap-2 mt-3 text-xs text-gray-500 truncate"><MapPin className="w-3 h-3 shrink-0" /> {item.destination_address}</div></div>))}
+                    {historyItems.length === 0 ? (
+                        <div className="py-12 text-center text-gray-400 flex flex-col items-center gap-3">
+                            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center"><History className="w-8 h-8 opacity-20" /></div>
+                            <p className="text-sm font-medium">Nenhuma viagem encontrada.</p>
+                        </div>
+                    ) : historyItems.map(item => (
+                        <div key={item.id} className="mb-3 p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:border-slate-200 transition-all group">
+                            <div className="flex justify-between items-start mb-2">
+                                <div>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase">{new Date(item.created_at).toLocaleDateString()} • {new Date(item.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                                    <p className="font-black text-slate-900 text-sm mt-0.5">{item.client_details?.first_name || item.guest_name}</p>
+                                </div>
+                                <div className="text-right">
+                                    <span className="font-black text-green-600 block">R$ {Number(item.driver_earnings || item.price * 0.8).toFixed(2)}</span>
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase">{item.category}</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 mt-3 text-[11px] text-gray-500 truncate">
+                                <MapPin className="w-3 h-3 shrink-0 text-slate-400" /> {item.destination_address}
+                            </div>
+                            <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-100">
+                                <div className="flex items-center gap-1"><TrendingUp className="w-3 h-3 text-blue-500" /><span className="text-[10px] font-bold">{item.distance}</span></div>
+                                <div className="flex items-center gap-1"><Clock className="w-3 h-3 text-orange-500" /><span className="text-[10px] font-bold">{Math.round(Number(item.duration || 10))} min</span></div>
+                                {item.customer_rating && <div className="flex items-center gap-1 ml-auto"><Star className="w-3 h-3 fill-yellow-500 text-yellow-500" /><span className="text-[10px] font-bold">{item.customer_rating}</span></div>}
+                            </div>
+                        </div>
+                    ))}
                 </ScrollArea>
              </div>
          )}
