@@ -9,6 +9,8 @@ interface MapProps {
   destinationLocation?: { lat: number; lon: number } | null;
   driverLocation?: { lat: number; lon: number } | null;
   stops?: { lat: number; lon: number }[] | null;
+  onMapClick?: (lat: number, lng: number) => void;
+  interactive?: boolean;
 }
 
 const Directions = ({ pickup, destination, stops }: { pickup: any, destination: any, stops?: any[] | null }) => {
@@ -68,9 +70,17 @@ const GoogleMapComponent = ({
     pickupLocation, 
     destinationLocation,
     driverLocation,
-    stops
+    stops,
+    onMapClick,
+    interactive = false
 }: MapProps) => {
   const defaultCenter = { lat: -18.9469, lng: -46.9928 };
+
+  const handleMapClick = (e: any) => {
+    if (onMapClick && e.detail.latLng) {
+        onMapClick(e.detail.latLng.lat, e.detail.latLng.lng);
+    }
+  };
 
   return (
     <div className={`relative h-full w-full ${className}`}>
@@ -79,12 +89,36 @@ const GoogleMapComponent = ({
         defaultZoom={14}
         gestureHandling={'greedy'}
         disableDefaultUI={true}
+        onClick={handleMapClick}
+        clickableIcons={false}
       >
         <Directions 
             pickup={pickupLocation ? { lat: pickupLocation.lat, lng: pickupLocation.lon } : null}
             destination={destinationLocation ? { lat: destinationLocation.lat, lng: destinationLocation.lon } : null}
             stops={stops}
         />
+
+        {/* Marcador de Origem (Somente se não estiver em rota) */}
+        {pickupLocation && !destinationLocation && (
+             <Marker 
+                position={{ lat: pickupLocation.lat, lng: pickupLocation.lon }}
+                icon={{
+                    url: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
+                    scaledSize: new google.maps.Size(25, 41)
+                }}
+             />
+        )}
+
+        {/* Marcador de Destino */}
+        {destinationLocation && (
+             <Marker 
+                position={{ lat: destinationLocation.lat, lng: destinationLocation.lon }}
+                icon={{
+                    url: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png",
+                    scaledSize: new google.maps.Size(25, 41)
+                }}
+             />
+        )}
 
         {/* MARCADOR DO MOTORISTA EM TEMPO REAL (CARRINHO) */}
         {driverLocation && (
