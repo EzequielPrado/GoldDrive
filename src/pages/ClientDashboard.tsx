@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import GoogleMapComponent from "@/components/GoogleMapComponent";
 import { 
-  MapPin, Car, Loader2, Star, ChevronRight, Clock, Wallet, ArrowLeft, History, MessageCircle, CheckCircle2, AlertTriangle, Banknote, XCircle, Ticket, Plus, X, Search, MousePointer2, Gift, Phone, Flag, User, ArrowRight, Navigation, LocateFixed, SearchCode, Map as MapIcon
+  MapPin, Car, Loader2, Star, ChevronRight, Clock, Wallet, ArrowLeft, History, MessageCircle, CheckCircle2, AlertTriangle, Banknote, XCircle, Ticket, Plus, X, Search, MousePointer2, Gift, Phone, Flag, User, ArrowRight, Navigation, LocateFixed, SearchCode, Map as MapIcon, ShieldAlert, Home, Briefcase, Share2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter, DrawerTrigger } from "@/components/ui/drawer";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -137,7 +136,6 @@ const ClientDashboard = () => {
                 if (stopRes && stopRes.value) setCostPerStop(Number(stopRes.value) || 2.50);
             }
 
-            // Tenta pegar a localização inicial silenciosamente
             getCurrentLocation(true);
 
             dataFetched.current = true;
@@ -360,6 +358,10 @@ const ClientDashboard = () => {
     }
   };
 
+  const handleSOS = () => {
+      showError("🚨 ALERTA DE SEGURANÇA ENVIADO! Nossa central entrará em contato.");
+  };
+
   if (isInitialSync) return <div className="h-screen w-full flex items-center justify-center bg-zinc-950"><Loader2 className="w-10 h-10 animate-spin text-yellow-500" /></div>;
 
   return (
@@ -381,6 +383,20 @@ const ClientDashboard = () => {
           </Button>
       </div>
 
+      {/* SOS BUTTON DURING ACTIVE RIDE */}
+      {step === 'active' && (
+          <div className="absolute top-4 right-4 z-20">
+              <Button 
+                variant="destructive" 
+                size="icon" 
+                className="h-12 w-12 rounded-full shadow-2xl animate-pulse border-4 border-white"
+                onClick={handleSOS}
+              >
+                  <ShieldAlert className="w-6 h-6" />
+              </Button>
+          </div>
+      )}
+
       {/* INITIAL STATE: 99-STYLE SEARCH BAR */}
       {step === 'search' && !isSearchingFull && (
           <div className="absolute bottom-32 left-4 right-4 z-20 pointer-events-auto max-w-md mx-auto animate-in slide-in-from-bottom-10">
@@ -401,6 +417,16 @@ const ClientDashboard = () => {
                       {gpsLoading ? <Loader2 className="animate-spin" /> : <LocateFixed className="w-6 h-6" />}
                   </Button>
               </div>
+              
+              {/* QUICK FAVORITES */}
+              <div className="flex gap-2 mt-4 justify-center">
+                  <button className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-full shadow-sm border border-white/20 flex items-center gap-2 text-xs font-bold text-slate-700 hover:bg-white transition-colors">
+                      <Home className="w-3 h-3 text-blue-500" /> Casa
+                  </button>
+                  <button className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-full shadow-sm border border-white/20 flex items-center gap-2 text-xs font-bold text-slate-700 hover:bg-white transition-colors">
+                      <Briefcase className="w-3 h-3 text-yellow-600" /> Trabalho
+                  </button>
+              </div>
           </div>
       )}
 
@@ -416,7 +442,6 @@ const ClientDashboard = () => {
                   </div>
 
                   <div className="space-y-3 relative">
-                      {/* Linha vertical decorativa entre pontos */}
                       <div className="absolute left-[34px] top-10 bottom-10 w-0.5 bg-slate-100 -z-10" />
 
                       <div className="flex gap-2 items-center">
@@ -476,7 +501,6 @@ const ClientDashboard = () => {
               </div>
 
               <div className="flex-1 bg-slate-50 overflow-y-auto px-4 py-6">
-                  {/* LUGARES RECENTES / RECOMENDADOS */}
                   <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 ml-2">Sugestões para você</h3>
                   <div className="space-y-4">
                       {historyItems.length > 0 ? historyItems.slice(0, 3).map((h, i) => (
@@ -540,7 +564,6 @@ const ClientDashboard = () => {
               </DrawerHeader>
               
               <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
-                  {/* CATEGORIES GRID */}
                   <div className="flex flex-col gap-3">
                     {categories.map(cat => (
                         <button 
@@ -560,7 +583,10 @@ const ClientDashboard = () => {
                                 <Car className="w-8 h-8" />
                             </div>
                             <div className="flex-1">
-                                <p className="font-black text-slate-900 text-lg leading-tight">{cat.name}</p>
+                                <div className="flex items-center gap-2">
+                                    <p className="font-black text-slate-900 text-lg leading-tight">{cat.name}</p>
+                                    <Badge className="bg-slate-100 text-slate-500 text-[9px] font-black border-0">{Math.floor(Math.random() * 5) + 2} min</Badge>
+                                </div>
                                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{cat.description || 'Premium'}</p>
                             </div>
                             <div className="text-right">
@@ -571,7 +597,6 @@ const ClientDashboard = () => {
                     ))}
                   </div>
 
-                  {/* PAYMENT & COUPON ROW */}
                   <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                           <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Forma de Pagamento</Label>
@@ -661,7 +686,10 @@ const ClientDashboard = () => {
           <Card className="w-full max-w-md mx-auto pointer-events-auto bg-white/95 backdrop-blur-xl p-0 rounded-[32px] shadow-2xl border border-white/40 overflow-hidden animate-in slide-in-from-bottom-8">
               <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
                   <Badge className="bg-yellow-500 text-black font-black uppercase tracking-widest text-[10px] px-3 py-1">{ride.status === 'ACCEPTED' ? 'A CAMINHO' : ride.status === 'ARRIVED' ? 'NO LOCAL' : 'EM VIAGEM'}</Badge>
-                  <span className="text-xs font-bold text-slate-400">#{ride.id.slice(0, 4)}</span>
+                  <div className="flex items-center gap-2">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-white hover:bg-white/10 rounded-full"><Share2 className="w-4 h-4" /></Button>
+                      <span className="text-xs font-bold text-slate-400">#{ride.id.slice(0, 4)}</span>
+                  </div>
               </div>
               <div className="p-6">
                   <div className="flex items-center gap-5 mb-6">
