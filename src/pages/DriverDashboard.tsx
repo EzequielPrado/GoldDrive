@@ -159,7 +159,7 @@ const DriverDashboard = () => {
 
           rides.forEach(r => {
               const rideDate = new Date(r.created_at);
-              const earnings = Number(r.driver_earnings || r.price * 0.8); // Fallback if driver_earnings is null
+              const earnings = Number(r.driver_earnings || r.price * 0.8);
               
               if (rideDate >= today) {
                   todayE += earnings;
@@ -477,21 +477,19 @@ const DriverDashboard = () => {
           </div>
       </div>
 
-      {/* SOS BUTTON - Visible only during trip */}
       {isOnTrip && (
           <div className="absolute top-24 right-4 z-40 pointer-events-auto animate-in fade-in zoom-in">
               <Button 
                 variant="destructive" 
                 size="icon" 
                 className="w-14 h-14 rounded-full shadow-2xl border-4 border-white animate-pulse"
-                onClick={() => showError("🚨 ALERTA SOS ENVIADO! A central de segurança foi notificada e sua localização está sendo monitorada em tempo real.")}
+                onClick={() => showError("🚨 ALERTA SOS ENVIADO! A central de segurança foi notificada.")}
               >
                   <ShieldAlert className="w-7 h-7" />
               </Button>
           </div>
       )}
 
-      {/* Driver Stats Overlay (Home Tab) */}
       {activeTab === 'home' && !isOnTrip && !isCompleted && !isCancelled && isOnline && (
           <div className="absolute top-24 left-4 right-4 z-20 pointer-events-auto animate-in slide-in-from-top-4">
               <div className="bg-white/90 backdrop-blur-xl rounded-3xl p-5 shadow-xl border border-white/50">
@@ -515,7 +513,6 @@ const DriverDashboard = () => {
                       </div>
                   </div>
 
-                  {/* Meta Diária Progress Bar */}
                   <div className="pt-4 border-t border-slate-100">
                       <div className="flex justify-between items-center mb-2">
                           <div className="flex items-center gap-2">
@@ -533,13 +530,19 @@ const DriverDashboard = () => {
                             style={{ width: `${goalProgress}%` }}
                           />
                       </div>
-                      {goalProgress >= 100 && (
-                          <p className="text-[9px] font-bold text-green-600 mt-1 flex items-center gap-1">
-                              <CheckCircle2 className="w-3 h-3" /> Meta batida! Parabéns!
-                          </p>
-                      )}
                   </div>
               </div>
+          </div>
+      )}
+
+      {isOnline && !isOnTrip && !isCompleted && !isCancelled && (
+          <div className="absolute bottom-28 left-4 z-40 pointer-events-auto flex flex-col gap-3">
+              <Button 
+                onClick={() => setShowManualRide(true)} 
+                className="w-16 h-16 rounded-full bg-yellow-500 text-black shadow-2xl border-4 border-white hover:bg-yellow-400 transition-all active:scale-90 flex items-center justify-center group"
+              >
+                  <Plus className="w-8 h-8 group-hover:rotate-90 transition-transform duration-300" />
+              </Button>
           </div>
       )}
 
@@ -569,7 +572,6 @@ const DriverDashboard = () => {
                         <div className="bg-black/80 backdrop-blur-xl px-8 py-4 rounded-full shadow-2xl flex items-center gap-4 animate-pulse border border-white/10 text-white font-black uppercase text-xs">
                             <div className="w-3 h-3 bg-green-500 rounded-full" /> PROCURANDO PEDIDOS...
                         </div>
-                        <Button onClick={() => setShowManualRide(true)} className="bg-yellow-500 text-black font-black h-16 w-16 rounded-full shadow-2xl"><UserPlus className="w-7 h-7" /></Button>
                     </div>
                 )}
 
@@ -630,63 +632,8 @@ const DriverDashboard = () => {
                 )}
             </div>
          )}
-         {activeTab === 'history' && (
-             <div className="w-full max-w-md mx-auto pointer-events-auto bg-white/95 backdrop-blur-xl p-6 rounded-[32px] shadow-2xl border border-white/40 h-[75vh] flex flex-col animate-in slide-in-from-bottom-8">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-black text-slate-900 flex items-center gap-2"><History className="w-6 h-6" /> Relatório</h2>
-                    <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
-                        <button onClick={() => setHistoryFilter('today')} className={cn("px-3 py-1.5 text-[10px] font-black rounded-lg transition-all", historyFilter === 'today' ? "bg-white text-black shadow-sm" : "text-slate-400")}>HOJE</button>
-                        <button onClick={() => setHistoryFilter('week')} className={cn("px-3 py-1.5 text-[10px] font-black rounded-lg transition-all", historyFilter === 'week' ? "bg-white text-black shadow-sm" : "text-slate-400")}>SEMANA</button>
-                        <button onClick={() => setHistoryFilter('all')} className={cn("px-3 py-1.5 text-[10px] font-black rounded-lg transition-all", historyFilter === 'all' ? "bg-white text-black shadow-sm" : "text-slate-400")}>TUDO</button>
-                    </div>
-                </div>
-
-                {/* Summary Card in History */}
-                <div className="grid grid-cols-2 gap-3 mb-6">
-                    <div className="bg-slate-900 p-4 rounded-2xl text-white">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Ganhos</p>
-                        <p className="text-xl font-black">R$ {historyItems.reduce((acc, item) => acc + Number(item.driver_earnings || item.price * 0.8), 0).toFixed(2)}</p>
-                    </div>
-                    <div className="bg-yellow-500 p-4 rounded-2xl text-black">
-                        <p className="text-[10px] font-black text-yellow-900 uppercase tracking-widest mb-1">Total Viagens</p>
-                        <p className="text-xl font-black">{historyItems.length}</p>
-                    </div>
-                </div>
-
-                <ScrollArea className="flex-1">
-                    {historyItems.length === 0 ? (
-                        <div className="py-12 text-center text-gray-400 flex flex-col items-center gap-3">
-                            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center"><History className="w-8 h-8 opacity-20" /></div>
-                            <p className="text-sm font-medium">Nenhuma viagem encontrada.</p>
-                        </div>
-                    ) : historyItems.map(item => (
-                        <div key={item.id} className="mb-3 p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:border-slate-200 transition-all group">
-                            <div className="flex justify-between items-start mb-2">
-                                <div>
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase">{new Date(item.created_at).toLocaleDateString()} • {new Date(item.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-                                    <p className="font-black text-slate-900 text-sm mt-0.5">{item.client_details?.first_name || item.guest_name}</p>
-                                </div>
-                                <div className="text-right">
-                                    <span className="font-black text-green-600 block">R$ {Number(item.driver_earnings || item.price * 0.8).toFixed(2)}</span>
-                                    <p className="text-[9px] font-bold text-slate-400 uppercase">{item.category}</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2 mt-3 text-[11px] text-gray-500 truncate">
-                                <MapPin className="w-3 h-3 shrink-0 text-slate-400" /> {item.destination_address}
-                            </div>
-                            <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-100">
-                                <div className="flex items-center gap-1"><TrendingUp className="w-3 h-3 text-blue-500" /><span className="text-[10px] font-bold">{item.distance}</span></div>
-                                <div className="flex items-center gap-1"><Clock className="w-3 h-3 text-orange-500" /><span className="text-[10px] font-bold">{Math.round(Number(item.duration || 10))} min</span></div>
-                                {item.customer_rating && <div className="flex items-center gap-1 ml-auto"><Star className="w-3 h-3 fill-yellow-500 text-yellow-500" /><span className="text-[10px] font-bold">{item.customer_rating}</span></div>}
-                            </div>
-                        </div>
-                    ))}
-                </ScrollArea>
-             </div>
-         )}
       </div>
 
-      {/* DIALOG PARA EDITAR META DIÁRIA */}
       <Dialog open={isEditingGoal} onOpenChange={setIsEditingGoal}>
           <DialogContent className="max-w-xs bg-white rounded-[32px] border-0 shadow-2xl p-6">
               <DialogHeader>
@@ -732,12 +679,6 @@ const DriverDashboard = () => {
                               <p className="text-xs font-bold text-slate-700 line-clamp-1">📍 {r.pickup_address}</p>
                               <p className="text-xs font-black text-slate-900 line-clamp-1">🏁 {r.destination_address}</p>
                           </div>
-                          {r.ride_notes && (
-                              <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 flex items-start gap-2">
-                                  <StickyNote className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                                  <p className="text-xs font-bold text-blue-800">{r.ride_notes}</p>
-                              </div>
-                          )}
                           <div className="flex gap-3 mt-2">
                               <Button variant="ghost" className="flex-1 text-red-500 font-bold h-14 rounded-2xl bg-red-50" onClick={() => rejectRide(r.id)}>Ignorar</Button>
                               <Button className="flex-[2] bg-slate-900 text-white font-black h-14 rounded-2xl text-lg shadow-xl" onClick={() => acceptRide(r.id)}>ACEITAR</Button>
@@ -749,40 +690,74 @@ const DriverDashboard = () => {
       </Dialog>
 
       <Dialog open={showManualRide} onOpenChange={setShowManualRide}>
-          <DialogContent className="max-w-md bg-white rounded-[32px] border-0 shadow-2xl p-0">
-              <DialogHeader className="p-6 bg-slate-900 text-white rounded-t-[32px]"><DialogTitle className="text-2xl font-black">Lançar Viagem</DialogTitle></DialogHeader>
-              <div className="p-6 bg-white rounded-b-[32px] max-h-[70vh] overflow-y-auto">
-                  <div className="space-y-4 mb-4">
-                      <Label className="text-xs font-black uppercase text-slate-400 ml-1">Passageiro</Label>
-                      <Input placeholder="Nome do Passageiro" value={passengerName} onChange={e => setPassengerName(e.target.value)} className="h-12 rounded-xl bg-slate-50 font-bold" />
+          <DialogContent className="max-w-md bg-white rounded-[32px] border-0 shadow-2xl p-0 overflow-hidden outline-none">
+              <DialogHeader className="p-6 bg-slate-900 text-white">
+                  <DialogTitle className="text-2xl font-black">Nova Viagem de Rua</DialogTitle>
+                  <DialogDescription className="text-slate-400 font-medium">Inicie uma corrida direto com o passageiro.</DialogDescription>
+              </DialogHeader>
+              <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto bg-white custom-scrollbar">
+                  <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase text-slate-400 ml-1 tracking-widest">Nome do Passageiro</Label>
+                      <div className="relative">
+                          <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                          <Input 
+                            placeholder="Digite o nome do passageiro..." 
+                            value={passengerName} 
+                            onChange={e => setPassengerName(e.target.value)} 
+                            className="h-14 pl-12 rounded-2xl bg-slate-50 border-slate-200 font-bold text-slate-900 focus:bg-white transition-all" 
+                          />
+                      </div>
                   </div>
+
                   <div className="space-y-4">
-                      <div className="flex gap-2">
-                          <GoogleLocationSearch placeholder="Embarque" onSelect={setPickupLocation} initialValue={pickupLocation?.display_name} className="flex-1" />
-                          <Button size="icon" variant="outline" className="h-14 w-14 rounded-2xl shrink-0 border-slate-200 bg-slate-50" onClick={getCurrentLocation} disabled={gpsLoading}>{gpsLoading ? <Loader2 className="animate-spin" /> : <MapPin className="w-5 h-5 text-slate-600" />}</Button>
+                      <div className="space-y-2">
+                          <Label className="text-[10px] font-black uppercase text-slate-400 ml-1 tracking-widest">Local de Embarque</Label>
+                          <div className="flex gap-2">
+                              <GoogleLocationSearch placeholder="Onde o passageiro entrou?" onSelect={setPickupLocation} initialValue={pickupLocation?.display_name} className="flex-1" />
+                              <Button size="icon" variant="outline" className="h-14 w-14 rounded-2xl shrink-0 border-slate-200 bg-slate-50" onClick={getCurrentLocation} disabled={gpsLoading}>
+                                  {gpsLoading ? <Loader2 className="animate-spin" /> : <MapPin className="w-5 h-5 text-slate-600" />}
+                              </Button>
+                          </div>
                       </div>
-                      {stops.map((stop, index) => (
-                          <div key={index} className="flex gap-2 animate-in slide-in-from-left">
-                              <GoogleLocationSearch placeholder={`Parada ${index + 1}`} onSelect={(l) => { const newStops = [...stops]; newStops[index] = l; setStops(newStops); }} initialValue={stop?.display_name} className="flex-1" />
-                              <Button size="icon" variant="outline" className="h-14 w-14 rounded-2xl text-red-500" onClick={() => { const newStops = [...stops]; newStops.splice(index, 1); setStops(newStops); }}><X className="w-5 h-5" /></Button>
-                          </div>
-                      ))}
-                      <GoogleLocationSearch placeholder="Destino" onSelect={setDestLocation} initialValue={destLocation?.display_name} />
-                      {stops.length < 2 && <Button variant="ghost" className="w-full text-slate-500 font-bold border border-dashed border-slate-200 rounded-xl h-12 mt-2" onClick={() => setStops([...stops, null])}><Plus className="w-4 h-4 mr-2" /> Adicionar Parada</Button>}
-                  </div>
-                  <div className="pt-6 space-y-4">
-                      {pickupLocation && destLocation && (
-                          <div className="bg-yellow-50 p-4 rounded-2xl border border-yellow-200 text-center animate-in zoom-in-95">
-                              {manualLoading ? <div className="flex flex-col items-center gap-2"><Loader2 className="animate-spin text-yellow-600 w-6 h-6" /><p className="text-[10px] font-bold text-yellow-700 uppercase">Calculando...</p></div>
-                              : <><p className="text-[10px] font-bold text-yellow-700 uppercase tracking-widest">Valor Estimado</p><h3 className="text-4xl font-black text-black">R$ {calculatePrice().toFixed(2)}</h3><p className="text-[10px] text-yellow-600 font-bold mt-1">{routeDistance.toFixed(1)} km</p></>}
-                          </div>
-                      )}
-                      <div className="flex gap-3">
-                          <Button variant="ghost" className="flex-1 h-14 rounded-2xl font-bold text-slate-400" onClick={() => setShowManualRide(false)}>Cancelar</Button>
-                          <Button className="flex-[2] h-14 bg-black text-white font-black rounded-2xl shadow-xl" onClick={handleCreateManual} disabled={manualLoading || !destLocation || !passengerName || !pickupLocation}>INICIAR CORRIDA</Button>
+
+                      <div className="space-y-2">
+                          <Label className="text-[10px] font-black uppercase text-slate-400 ml-1 tracking-widest">Destino Final</Label>
+                          <GoogleLocationSearch placeholder="Para onde vamos?" onSelect={setDestLocation} initialValue={destLocation?.display_name} />
                       </div>
                   </div>
+
+                  {pickupLocation && destLocation && (
+                      <div className="bg-yellow-50 p-6 rounded-[28px] border-2 border-yellow-200 text-center animate-in zoom-in-95">
+                          {manualLoading ? (
+                              <div className="flex flex-col items-center gap-3 py-2">
+                                  <Loader2 className="animate-spin text-yellow-600 w-8 h-8" />
+                                  <p className="text-[10px] font-black text-yellow-700 uppercase tracking-widest">Calculando Trajeto...</p>
+                              </div>
+                          ) : (
+                              <>
+                                  <p className="text-[10px] font-black text-yellow-700 uppercase tracking-widest mb-1">Valor da Corrida</p>
+                                  <h3 className="text-5xl font-black text-black tracking-tighter">R$ {calculatePrice().toFixed(2)}</h3>
+                                  <div className="flex justify-center gap-3 mt-3">
+                                      <Badge className="bg-white/50 text-yellow-800 font-bold border-yellow-200">{routeDistance.toFixed(1)} km</Badge>
+                                      <Badge className="bg-white/50 text-yellow-800 font-bold border-yellow-200">{Math.round(routeDuration)} min</Badge>
+                                  </div>
+                              </>
+                          )}
+                      </div>
+                  )}
               </div>
+              <DialogFooter className="p-6 pt-0 bg-white">
+                  <div className="flex gap-3 w-full">
+                      <Button variant="ghost" className="flex-1 h-14 rounded-2xl font-bold text-slate-400" onClick={() => setShowManualRide(false)}>CANCELAR</Button>
+                      <Button 
+                        className="flex-[2] h-14 bg-black text-white font-black rounded-2xl shadow-xl text-lg disabled:opacity-50" 
+                        onClick={handleCreateManual} 
+                        disabled={manualLoading || !destLocation || !passengerName || !pickupLocation}
+                      >
+                          INICIAR AGORA
+                      </Button>
+                  </div>
+              </DialogFooter>
           </DialogContent>
       </Dialog>
 
