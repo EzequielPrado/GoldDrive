@@ -47,7 +47,12 @@ const Directions = ({ pickup, destination, stops }: { pickup: any, destination: 
       origin: pickup,
       destination: destination,
       waypoints: waypoints,
-      travelMode: google.maps.TravelMode.DRIVING
+      travelMode: google.maps.TravelMode.DRIVING,
+      optimizeWaypoints: true,
+      drivingOptions: {
+        departureTime: new Date(),
+        trafficModel: google.maps.TrafficModel.BEST_GUESS
+      }
     }, (result, status) => {
       if (status === 'OK' && result) {
         directionsRenderer.setDirections(result);

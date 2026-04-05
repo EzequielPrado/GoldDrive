@@ -162,7 +162,12 @@ const ClientDashboard = () => {
             origin: { lat: pickupLocation.lat, lng: pickupLocation.lon },
             destination: { lat: destLocation.lat, lng: destLocation.lon },
             waypoints: waypoints,
-            travelMode: google.maps.TravelMode.DRIVING
+            travelMode: google.maps.TravelMode.DRIVING,
+            optimizeWaypoints: true,
+            drivingOptions: {
+                departureTime: new Date(),
+                trafficModel: google.maps.TrafficModel.BEST_GUESS
+            }
         }, (result, status) => {
             if (status === 'OK' && result) {
                 let totalDist = 0;
