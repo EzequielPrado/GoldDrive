@@ -101,7 +101,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       });
       if ('Notification' in window && navigator.serviceWorker && Notification.permission === 'granted') {
           navigator.serviceWorker.ready.then(reg => {
-              reg.showNotification(title, { body, icon: '/app-logo.png', badge: '/app-logo.png', vibrate: [200, 100, 200] });
+              reg.showNotification(title, { body, icon: '/app-logo.png', badge: '/app-logo.png', vibrate: [200, 100, 200] } as any);
           });
       }
   };
