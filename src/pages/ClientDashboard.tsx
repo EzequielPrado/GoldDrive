@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import GoogleMapComponent from "@/components/GoogleMapComponent";
 import { 
-  MapPin, Car, Loader2, Star, ChevronRight, Clock, Wallet, ArrowLeft, History, MessageCircle, CheckCircle2, AlertTriangle, Banknote, XCircle, Ticket, Plus, X, Search, MousePointer2, Gift, Phone, Flag, User, ArrowRight, Navigation, LocateFixed, SearchCode, Map as MapIcon, ShieldAlert, Home, Briefcase, Share2, Info, StickyNote, SeparatorHorizontal
+  MapPin, Car, Loader2, Star, ChevronRight, Clock, Wallet, ArrowLeft, History, MessageCircle, CheckCircle2, AlertTriangle, Banknote, XCircle, Ticket, Plus, X, Search, MousePointer2, Gift, Phone, Flag, User, ArrowRight, Navigation, LocateFixed, SearchCode, Map as MapIcon, ShieldAlert, Home, Briefcase, Share2, Info, StickyNote, SeparatorHorizontal, TrendingUp
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -397,7 +397,7 @@ const ClientDashboard = () => {
           </div>
       )}
 
-      {step === 'search' && !isSearchingFull && (
+      {activeTab === 'home' && step === 'search' && !isSearchingFull && (
           <div className="absolute bottom-32 left-4 right-4 z-20 pointer-events-auto max-w-md mx-auto animate-in slide-in-from-bottom-10">
               <div className="bg-white rounded-[32px] p-2 shadow-2xl shadow-black/20 border border-slate-100 flex items-center">
                   <button onClick={() => setIsSearchingFull(true)} className="flex-1 h-14 flex items-center px-6 gap-4 text-left">
@@ -413,7 +413,7 @@ const ClientDashboard = () => {
           </div>
       )}
 
-      {step === 'search' && isSearchingFull && (
+      {activeTab === 'home' && step === 'search' && isSearchingFull && (
           <div className="absolute inset-0 z-[150] bg-white pointer-events-auto flex flex-col animate-in fade-in duration-300">
               <div className="p-4 pt-12 space-y-4">
                   <div className="flex items-center gap-2">
@@ -587,6 +587,44 @@ const ClientDashboard = () => {
               <Button className="w-full h-16 bg-black text-white font-black rounded-[24px]" onClick={() => { clearRide(); setStep('search'); }}>FECHAR E CONTINUAR</Button>
           </Card>
         )}
+
+        {activeTab === 'history' && (
+             <div className="w-full max-w-md mx-auto pointer-events-auto bg-white/95 backdrop-blur-xl p-6 rounded-[32px] shadow-2xl border border-white/40 h-[75vh] flex flex-col animate-in slide-in-from-bottom-8">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-black text-slate-900 flex items-center gap-2"><History className="w-6 h-6" /> Minhas Viagens</h2>
+                    <Button variant="ghost" size="icon" onClick={() => setActiveTab('home')} className="rounded-full"><X className="w-5 h-5" /></Button>
+                </div>
+
+                <ScrollArea className="flex-1">
+                    {historyItems.length === 0 ? (
+                        <div className="py-12 text-center text-gray-400 flex flex-col items-center gap-3">
+                            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center"><History className="w-8 h-8 opacity-20" /></div>
+                            <p className="text-sm font-medium">Você ainda não realizou viagens.</p>
+                        </div>
+                    ) : historyItems.map(item => (
+                        <div key={item.id} className="mb-3 p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:border-slate-200 transition-all group">
+                            <div className="flex justify-between items-start mb-2">
+                                <div>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase">{new Date(item.created_at).toLocaleDateString()} • {new Date(item.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                                    <p className="font-black text-slate-900 text-sm mt-0.5">{item.driver?.first_name || 'Motorista Gold'}</p>
+                                </div>
+                                <div className="text-right">
+                                    <span className="font-black text-slate-900 block">R$ {Number(item.price).toFixed(2)}</span>
+                                    <Badge variant="outline" className={cn("text-[9px] font-bold uppercase border-0 px-2 py-0.5", item.status === 'COMPLETED' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')}>{item.status}</Badge>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 mt-3 text-[11px] text-gray-500 truncate">
+                                <MapPin className="w-3 h-3 shrink-0 text-slate-400" /> {item.destination_address}
+                            </div>
+                            <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-100">
+                                <div className="flex items-center gap-1"><TrendingUp className="w-3 h-3 text-blue-500" /><span className="text-[10px] font-bold">{item.distance}</span></div>
+                                {item.driver_rating && <div className="flex items-center gap-1 ml-auto"><Star className="w-3 h-3 fill-yellow-500 text-yellow-500" /><span className="text-[10px] font-bold">{item.driver_rating}</span></div>}
+                            </div>
+                        </div>
+                    ))}
+                </ScrollArea>
+             </div>
+         )}
       </div>
 
       <Dialog open={showBalanceAlert} onOpenChange={setShowBalanceAlert}>
@@ -603,7 +641,7 @@ const ClientDashboard = () => {
           </DialogContent>
       </Dialog>
 
-      <FloatingDock activeTab={step === 'search' ? 'home' : 'rides'} onTabChange={tab => { if(tab === 'profile') navigate('/profile'); else if(tab === 'wallet') navigate('/wallet'); else setActiveTab(tab); }} role="client" />
+      <FloatingDock activeTab={activeTab} onTabChange={tab => { if(tab === 'profile') navigate('/profile'); else if(tab === 'wallet') navigate('/wallet'); else setActiveTab(tab); }} role="client" />
 
       {showChat && ride && currentUserId && (
           <RideChat 
