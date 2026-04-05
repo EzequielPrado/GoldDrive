@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -5,11 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ArrowLeft, Camera, Loader2, LogOut, Smartphone, Calendar, Star, History, Car, Mail, Phone, ShieldCheck, User, Pencil, Check, X } from "lucide-react";
+import { ArrowLeft, Camera, Loader2, LogOut, Smartphone, Calendar, Star, History, Car, Mail, Phone, ShieldCheck, User, Pencil, Check, X, Home, Briefcase, MapPin } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import GoogleLocationSearch from "@/components/GoogleLocationSearch";
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -22,8 +25,17 @@ const Profile = () => {
   const [savingVehicle, setSavingVehicle] = useState(false);
   const [vehicleForm, setVehicleForm] = useState({ model: '', plate: '', color: '', year: '' });
   
+  // Estados para endereços favoritos
+  const [isEditingFavorites, setIsEditingFavorites] = useState(false);
+  const [savingFavorites, setSavingFavorites] = useState(false);
+  const [favoritesForm, setFavoritesForm] = useState({
+    home: { address: '', lat: 0, lng: 0 },
+    work: { address: '', lat: 0, lng: 0 }
+  });
+
   const [profile, setProfile] = useState<any>({
-    id: "", first_name: "", last_name: "", email: "", phone: "", bio: "", avatar_url: "", role: "", created_at: "", car_model: "", car_plate: "", car_color: "", car_year: "", total_rides: 0, rating: 5.0
+    id: "", first_name: "", last_name: "", email: "", phone: "", bio: "", avatar_url: "", role: "", created_at: "", car_model: "", car_plate: "", car_color: "", car_year: "", total_rides: 0, rating: 5.0,
+    home_address: "", work_address: ""
   });
 
   useEffect(() => { getProfile(); }, []);
@@ -36,11 +48,9 @@ const Profile = () => {
           return;
       }
       
-      // Busca perfil básico
       const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
       if (error) throw error;
       
-      // Contagem REAL de viagens finalizadas
       const queryField = data.role === 'driver' ? 'driver_id' : 'customer_id';
       
       const { count, error: countError } = await supabase
@@ -65,6 +75,12 @@ const Profile = () => {
           total_rides: count || 0,
           rating: avgRating 
       });
+
+      setFavoritesForm({
+        home: { address: data.home_address || '', lat: data.home_lat || 0, lng: data.home_lng || 0 },
+        work: { address: data.work_address || '', lat: data.work_lat || 0, lng: data.work_lng || 0 }
+      });
+
     } catch (error: any) { 
         showError(error.message); 
     } finally { 
@@ -129,6 +145,36 @@ const Profile = () => {
       showError("Erro ao atualizar veículo: " + error.message);
     } finally {
       setSavingVehicle(false);
+    }
+  };
+
+  const handleSaveFavorites = async () => {
+    setSavingFavorites(true);
+    try {
+      const { error } = await supabase.from('profiles')
+        .update({
+          home_address: favoritesForm.home.address,
+          home_lat: favoritesForm.home.lat,
+          home_lng: favoritesForm.home.lng,
+          work_address: favoritesForm.work.address,
+          work_lat: favoritesForm.work.lat,
+          work_lng: favoritesForm.work.lng
+        })
+        .eq('id', profile.id);
+
+      if (error) throw error;
+
+      setProfile({
+        ...profile,
+        home_address: favoritesForm.home.address,
+        work_address: favoritesForm.work.address
+      });
+      showSuccess("Endereços favoritos salvos!");
+      setIsEditingFavorites(false);
+    } catch (error: any) {
+      showError("Erro ao salvar endereços: " + error.message);
+    } finally {
+      setSavingFavorites(false);
     }
   };
 
@@ -256,6 +302,86 @@ const Profile = () => {
                 </div>
             </div>
         </div>
+
+        {/* Card de Endereços Favoritos (Apenas Passageiro) */}
+        {profile.role === 'client' && (
+            <div className="bg-white rounded-[32px] shadow-lg p-6 mb-6 border border-gray-100 transition-all">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-black text-slate-900 flex items-center gap-2 text-lg">
+                        <MapPin className="w-5 h-5 text-blue-500" /> Endereços Favoritos
+                    </h3>
+                    {!isEditingFavorites && (
+                        <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-xl font-bold h-8 px-3"
+                            onClick={() => setIsEditingFavorites(true)}
+                        >
+                            <Pencil className="w-4 h-4 mr-2" /> Editar
+                        </Button>
+                    )}
+                </div>
+
+                {isEditingFavorites ? (
+                    <div className="space-y-4 bg-slate-50 p-4 rounded-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Casa</Label>
+                            <GoogleLocationSearch 
+                                placeholder="Definir endereço de casa" 
+                                onSelect={(l) => setFavoritesForm({ ...favoritesForm, home: { address: l?.display_name || '', lat: l?.lat || 0, lng: l?.lon || 0 } })} 
+                                initialValue={favoritesForm.home.address}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Trabalho</Label>
+                            <GoogleLocationSearch 
+                                placeholder="Definir endereço do trabalho" 
+                                onSelect={(l) => setFavoritesForm({ ...favoritesForm, work: { address: l?.display_name || '', lat: l?.lat || 0, lng: l?.lon || 0 } })} 
+                                initialValue={favoritesForm.work.address}
+                            />
+                        </div>
+                        <div className="flex gap-2 pt-2">
+                            <Button 
+                                variant="outline" 
+                                className="flex-1 rounded-xl h-12 font-bold text-slate-500" 
+                                onClick={() => setIsEditingFavorites(false)} 
+                                disabled={savingFavorites}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button 
+                                className="flex-1 rounded-xl h-12 bg-blue-600 text-white hover:bg-blue-700 font-black shadow-md" 
+                                onClick={handleSaveFavorites} 
+                                disabled={savingFavorites}
+                            >
+                                {savingFavorites ? <Loader2 className="w-5 h-5 animate-spin" /> : "Salvar"}
+                            </Button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        <div className="bg-slate-50 rounded-2xl p-4 flex items-center gap-4 border border-slate-100">
+                            <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600">
+                                <Home className="w-5 h-5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold text-slate-900">Casa</p>
+                                <p className="text-xs text-slate-500 truncate">{profile.home_address || 'Não definido'}</p>
+                            </div>
+                        </div>
+                        <div className="bg-slate-50 rounded-2xl p-4 flex items-center gap-4 border border-slate-100">
+                            <div className="w-10 h-10 rounded-xl bg-yellow-100 flex items-center justify-center text-yellow-600">
+                                <Briefcase className="w-5 h-5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold text-slate-900">Trabalho</p>
+                                <p className="text-xs text-slate-500 truncate">{profile.work_address || 'Não definido'}</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        )}
 
         {/* Card do Veículo (Apenas Motorista) */}
         {profile.role === 'driver' && (

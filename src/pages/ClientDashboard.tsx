@@ -362,6 +362,25 @@ const ClientDashboard = () => {
       showError("🚨 ALERTA DE SEGURANÇA ENVIADO! Nossa central entrará em contato.");
   };
 
+  const handleFavoriteClick = (type: 'home' | 'work') => {
+    if (!userProfile) return;
+    
+    const address = type === 'home' ? userProfile.home_address : userProfile.work_address;
+    const lat = type === 'home' ? userProfile.home_lat : userProfile.work_lat;
+    const lng = type === 'home' ? userProfile.home_lng : userProfile.work_lng;
+
+    if (!address) {
+        showError(`Você ainda não definiu o endereço de ${type === 'home' ? 'casa' : 'trabalho'}. Vá ao seu perfil para configurar.`);
+        navigate('/profile');
+        return;
+    }
+
+    setDestLocation({ lat, lon: lng, display_name: address });
+    setIsSearchingFull(false);
+    unlockAudio();
+    setStep('confirm');
+  };
+
   if (isInitialSync) return <div className="h-screen w-full flex items-center justify-center bg-zinc-950"><Loader2 className="w-10 h-10 animate-spin text-yellow-500" /></div>;
 
   return (
@@ -420,10 +439,16 @@ const ClientDashboard = () => {
               
               {/* QUICK FAVORITES */}
               <div className="flex gap-2 mt-4 justify-center">
-                  <button className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-full shadow-sm border border-white/20 flex items-center gap-2 text-xs font-bold text-slate-700 hover:bg-white transition-colors">
+                  <button 
+                    onClick={() => handleFavoriteClick('home')}
+                    className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-full shadow-sm border border-white/20 flex items-center gap-2 text-xs font-bold text-slate-700 hover:bg-white transition-colors"
+                  >
                       <Home className="w-3 h-3 text-blue-500" /> Casa
                   </button>
-                  <button className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-full shadow-sm border border-white/20 flex items-center gap-2 text-xs font-bold text-slate-700 hover:bg-white transition-colors">
+                  <button 
+                    onClick={() => handleFavoriteClick('work')}
+                    className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-full shadow-sm border border-white/20 flex items-center gap-2 text-xs font-bold text-slate-700 hover:bg-white transition-colors"
+                  >
                       <Briefcase className="w-3 h-3 text-yellow-600" /> Trabalho
                   </button>
               </div>
