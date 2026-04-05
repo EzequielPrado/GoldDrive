@@ -1,7 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Wallet, MapPin, Navigation, DollarSign, Star, History, Car, ArrowRight, MessageCircle, Phone, Smartphone, Map, Flag, CheckCircle2, UserPlus, Clock, X, MousePointer2, Loader2, ChevronRight, Banknote, XCircle, Zap, Plus, StickyNote, TrendingUp, Calendar, Filter, ShieldAlert, Target, Check, Pencil } from "lucide-react";
+import { 
+  Wallet, MapPin, Navigation, DollarSign, Star, History, Car, ArrowRight, 
+  MessageCircle, Phone, Smartphone, Map, Flag, CheckCircle2, UserPlus, 
+  Clock, X, MousePointer2, Loader2, ChevronRight, Banknote, XCircle, 
+  Zap, Plus, StickyNote, TrendingUp, Calendar, Filter, ShieldAlert, 
+  Target, Check, Pencil, User 
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
