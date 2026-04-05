@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import GoogleMapComponent from "@/components/GoogleMapComponent";
 import { 
-  MapPin, Car, Loader2, Star, ChevronRight, Clock, Wallet, ArrowLeft, History, MessageCircle, CheckCircle2, AlertTriangle, Banknote, XCircle, Ticket, Plus, X, Search, MousePointer2, Gift, Phone, Flag, User, ArrowRight, Navigation, GpsFixed, SearchCode, Map as MapIcon
+  MapPin, Car, Loader2, Star, ChevronRight, Clock, Wallet, ArrowLeft, History, MessageCircle, CheckCircle2, AlertTriangle, Banknote, XCircle, Ticket, Plus, X, Search, MousePointer2, Gift, Phone, Flag, User, ArrowRight, Navigation, LocateFixed, SearchCode, Map as MapIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -395,7 +395,7 @@ const ClientDashboard = () => {
                     onClick={getCurrentLocation}
                     className="h-14 w-14 rounded-full text-slate-400"
                   >
-                      {gpsLoading ? <Loader2 className="animate-spin" /> : <GpsFixed className="w-6 h-6" />}
+                      {gpsLoading ? <Loader2 className="animate-spin" /> : <LocateFixed className="w-6 h-6" />}
                   </Button>
               </div>
           </div>
