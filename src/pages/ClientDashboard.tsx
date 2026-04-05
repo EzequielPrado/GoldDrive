@@ -73,6 +73,29 @@ const ClientDashboard = () => {
     }
   }, [searchParams]);
 
+  const getCurrentLocation = useCallback((silent = false) => {
+      if (!silent) setGpsLoading(true);
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+          const geocoder = new google.maps.Geocoder();
+          geocoder.geocode({ 
+              location: { lat: pos.coords.latitude, lng: pos.coords.longitude } 
+          }, (results, status) => {
+              if (status === 'OK' && results?.[0]) {
+                  setPickupLocation({ 
+                      lat: pos.coords.latitude, 
+                      lon: pos.coords.longitude, 
+                      display_name: results[0].formatted_address 
+                  });
+                  if (!silent) showSuccess("Sua localização atualizada!");
+              }
+              setGpsLoading(false);
+          });
+      }, (error) => { 
+          setGpsLoading(false); 
+          if (!silent) showError("Ative a localização.");
+      }, { enableHighAccuracy: true, timeout: 5000 });
+  }, []);
+
   useEffect(() => {
     if (dataFetched.current) return;
     const fetchInitialData = async () => {
@@ -114,6 +137,9 @@ const ClientDashboard = () => {
                 if (stopRes && stopRes.value) setCostPerStop(Number(stopRes.value) || 2.50);
             }
 
+            // Tenta pegar a localização inicial silenciosamente
+            getCurrentLocation(true);
+
             dataFetched.current = true;
             setIsInitialSync(false);
         } catch (error) { 
@@ -121,7 +147,7 @@ const ClientDashboard = () => {
         }
     };
     fetchInitialData();
-  }, [navigate]);
+  }, [navigate, getCurrentLocation]);
 
   useEffect(() => {
     if (activeTab === 'history' && userProfile?.id) {
@@ -334,29 +360,6 @@ const ClientDashboard = () => {
     }
   };
 
-  const getCurrentLocation = () => {
-      setGpsLoading(true);
-      navigator.geolocation.getCurrentPosition(async (pos) => {
-          const geocoder = new google.maps.Geocoder();
-          geocoder.geocode({ 
-              location: { lat: pos.coords.latitude, lng: pos.coords.longitude } 
-          }, (results, status) => {
-              if (status === 'OK' && results?.[0]) {
-                  setPickupLocation({ 
-                      lat: pos.coords.latitude, 
-                      lon: pos.coords.longitude, 
-                      display_name: results[0].formatted_address 
-                  });
-                  showSuccess("Sua localização atualizada!");
-              }
-              setGpsLoading(false);
-          });
-      }, (error) => { 
-          setGpsLoading(false); 
-          showError("Ative a localização.");
-      }, { enableHighAccuracy: true, timeout: 5000 });
-  };
-
   if (isInitialSync) return <div className="h-screen w-full flex items-center justify-center bg-zinc-950"><Loader2 className="w-10 h-10 animate-spin text-yellow-500" /></div>;
 
   return (
@@ -392,7 +395,7 @@ const ClientDashboard = () => {
                   <Button 
                     size="icon" 
                     variant="ghost" 
-                    onClick={getCurrentLocation}
+                    onClick={() => getCurrentLocation()}
                     className="h-14 w-14 rounded-full text-slate-400"
                   >
                       {gpsLoading ? <Loader2 className="animate-spin" /> : <LocateFixed className="w-6 h-6" />}
