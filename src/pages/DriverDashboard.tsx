@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Wallet, MapPin, Navigation, DollarSign, Star, History, Car, ArrowRight, MessageCircle, Phone, Smartphone, Map, Flag, CheckCircle2, UserPlus, Clock, X, MousePointer2, Loader2, ChevronRight, Banknote, XCircle, Zap, Plus, StickyNote, TrendingUp, Calendar, Filter } from "lucide-react";
+import { Wallet, MapPin, Navigation, DollarSign, Star, History, Car, ArrowRight, MessageCircle, Phone, Smartphone, Map, Flag, CheckCircle2, UserPlus, Clock, X, MousePointer2, Loader2, ChevronRight, Banknote, XCircle, Zap, Plus, StickyNote, TrendingUp, Calendar, Filter, ShieldAlert, Target, Check, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import GoogleMapComponent from "@/components/GoogleMapComponent";
 import { useRide } from "@/context/RideContext";
 import { showSuccess, showError } from "@/utils/toast";
@@ -55,6 +55,11 @@ const DriverDashboard = () => {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [trackingActive, setTrackingActive] = useState(false);
   
+  // Metas de Ganhos
+  const [dailyGoal, setDailyGoal] = useState(() => Number(localStorage.getItem('driver_daily_goal')) || 200);
+  const [isEditingGoal, setIsEditingGoal] = useState(false);
+  const [tempGoal, setTempGoal] = useState(dailyGoal.toString());
+
   const [pickupCoord, setPickupCoord] = useState<{lat: number, lon: number} | null>(null);
   const [destCoord, setDestCoord] = useState<{lat: number, lon: number} | null>(null);
 
@@ -376,6 +381,18 @@ const DriverDashboard = () => {
       }
   };
 
+  const handleSaveGoal = () => {
+      const newGoal = Number(tempGoal);
+      if (isNaN(newGoal) || newGoal <= 0) {
+          showError("Insira um valor válido.");
+          return;
+      }
+      setDailyGoal(newGoal);
+      localStorage.setItem('driver_daily_goal', newGoal.toString());
+      setIsEditingGoal(false);
+      showSuccess("Meta diária atualizada!");
+  };
+
   const handleCreateManual = async () => {
       if (!pickupLocation || !destLocation || !passengerName) {
           showError("Preencha todos os campos.");
@@ -431,6 +448,8 @@ const DriverDashboard = () => {
   const nextStopIndex = currentStops.findIndex((s: any) => !s.completed);
   const nextStop = nextStopIndex !== -1 ? currentStops[nextStopIndex] : null;
 
+  const goalProgress = Math.min(100, Math.round((stats.todayEarnings / dailyGoal) * 100));
+
   return (
     <div className="h-screen flex flex-col bg-slate-50 relative overflow-hidden font-sans">
       <img src="/app-logo.png" alt="Logo" className="fixed top-4 left-1/2 -translate-x-1/2 h-8 opacity-90 z-50 pointer-events-none drop-shadow-md rounded-lg" />
@@ -458,26 +477,67 @@ const DriverDashboard = () => {
           </div>
       </div>
 
+      {/* SOS BUTTON - Visible only during trip */}
+      {isOnTrip && (
+          <div className="absolute top-24 right-4 z-40 pointer-events-auto animate-in fade-in zoom-in">
+              <Button 
+                variant="destructive" 
+                size="icon" 
+                className="w-14 h-14 rounded-full shadow-2xl border-4 border-white animate-pulse"
+                onClick={() => showError("🚨 ALERTA SOS ENVIADO! A central de segurança foi notificada e sua localização está sendo monitorada em tempo real.")}
+              >
+                  <ShieldAlert className="w-7 h-7" />
+              </Button>
+          </div>
+      )}
+
       {/* Driver Stats Overlay (Home Tab) */}
       {activeTab === 'home' && !isOnTrip && !isCompleted && !isCancelled && isOnline && (
           <div className="absolute top-24 left-4 right-4 z-20 pointer-events-auto animate-in slide-in-from-top-4">
-              <div className="bg-white/90 backdrop-blur-xl rounded-3xl p-4 shadow-xl border border-white/50 flex justify-between items-center">
-                  <div className="flex flex-col">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ganhos Hoje</p>
-                      <p className="text-xl font-black text-slate-900">R$ {stats.todayEarnings.toFixed(2)}</p>
-                  </div>
-                  <div className="h-8 w-px bg-slate-200" />
-                  <div className="flex flex-col items-center">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Viagens</p>
-                      <p className="text-xl font-black text-slate-900">{stats.todayRides}</p>
-                  </div>
-                  <div className="h-8 w-px bg-slate-200" />
-                  <div className="flex flex-col items-end">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Avaliação</p>
-                      <div className="flex items-center gap-1">
-                          <Star className="w-4 h-4 fill-yellow-500 text-yellow-500" />
-                          <p className="text-xl font-black text-slate-900">{stats.avgRating.toFixed(1)}</p>
+              <div className="bg-white/90 backdrop-blur-xl rounded-3xl p-5 shadow-xl border border-white/50">
+                  <div className="flex justify-between items-center mb-4">
+                      <div className="flex flex-col">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ganhos Hoje</p>
+                          <p className="text-xl font-black text-slate-900">R$ {stats.todayEarnings.toFixed(2)}</p>
                       </div>
+                      <div className="h-8 w-px bg-slate-200" />
+                      <div className="flex flex-col items-center">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Viagens</p>
+                          <p className="text-xl font-black text-slate-900">{stats.todayRides}</p>
+                      </div>
+                      <div className="h-8 w-px bg-slate-200" />
+                      <div className="flex flex-col items-end">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Avaliação</p>
+                          <div className="flex items-center gap-1">
+                              <Star className="w-4 h-4 fill-yellow-500 text-yellow-500" />
+                              <p className="text-xl font-black text-slate-900">{stats.avgRating.toFixed(1)}</p>
+                          </div>
+                      </div>
+                  </div>
+
+                  {/* Meta Diária Progress Bar */}
+                  <div className="pt-4 border-t border-slate-100">
+                      <div className="flex justify-between items-center mb-2">
+                          <div className="flex items-center gap-2">
+                              <Target className="w-3 h-3 text-blue-600" />
+                              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Meta Diária: R$ {dailyGoal}</p>
+                              <button onClick={() => { setTempGoal(dailyGoal.toString()); setIsEditingGoal(true); }} className="p-1 hover:bg-slate-100 rounded-md transition-colors">
+                                  <Pencil className="w-3 h-3 text-slate-400" />
+                              </button>
+                          </div>
+                          <p className="text-[10px] font-black text-blue-600 uppercase">{goalProgress}%</p>
+                      </div>
+                      <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div 
+                            className={cn("h-full transition-all duration-1000", goalProgress >= 100 ? "bg-green-500" : "bg-blue-600")} 
+                            style={{ width: `${goalProgress}%` }}
+                          />
+                      </div>
+                      {goalProgress >= 100 && (
+                          <p className="text-[9px] font-bold text-green-600 mt-1 flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" /> Meta batida! Parabéns!
+                          </p>
+                      )}
                   </div>
               </div>
           </div>
@@ -625,6 +685,31 @@ const DriverDashboard = () => {
              </div>
          )}
       </div>
+
+      {/* DIALOG PARA EDITAR META DIÁRIA */}
+      <Dialog open={isEditingGoal} onOpenChange={setIsEditingGoal}>
+          <DialogContent className="max-w-xs bg-white rounded-[32px] border-0 shadow-2xl p-6">
+              <DialogHeader>
+                  <DialogTitle className="text-xl font-black text-slate-900">Meta Diária</DialogTitle>
+                  <DialogDescription className="text-sm font-medium text-slate-500">Quanto você deseja ganhar hoje?</DialogDescription>
+              </DialogHeader>
+              <div className="py-4">
+                  <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-slate-400">R$</span>
+                      <Input 
+                        type="number" 
+                        value={tempGoal} 
+                        onChange={e => setTempGoal(e.target.value)} 
+                        className="h-14 pl-12 rounded-2xl bg-slate-50 border-slate-100 font-black text-xl"
+                      />
+                  </div>
+              </div>
+              <DialogFooter className="flex gap-2">
+                  <Button variant="ghost" className="flex-1 h-12 rounded-xl font-bold text-slate-400" onClick={() => setIsEditingGoal(false)}>Cancelar</Button>
+                  <Button className="flex-1 h-12 bg-blue-600 text-white font-black rounded-xl shadow-lg" onClick={handleSaveGoal}>SALVAR</Button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
 
       <Dialog open={hasAvailableRides && isOnline && !ride} onOpenChange={() => {}}>
           <DialogContent className="max-w-md bg-white rounded-[32px] border-0 shadow-2xl p-0 overflow-hidden outline-none">
