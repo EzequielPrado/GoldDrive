@@ -638,6 +638,48 @@ const DriverDashboard = () => {
                 )}
             </div>
          )}
+
+         {activeTab === 'history' && (
+             <div className="w-full max-w-md mx-auto pointer-events-auto bg-white/95 backdrop-blur-xl p-6 rounded-[32px] shadow-2xl border border-white/40 h-[75vh] flex flex-col animate-in slide-in-from-bottom-8">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-black text-slate-900 flex items-center gap-2"><History className="w-6 h-6" /> Meu Histórico</h2>
+                    <Button variant="ghost" size="icon" onClick={() => setActiveTab('home')} className="rounded-full"><X className="w-5 h-5" /></Button>
+                </div>
+
+                <div className="flex gap-2 mb-6">
+                    {(['today', 'week', 'all'] as const).map(f => (
+                        <button key={f} onClick={() => setHistoryFilter(f)} className={cn("flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all", historyFilter === f ? "bg-slate-900 text-white shadow-lg" : "bg-slate-100 text-slate-400 hover:bg-slate-200")}>
+                            {f === 'today' ? 'Hoje' : f === 'week' ? 'Semana' : 'Tudo'}
+                        </button>
+                    ))}
+                </div>
+
+                <ScrollArea className="flex-1">
+                    {historyItems.length === 0 ? (
+                        <div className="py-12 text-center text-gray-400 flex flex-col items-center gap-3">
+                            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center"><History className="w-8 h-8 opacity-20" /></div>
+                            <p className="text-sm font-medium">Nenhuma viagem encontrada.</p>
+                        </div>
+                    ) : historyItems.map(item => (
+                        <div key={item.id} className="mb-3 p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:border-slate-200 transition-all group">
+                            <div className="flex justify-between items-start mb-2">
+                                <div>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase">{new Date(item.created_at).toLocaleDateString()} • {new Date(item.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                                    <p className="font-black text-slate-900 text-sm mt-0.5">{item.client_details?.first_name || item.guest_name || 'Passageiro'}</p>
+                                </div>
+                                <div className="text-right">
+                                    <span className="font-black text-green-600 block">R$ {Number(item.driver_earnings || item.price * 0.8).toFixed(2)}</span>
+                                    <Badge variant="outline" className={cn("text-[9px] font-bold uppercase border-0 px-2 py-0.5", item.status === 'COMPLETED' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')}>{item.status}</Badge>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 mt-3 text-[11px] text-gray-500 truncate">
+                                <Flag className="w-3 h-3 shrink-0 text-slate-400" /> {item.destination_address}
+                            </div>
+                        </div>
+                    ))}
+                </ScrollArea>
+             </div>
+         )}
       </div>
 
       <Dialog open={isEditingGoal} onOpenChange={setIsEditingGoal}>
