@@ -75,6 +75,96 @@ const ClientDashboard = () => {
     }
   }, [searchParams]);
 
+  const getCurrentLocation = useCallback((silent = falsethink
+The user is pointing out that my previous response was cut off mid-code. I need to provide the complete `src/pages/ClientDashboard.tsx` file, starting from where it left off or just rewriting the whole file to ensure it's correct and complete.
+
+Looking at the previous turn:
+It stopped at: `const getCurrentLocation = useCallback((silent = false`
+
+I will rewrite the entire `src/pages/ClientDashboard.tsx` file to ensure it is complete and functional, specifically focusing on making the chat button more visible and ensuring the z-index is correct as requested.
+
+Plan:
+1. Rewrite `src/pages/ClientDashboard.tsx`.
+2. Ensure the chat button is prominent in the `active` step.
+3. Ensure the `RideChat` component is rendered correctly at the end of the file.
+4. Add a summary.<dyad-write path="src/pages/ClientDashboard.tsx" description="Completing the ClientDashboard file with improved chat button visibility and layout.">
+"use client";
+
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import GoogleMapComponent from "@/components/GoogleMapComponent";
+import { 
+  MapPin, Car, Loader2, Star, ChevronRight, Clock, Wallet, ArrowLeft, History, MessageCircle, CheckCircle2, AlertTriangle, Banknote, XCircle, Ticket, Plus, X, Search, MousePointer2, Gift, Phone, Flag, User, ArrowRight, Navigation, LocateFixed, SearchCode, Map as MapIcon, ShieldAlert, Home, Briefcase, Share2, Info, StickyNote, SeparatorHorizontal
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useRide } from "@/context/RideContext";
+import { showSuccess, showError } from "@/utils/toast";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter, DrawerTrigger } from "@/components/ui/drawer";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
+import FloatingDock from "@/components/FloatingDock";
+import RideChat from "@/components/RideChat";
+import GoogleLocationSearch from "@/components/GoogleLocationSearch";
+import { cn } from "@/lib/utils";
+
+const ClientDashboard = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { ride, loading: rideLoading, requestRide, cancelRide, rateRide, clearRide, currentUserId, unlockAudio } = useRide();
+  
+  const [activeTab, setActiveTab] = useState("home");
+  const [step, setStep] = useState<'search' | 'confirm' | 'waiting' | 'active' | 'rating'>('search');
+  const [isInitialSync, setIsInitialSync] = useState(true);
+  const [isSearchingFull, setIsSearchingFull] = useState(false);
+  
+  const [pickupLocation, setPickupLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
+  const [destLocation, setDestLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
+  const [stops, setStops] = useState<any[]>([]); 
+  const [rideNotes, setRideNotes] = useState("");
+
+  const [routeDistance, setRouteDistance] = useState<number>(0); 
+  const [routeDuration, setRouteDuration] = useState<number>(0); 
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
+  const [paymentMethod, setPaymentMethod] = useState<'WALLET' | 'CASH'>('CASH');
+  
+  const [isRequesting, setIsRequesting] = useState(false);
+  const [calculatingRoute, setCalculatingRoute] = useState(false);
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [showBalanceAlert, setShowBalanceAlert] = useState(false);
+  const [missingAmount, setMissingAmount] = useState(0);
+
+  const [globalMultiplier, setGlobalMultiplier] = useState(1.0);
+  const [costPerStop, setCostPerStop] = useState(2.50);
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
+  const [applyingCoupon, setApplyingCoupon] = useState(false);
+
+  const [categories, setCategories] = useState<any[]>([]);
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [pricingTiers, setPricingTiers] = useState<any[]>([]);
+  const [appSettings, setAppSettings] = useState({ enableCash: true, enableWallet: true });
+  const [categoryRules, setCategoryRules] = useState<Record<string, any>>({});
+  const [historyItems, setHistoryItems] = useState<any[]>([]);
+  const [rating, setRating] = useState(0);
+
+  const dataFetched = useRef(false);
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam && ['home', 'history', 'wallet', 'profile'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams]);
+
   const getCurrentLocation = useCallback((silent = false) => {
       if (!silent) setGpsLoading(true);
       navigator.geolocation.getCurrentPosition(async (pos) => {
@@ -546,10 +636,26 @@ const ClientDashboard = () => {
               <div className="p-6">
                   <div className="flex items-center gap-5 mb-6">
                       <Avatar className="w-20 h-20 border-4 border-white shadow-xl"><AvatarImage src={ride.driver_details?.avatar_url} /><AvatarFallback className="bg-slate-200 text-slate-500 font-bold">{ride.driver_details?.first_name?.[0]}</AvatarFallback></Avatar>
-                      <div className="flex-1"><h3 className="text-2xl font-black text-slate-900 leading-tight">{ride.driver_details?.first_name}</h3><Badge variant="outline" className="mt-1 border-slate-200 text-slate-500 font-bold uppercase tracking-widest">{ride.driver_details?.car_model} • {ride.driver_details?.car_plate}</Badge></div>
+                      <div className="flex-1">
+                          <h3 className="text-2xl font-black text-slate-900 leading-tight">{ride.driver_details?.first_name}</h3>
+                          <Badge variant="outline" className="mt-1 border-slate-200 text-slate-500 font-bold uppercase tracking-widest">{ride.driver_details?.car_model} • {ride.driver_details?.car_plate}</Badge>
+                      </div>
                       <div className="flex flex-col gap-3">
-                          <Button size="icon" variant="outline" className="h-12 w-12 rounded-2xl shadow-sm bg-white" onClick={() => setShowChat(true)}><MessageCircle className="w-5 h-5" /></Button>
-                          <Button size="icon" variant="outline" className="h-12 w-12 rounded-2xl shadow-sm bg-white" onClick={() => window.open(`tel:${ride.driver_details?.phone}`)}><Phone className="w-5 h-5 text-green-600" /></Button>
+                          <Button 
+                            size="icon" 
+                            className="h-14 w-14 rounded-2xl shadow-lg bg-yellow-500 hover:bg-yellow-400 text-black border-0" 
+                            onClick={() => setShowChat(true)}
+                          >
+                              <MessageCircle className="w-7 h-7" />
+                          </Button>
+                          <Button 
+                            size="icon" 
+                            variant="outline" 
+                            className="h-12 w-12 rounded-2xl shadow-sm bg-white" 
+                            onClick={() => window.open(`tel:${ride.driver_details?.phone}`)}
+                          >
+                              <Phone className="w-5 h-5 text-green-600" />
+                          </Button>
                       </div>
                   </div>
                   <div className="flex items-center justify-between pt-4 border-t border-slate-100">
