@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Wallet, MapPin, Navigation, DollarSign, Star, History, Car, ArrowRight, MessageCircle, Phone, Smartphone, Map, Flag, CheckCircle2, UserPlus, Clock, X, MousePointer2, Loader2, ChevronRight, Banknote, XCircle, Zap, Plus } from "lucide-react";
+import { Wallet, MapPin, Navigation, DollarSign, Star, History, Car, ArrowRight, MessageCircle, Phone, Smartphone, Map, Flag, CheckCircle2, UserPlus, Clock, X, MousePointer2, Loader2, ChevronRight, Banknote, XCircle, Zap, Plus, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -445,6 +445,17 @@ const DriverDashboard = () => {
                                 : <NavigationBlock label="Destino" lat={ride.destination_lat} lng={ride.destination_lng} address={ride.destination_address} icon={Flag} />
                             )}
                         </ScrollArea>
+                        
+                        {ride?.ride_notes && (
+                            <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 mb-4 flex items-start gap-3">
+                                <StickyNote className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Nota do Passageiro</p>
+                                    <p className="text-sm font-bold text-blue-900">{ride.ride_notes}</p>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100 mb-6 mt-4">
                              <Avatar className="w-12 h-12 border-2 border-white"><AvatarImage src={ride?.client_details?.avatar_url} /><AvatarFallback>{ride?.client_details?.first_name?.[0] || 'P'}</AvatarFallback></Avatar>
                              <div className="flex-1"><h3 className="font-black text-slate-900 leading-tight">{ride?.client_details?.first_name || ride?.guest_name}</h3><p className="text-[10px] text-gray-500 font-bold uppercase mt-0.5">Nota: 5.0 ⭐</p></div>
@@ -491,6 +502,12 @@ const DriverDashboard = () => {
                               <p className="text-xs font-bold text-slate-700 line-clamp-1">📍 {r.pickup_address}</p>
                               <p className="text-xs font-black text-slate-900 line-clamp-1">🏁 {r.destination_address}</p>
                           </div>
+                          {r.ride_notes && (
+                              <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 flex items-start gap-2">
+                                  <StickyNote className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                                  <p className="text-xs font-bold text-blue-800">{r.ride_notes}</p>
+                              </div>
+                          )}
                           <div className="flex gap-3 mt-2">
                               <Button variant="ghost" className="flex-1 text-red-500 font-bold h-14 rounded-2xl bg-red-50" onClick={() => rejectRide(r.id)}>Ignorar</Button>
                               <Button className="flex-[2] bg-slate-900 text-white font-black h-14 rounded-2xl text-lg shadow-xl" onClick={() => acceptRide(r.id)}>ACEITAR</Button>

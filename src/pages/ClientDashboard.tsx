@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import GoogleMapComponent from "@/components/GoogleMapComponent";
 import { 
-  MapPin, Car, Loader2, Star, ChevronRight, Clock, Wallet, ArrowLeft, History, MessageCircle, CheckCircle2, AlertTriangle, Banknote, XCircle, Ticket, Plus, X, Search, MousePointer2, Gift, Phone, Flag, User, ArrowRight, Navigation, LocateFixed, SearchCode, Map as MapIcon, ShieldAlert, Home, Briefcase, Share2
+  MapPin, Car, Loader2, Star, ChevronRight, Clock, Wallet, ArrowLeft, History, MessageCircle, CheckCircle2, AlertTriangle, Banknote, XCircle, Ticket, Plus, X, Search, MousePointer2, Gift, Phone, Flag, User, ArrowRight, Navigation, LocateFixed, SearchCode, Map as MapIcon, ShieldAlert, Home, Briefcase, Share2, Info, StickyNote, SeparatorHorizontal
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
 import FloatingDock from "@/components/FloatingDock";
 import RideChat from "@/components/RideChat";
 import GoogleLocationSearch from "@/components/GoogleLocationSearch";
@@ -36,6 +38,7 @@ const ClientDashboard = () => {
   const [pickupLocation, setPickupLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
   const [destLocation, setDestLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
   const [stops, setStops] = useState<any[]>([]); 
+  const [rideNotes, setRideNotes] = useState("");
 
   const [routeDistance, setRouteDistance] = useState<number>(0); 
   const [routeDuration, setRouteDuration] = useState<number>(0); 
@@ -229,15 +232,20 @@ const ClientDashboard = () => {
       }
   };
 
-  const calculatePrice = useCallback((catId?: string) => {
+  const calculatePriceDetails = useCallback((catId?: string) => {
       const category = categories.find(c => c.id === (catId || selectedCategoryId));
-      if (!category || routeDistance <= 0) return 0;
+      if (!category || routeDistance <= 0) return { total: 0, base: 0, km: 0, time: 0, stops: 0, multiplier: 1 };
       
       let price = 0;
-      
+      let baseFare = Number(category.base_fare);
+      let kmPrice = 0;
+      let timePrice = 0;
+      let stopsPrice = 0;
+
       if (category.name === 'Gold Driver' && pricingTiers.length > 0) {
           const tier = pricingTiers.find(t => routeDistance <= Number(t.max_distance)) || pricingTiers[pricingTiers.length - 1];
           price = Number(tier?.price || 15);
+          baseFare = price;
       } else {
           const rules = categoryRules[category.name] || {};
           let isNight = false;
@@ -248,17 +256,11 @@ const ClientDashboard = () => {
               const currentHour = new Date().getHours();
               const currentMinute = new Date().getMinutes();
               const currentTime = currentHour + (currentMinute / 60);
-
               const startParts = startStr.split(':');
               const endParts = endStr.split(':');
               const start = parseInt(startParts[0]) + parseInt(startParts[1]) / 60;
               const end = parseInt(endParts[0]) + parseInt(endParts[1]) / 60;
-
-              if (start > end) { 
-                  return currentTime >= start || currentTime <= end;
-              } else {
-                  return currentTime >= start && currentTime <= end;
-              }
+              return start > end ? (currentTime >= start || currentTime <= end) : (currentTime >= start && currentTime <= end);
           };
 
           if (checkNightPeriod(rules.night_start_2, rules.night_end_2, rules.night_km_2)) {
@@ -270,7 +272,6 @@ const ClientDashboard = () => {
           }
 
           let appliedKmPrice = Number(category.cost_per_km);
-          const baseFare = Number(category.base_fare);
           const costPerMinute = Number(category.cost_per_minute || 0);
           
           if (isNight) {
@@ -280,58 +281,53 @@ const ClientDashboard = () => {
               const price1 = (rules.price_1 || rules.km_over_45) ? Number(rules.price_1 || rules.km_over_45) : null;
               const dist2 = Number(rules.dist_2 || 0);
               const price2 = (rules.price_2 || rules.km_over_10) ? Number(rules.price_2 || rules.km_over_10) : null;
-
               let thresholds = [];
               if (price1 !== null && dist1 > 0) thresholds.push({ dist: dist1, price: price1 });
               if (price2 !== null && dist2 > 0) thresholds.push({ dist: dist2, price: price2 });
               thresholds.sort((a, b) => b.dist - a.dist);
-
-              for (const t of thresholds) {
-                  if (routeDistance >= t.dist) {
-                      appliedKmPrice = t.price;
-                      break;
-                  }
-              }
+              for (const t of thresholds) { if (routeDistance >= t.dist) { appliedKmPrice = t.price; break; } }
           }
 
-          price = baseFare + (routeDistance * appliedKmPrice) + (routeDuration * costPerMinute);
+          kmPrice = routeDistance * appliedKmPrice;
+          timePrice = routeDuration * costPerMinute;
+          price = baseFare + kmPrice + timePrice;
       }
 
       const validStops = stops.filter(s => s && s.lat && s.lon);
-      price += validStops.length * costPerStop;
-
+      stopsPrice = validStops.length * costPerStop;
+      price += stopsPrice;
       price = price * globalMultiplier;
 
-      if (price < Number(category.min_fare)) {
-          price = Number(category.min_fare);
-      }
+      if (price < Number(category.min_fare)) price = Number(category.min_fare);
 
       if (appliedCoupon) {
-          if (appliedCoupon.discount_type === 'PERCENTAGE') {
-              price = price - (price * (Number(appliedCoupon.discount_value) / 100));
-          } else {
-              price = price - Number(appliedCoupon.discount_value);
-          }
+          if (appliedCoupon.discount_type === 'PERCENTAGE') price = price - (price * (Number(appliedCoupon.discount_value) / 100));
+          else price = price - Number(appliedCoupon.discount_value);
       }
 
-      return parseFloat(Math.max(price, 0).toFixed(2));
+      return {
+          total: parseFloat(Math.max(price, 0).toFixed(2)),
+          base: baseFare,
+          km: kmPrice,
+          time: timePrice,
+          stops: stopsPrice,
+          multiplier: globalMultiplier
+      };
   }, [categories, pricingTiers, routeDistance, routeDuration, selectedCategoryId, categoryRules, globalMultiplier, appliedCoupon, stops, costPerStop]);
+
+  const calculatePrice = (catId?: string) => calculatePriceDetails(catId).total;
 
   const confirmRide = async () => {
     if (isRequesting || !pickupLocation || !destLocation || !selectedCategoryId) return;
-    
     const validStops = stops.filter(s => s && s.lat && s.lon);
     const price = calculatePrice();
     const category = categories.find(c => c.id === selectedCategoryId);
-    
     if (paymentMethod === 'WALLET' && (userProfile?.balance || 0) < price) { 
         setMissingAmount(price - (userProfile?.balance || 0)); 
         setShowBalanceAlert(true); 
         return; 
     }
-    
     setIsRequesting(true);
-    
     try { 
         const success = await requestRide(
             pickupLocation.display_name, 
@@ -342,43 +338,35 @@ const ClientDashboard = () => {
             `${routeDistance.toFixed(1)} km`, 
             category.name, 
             paymentMethod,
-            validStops
+            validStops,
+            rideNotes
         ); 
         if (success) {
             showSuccess("Motorista solicitado!");
-            if (appliedCoupon) {
-                await supabase.from('coupons').update({ current_uses: appliedCoupon.current_uses + 1 }).eq('id', appliedCoupon.id);
-            }
-        } else {
-            setIsRequesting(false);
-        }
-    } catch (e: any) { 
-        setIsRequesting(false);
-        showError(e.message); 
-    }
+            if (appliedCoupon) await supabase.from('coupons').update({ current_uses: appliedCoupon.current_uses + 1 }).eq('id', appliedCoupon.id);
+        } else setIsRequesting(false);
+    } catch (e: any) { setIsRequesting(false); showError(e.message); }
   };
 
-  const handleSOS = () => {
-      showError("🚨 ALERTA DE SEGURANÇA ENVIADO! Nossa central entrará em contato.");
-  };
+  const handleSOS = () => showError("🚨 ALERTA DE SEGURANÇA ENVIADO! Nossa central entrará em contato.");
 
   const handleFavoriteClick = (type: 'home' | 'work') => {
     if (!userProfile) return;
-    
     const address = type === 'home' ? userProfile.home_address : userProfile.work_address;
     const lat = type === 'home' ? userProfile.home_lat : userProfile.work_lat;
     const lng = type === 'home' ? userProfile.home_lng : userProfile.work_lng;
-
-    if (!address) {
-        showError(`Você ainda não definiu o endereço de ${type === 'home' ? 'casa' : 'trabalho'}. Vá ao seu perfil para configurar.`);
-        navigate('/profile');
-        return;
-    }
-
+    if (!address) { showError(`Você ainda não definiu o endereço de ${type === 'home' ? 'casa' : 'trabalho'}. Vá ao seu perfil para configurar.`); navigate('/profile'); return; }
     setDestLocation({ lat, lon: lng, display_name: address });
     setIsSearchingFull(false);
     unlockAudio();
     setStep('confirm');
+  };
+
+  const handleShareRoute = () => {
+      if (navigator.share) {
+          navigator.share({ title: 'Minha Viagem Gold', text: `Estou a caminho em um Gold! Acompanhe minha rota:`, url: window.location.href })
+          .catch(console.error);
+      } else showError("Compartilhamento não suportado neste navegador.");
   };
 
   if (isInitialSync) return <div className="h-screen w-full flex items-center justify-center bg-zinc-950"><Loader2 className="w-10 h-10 animate-spin text-yellow-500" /></div>;
@@ -402,292 +390,140 @@ const ClientDashboard = () => {
           </Button>
       </div>
 
-      {/* SOS BUTTON DURING ACTIVE RIDE */}
       {step === 'active' && (
-          <div className="absolute top-4 right-4 z-20">
-              <Button 
-                variant="destructive" 
-                size="icon" 
-                className="h-12 w-12 rounded-full shadow-2xl animate-pulse border-4 border-white"
-                onClick={handleSOS}
-              >
-                  <ShieldAlert className="w-6 h-6" />
-              </Button>
+          <div className="absolute top-4 right-4 z-20 flex flex-col gap-3">
+              <Button variant="destructive" size="icon" className="h-12 w-12 rounded-full shadow-2xl animate-pulse border-4 border-white" onClick={handleSOS}><ShieldAlert className="w-6 h-6" /></Button>
+              <Button variant="secondary" size="icon" className="h-12 w-12 rounded-full shadow-2xl bg-white border-4 border-white" onClick={handleShareRoute}><Share2 className="w-5 h-5 text-blue-600" /></Button>
           </div>
       )}
 
-      {/* INITIAL STATE: 99-STYLE SEARCH BAR */}
       {step === 'search' && !isSearchingFull && (
           <div className="absolute bottom-32 left-4 right-4 z-20 pointer-events-auto max-w-md mx-auto animate-in slide-in-from-bottom-10">
               <div className="bg-white rounded-[32px] p-2 shadow-2xl shadow-black/20 border border-slate-100 flex items-center">
-                  <button 
-                    onClick={() => setIsSearchingFull(true)}
-                    className="flex-1 h-14 flex items-center px-6 gap-4 text-left"
-                  >
+                  <button onClick={() => setIsSearchingFull(true)} className="flex-1 h-14 flex items-center px-6 gap-4 text-left">
                       <div className="w-3 h-3 bg-yellow-500 rounded-full shadow-[0_0_10px_rgba(234,179,8,0.5)]" />
                       <span className="text-slate-400 font-black text-lg">Para onde vamos?</span>
                   </button>
-                  <Button 
-                    size="icon" 
-                    variant="ghost" 
-                    onClick={() => getCurrentLocation()}
-                    className="h-14 w-14 rounded-full text-slate-400"
-                  >
-                      {gpsLoading ? <Loader2 className="animate-spin" /> : <LocateFixed className="w-6 h-6" />}
-                  </Button>
+                  <Button size="icon" variant="ghost" onClick={() => getCurrentLocation()} className="h-14 w-14 rounded-full text-slate-400">{gpsLoading ? <Loader2 className="animate-spin" /> : <LocateFixed className="w-6 h-6" />}</Button>
               </div>
-              
-              {/* QUICK FAVORITES */}
               <div className="flex gap-2 mt-4 justify-center">
-                  <button 
-                    onClick={() => handleFavoriteClick('home')}
-                    className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-full shadow-sm border border-white/20 flex items-center gap-2 text-xs font-bold text-slate-700 hover:bg-white transition-colors"
-                  >
-                      <Home className="w-3 h-3 text-blue-500" /> Casa
-                  </button>
-                  <button 
-                    onClick={() => handleFavoriteClick('work')}
-                    className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-full shadow-sm border border-white/20 flex items-center gap-2 text-xs font-bold text-slate-700 hover:bg-white transition-colors"
-                  >
-                      <Briefcase className="w-3 h-3 text-yellow-600" /> Trabalho
-                  </button>
+                  <button onClick={() => handleFavoriteClick('home')} className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-full shadow-sm border border-white/20 flex items-center gap-2 text-xs font-bold text-slate-700 hover:bg-white transition-colors"><Home className="w-3 h-3 text-blue-500" /> Casa</button>
+                  <button onClick={() => handleFavoriteClick('work')} className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-full shadow-sm border border-white/20 flex items-center gap-2 text-xs font-bold text-slate-700 hover:bg-white transition-colors"><Briefcase className="w-3 h-3 text-yellow-600" /> Trabalho</button>
               </div>
           </div>
       )}
 
-      {/* FULL SCREEN SEARCH OVERLAY */}
       {step === 'search' && isSearchingFull && (
           <div className="absolute inset-0 z-[150] bg-white pointer-events-auto flex flex-col animate-in fade-in duration-300">
               <div className="p-4 pt-12 space-y-4">
                   <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="icon" className="rounded-full h-12 w-12" onClick={() => setIsSearchingFull(false)}>
-                          <ArrowLeft className="w-6 h-6" />
-                      </Button>
+                      <Button variant="ghost" size="icon" className="rounded-full h-12 w-12" onClick={() => setIsSearchingFull(false)}><ArrowLeft className="w-6 h-6" /></Button>
                       <h2 className="text-2xl font-black text-slate-900">Configure sua viagem</h2>
                   </div>
-
                   <div className="space-y-3 relative">
                       <div className="absolute left-[34px] top-10 bottom-10 w-0.5 bg-slate-100 -z-10" />
-
                       <div className="flex gap-2 items-center">
-                        <div className="w-10 flex justify-center shrink-0">
-                            <div className="w-3 h-3 rounded-full bg-blue-500" />
-                        </div>
-                        <GoogleLocationSearch 
-                          placeholder="Local de embarque" 
-                          onSelect={setPickupLocation} 
-                          initialValue={pickupLocation?.display_name} 
-                          className="flex-1"
-                        />
+                        <div className="w-10 flex justify-center shrink-0"><div className="w-3 h-3 rounded-full bg-blue-500" /></div>
+                        <GoogleLocationSearch placeholder="Local de embarque" onSelect={setPickupLocation} initialValue={pickupLocation?.display_name} className="flex-1" />
                       </div>
-
                       {stops.map((stop, index) => (
                           <div key={index} className="flex gap-2 items-center animate-in slide-in-from-left">
-                              <div className="w-10 flex justify-center shrink-0">
-                                  <div className="w-3 h-3 rounded-full border-2 border-slate-300 bg-white" />
-                              </div>
-                              <GoogleLocationSearch 
-                                placeholder={`Parada ${index + 1}`} 
-                                onSelect={(l) => {
-                                    const newStops = [...stops];
-                                    newStops[index] = l;
-                                    setStops(newStops);
-                                }} 
-                                initialValue={stop?.display_name} 
-                                className="flex-1"
-                              />
-                              <Button size="icon" variant="ghost" className="h-10 w-10 text-red-400" onClick={() => {
-                                  const newStops = [...stops];
-                                  newStops.splice(index, 1);
-                                  setStops(newStops);
-                              }}>
-                                  <X className="w-4 h-4" />
-                              </Button>
+                              <div className="w-10 flex justify-center shrink-0"><div className="w-3 h-3 rounded-full border-2 border-slate-300 bg-white" /></div>
+                              <GoogleLocationSearch placeholder={`Parada ${index + 1}`} onSelect={(l) => { const newStops = [...stops]; newStops[index] = l; setStops(newStops); }} initialValue={stop?.display_name} className="flex-1" />
+                              <Button size="icon" variant="ghost" className="h-10 w-10 text-red-400" onClick={() => { const newStops = [...stops]; newStops.splice(index, 1); setStops(newStops); }}><X className="w-4 h-4" /></Button>
                           </div>
                       ))}
-
                       <div className="flex gap-2 items-center">
-                          <div className="w-10 flex justify-center shrink-0">
-                              <div className="w-3 h-3 bg-yellow-500 rounded-sm" />
-                          </div>
-                          <GoogleLocationSearch 
-                            placeholder="Seu destino final" 
-                            onSelect={setDestLocation} 
-                            initialValue={destLocation?.display_name} 
-                            className="flex-1"
-                          />
-                          {stops.length < 2 && (
-                              <Button size="icon" variant="ghost" className="h-12 w-12 rounded-full text-slate-400" onClick={() => setStops([...stops, null])}>
-                                  <Plus className="w-5 h-5" />
-                              </Button>
-                          )}
+                          <div className="w-10 flex justify-center shrink-0"><div className="w-3 h-3 bg-yellow-500 rounded-sm" /></div>
+                          <GoogleLocationSearch placeholder="Seu destino final" onSelect={setDestLocation} initialValue={destLocation?.display_name} className="flex-1" />
+                          {stops.length < 2 && <Button size="icon" variant="ghost" className="h-12 w-12 rounded-full text-slate-400" onClick={() => setStops([...stops, null])}><Plus className="w-5 h-5" /></Button>}
                       </div>
                   </div>
               </div>
-
               <div className="flex-1 bg-slate-50 overflow-y-auto px-4 py-6">
                   <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 ml-2">Sugestões para você</h3>
                   <div className="space-y-4">
-                      {historyItems.length > 0 ? historyItems.slice(0, 3).map((h, i) => (
-                          <button 
-                            key={i} 
-                            className="w-full flex items-center gap-4 p-2 text-left hover:bg-white rounded-2xl transition-colors"
-                            onClick={() => {
-                                setDestLocation({ lat: Number(h.destination_lat), lon: Number(h.destination_lng), display_name: h.destination_address });
-                            }}
-                          >
-                              <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500">
-                                  <History className="w-5 h-5" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                  <p className="font-bold text-sm text-slate-900 truncate">{h.destination_address.split(',')[0]}</p>
-                                  <p className="text-xs text-slate-500 truncate">{h.destination_address}</p>
-                              </div>
+                      {historyItems.length > 0 ? historyItems.slice(0, 5).map((h, i) => (
+                          <button key={i} className="w-full flex items-center gap-4 p-2 text-left hover:bg-white rounded-2xl transition-colors" onClick={() => setDestLocation({ lat: Number(h.destination_lat), lon: Number(h.destination_lng), display_name: h.destination_address })}>
+                              <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500"><History className="w-5 h-5" /></div>
+                              <div className="flex-1 min-w-0"><p className="font-bold text-sm text-slate-900 truncate">{h.destination_address.split(',')[0]}</p><p className="text-xs text-slate-500 truncate">{h.destination_address}</p></div>
                           </button>
-                      )) : (
-                          <div className="text-center py-10 opacity-40">
-                              <MapIcon className="w-12 h-12 mx-auto mb-2" />
-                              <p className="text-sm font-medium">Busque por um destino acima</p>
-                          </div>
-                      )}
+                      )) : <div className="text-center py-10 opacity-40"><MapIcon className="w-12 h-12 mx-auto mb-2" /><p className="text-sm font-medium">Busque por um destino acima</p></div>}
                   </div>
               </div>
-
               {pickupLocation && destLocation && (
                   <div className="p-4 bg-white border-t border-slate-100">
-                      <Button 
-                        className="w-full h-16 bg-black text-white font-black text-xl rounded-[24px] shadow-2xl"
-                        onClick={() => {
-                            setIsSearchingFull(false);
-                            unlockAudio();
-                            setStep('confirm');
-                        }}
-                      >
-                          CONFIRMAR ROTA
-                      </Button>
+                      <Button className="w-full h-16 bg-black text-white font-black text-xl rounded-[24px] shadow-2xl" onClick={() => { setIsSearchingFull(false); unlockAudio(); setStep('confirm'); }}>CONFIRMAR ROTA</Button>
                   </div>
               )}
           </div>
       )}
 
-      {/* CONFIRMATION STEP: BOTTOM SHEET DRAWER */}
-      <Drawer 
-        open={step === 'confirm'} 
-        onOpenChange={(open) => { if(!open) setStep('search'); }}
-      >
+      <Drawer open={step === 'confirm'} onOpenChange={(open) => { if(!open) setStep('search'); }}>
           <DrawerContent className="bg-white/95 backdrop-blur-xl border-t-0 p-0 rounded-t-[40px] max-h-[85vh]">
               <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto my-4" />
-              
               <DrawerHeader className="px-6 py-2 text-left">
                   <div className="flex justify-between items-center">
                     <div>
                         <DrawerTitle className="text-2xl font-black text-slate-900">Escolha seu Gold</DrawerTitle>
                         <DrawerDescription className="font-bold text-slate-500">{routeDistance.toFixed(1)} km • {Math.round(routeDuration)} min</DrawerDescription>
                     </div>
-                    <Badge variant="outline" className="h-8 border-slate-100 bg-slate-50 font-black px-4">{paymentMethod === 'WALLET' ? 'CARTEIRA' : 'DINHEIRO'}</Badge>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full bg-slate-100"><Info className="w-5 h-5 text-slate-500" /></Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-64 rounded-2xl p-4 shadow-2xl border-slate-100">
+                            <h4 className="font-black text-sm mb-3 uppercase tracking-widest">Detalhes do Preço</h4>
+                            <div className="space-y-2 text-xs">
+                                <div className="flex justify-between"><span>Tarifa Base</span><span className="font-bold">R$ {calculatePriceDetails().base.toFixed(2)}</span></div>
+                                <div className="flex justify-between"><span>Distância ({routeDistance.toFixed(1)}km)</span><span className="font-bold">R$ {calculatePriceDetails().km.toFixed(2)}</span></div>
+                                <div className="flex justify-between"><span>Tempo ({Math.round(routeDuration)}min)</span><span className="font-bold">R$ {calculatePriceDetails().time.toFixed(2)}</span></div>
+                                {calculatePriceDetails().stops > 0 && <div className="flex justify-between"><span>Paradas</span><span className="font-bold">R$ {calculatePriceDetails().stops.toFixed(2)}</span></div>}
+                                <Separator className="my-2" />
+                                <div className="flex justify-between text-sm font-black"><span>Total Estimado</span><span>R$ {calculatePriceDetails().total.toFixed(2)}</span></div>
+                            </div>
+                        </PopoverContent>
+                    </Popover>
                   </div>
               </DrawerHeader>
-              
               <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
                   <div className="flex flex-col gap-3">
                     {categories.map(cat => (
-                        <button 
-                            key={cat.id} 
-                            onClick={() => setSelectedCategoryId(cat.id)} 
-                            className={cn(
-                                "flex items-center gap-4 p-4 rounded-[28px] border-2 transition-all text-left",
-                                selectedCategoryId === cat.id 
-                                    ? "border-yellow-500 bg-yellow-50/50 ring-4 ring-yellow-500/10 shadow-lg scale-[1.02]" 
-                                    : "border-slate-100 hover:border-slate-200"
-                            )}
-                        >
-                            <div className={cn(
-                                "p-3 rounded-2xl transition-colors",
-                                selectedCategoryId === cat.id ? "bg-yellow-500 text-black" : "bg-slate-100 text-slate-400"
-                            )}>
-                                <Car className="w-8 h-8" />
-                            </div>
+                        <button key={cat.id} onClick={() => setSelectedCategoryId(cat.id)} className={cn("flex items-center gap-4 p-4 rounded-[28px] border-2 transition-all text-left", selectedCategoryId === cat.id ? "border-yellow-500 bg-yellow-50/50 ring-4 ring-yellow-500/10 shadow-lg scale-[1.02]" : "border-slate-100 hover:border-slate-200")}>
+                            <div className={cn("p-3 rounded-2xl transition-colors", selectedCategoryId === cat.id ? "bg-yellow-500 text-black" : "bg-slate-100 text-slate-400")}><Car className="w-8 h-8" /></div>
                             <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                    <p className="font-black text-slate-900 text-lg leading-tight">{cat.name}</p>
-                                    <Badge className="bg-slate-100 text-slate-500 text-[9px] font-black border-0">{Math.floor(Math.random() * 5) + 2} min</Badge>
-                                </div>
+                                <div className="flex items-center gap-2"><p className="font-black text-slate-900 text-lg leading-tight">{cat.name}</p><Badge className="bg-slate-100 text-slate-500 text-[9px] font-black border-0">{Math.floor(Math.random() * 5) + 2} min</Badge></div>
                                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{cat.description || 'Premium'}</p>
                             </div>
-                            <div className="text-right">
-                                <p className="font-black text-2xl text-slate-900">R$ {calculatePrice(cat.id).toFixed(2)}</p>
-                                <p className="text-[9px] font-bold text-green-600 uppercase">Melhor preço</p>
-                            </div>
+                            <div className="text-right"><p className="font-black text-2xl text-slate-900">R$ {calculatePrice(cat.id).toFixed(2)}</p></div>
                         </button>
                     ))}
                   </div>
-
+                  <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Nota para o motorista (Opcional)</Label>
+                      <div className="relative">
+                          <StickyNote className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                          <Input placeholder="Ex: Estou na porta do mercado..." value={rideNotes} onChange={e => setRideNotes(e.target.value)} className="h-12 pl-10 rounded-2xl bg-slate-50 border-slate-100 font-medium text-sm" />
+                      </div>
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
-                          <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Forma de Pagamento</Label>
+                          <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Pagamento</Label>
                           <div className="flex gap-2">
-                              {appSettings.enableCash && (
-                                  <button 
-                                    onClick={() => setPaymentMethod('CASH')} 
-                                    className={cn(
-                                        "flex-1 h-12 rounded-2xl border-2 flex items-center justify-center gap-2 transition-all",
-                                        paymentMethod === 'CASH' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-100 text-slate-400'
-                                    )}
-                                  >
-                                      <Banknote className="w-4 h-4" /> <span className="text-[10px] font-black">DINHEIRO</span>
-                                  </button>
-                              )}
-                              {appSettings.enableWallet && (
-                                  <button 
-                                    onClick={() => setPaymentMethod('WALLET')} 
-                                    className={cn(
-                                        "flex-1 h-12 rounded-2xl border-2 flex items-center justify-center gap-2 transition-all",
-                                        paymentMethod === 'WALLET' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-100 text-slate-400'
-                                    )}
-                                  >
-                                      <Wallet className="w-4 h-4" /> <span className="text-[10px] font-black">CARTEIRA</span>
-                                  </button>
-                              )}
+                              {appSettings.enableCash && <button onClick={() => setPaymentMethod('CASH')} className={cn("flex-1 h-12 rounded-2xl border-2 flex items-center justify-center gap-2 transition-all", paymentMethod === 'CASH' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-100 text-slate-400')}><Banknote className="w-4 h-4" /> <span className="text-[10px] font-black">DINHEIRO</span></button>}
+                              {appSettings.enableWallet && <button onClick={() => setPaymentMethod('WALLET')} className={cn("flex-1 h-12 rounded-2xl border-2 flex items-center justify-center gap-2 transition-all", paymentMethod === 'WALLET' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-100 text-slate-400')}><Wallet className="w-4 h-4" /> <span className="text-[10px] font-black">CARTEIRA</span></button>}
                           </div>
                       </div>
                       <div className="space-y-1.5">
-                          <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Cupom Promocional</Label>
+                          <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Cupom</Label>
                           <div className="flex gap-2 h-12">
-                              <Input 
-                                placeholder="CÓDIGO" 
-                                value={couponCode} 
-                                onChange={e => setCouponCode(e.target.value.toUpperCase())} 
-                                className="uppercase rounded-2xl border-slate-100 bg-slate-50 font-black text-xs h-full" 
-                              />
-                              <Button 
-                                variant="outline" 
-                                className="rounded-2xl h-full border-slate-100 px-3 shrink-0" 
-                                onClick={applyCoupon} 
-                                disabled={applyingCoupon}
-                              >
-                                  {applyingCoupon ? <Loader2 className="animate-spin w-4 h-4" /> : <Ticket className="w-4 h-4" />}
-                              </Button>
+                              <Input placeholder="CÓDIGO" value={couponCode} onChange={e => setCouponCode(e.target.value.toUpperCase())} className="uppercase rounded-2xl border-slate-100 bg-slate-50 font-black text-xs h-full" />
+                              <Button variant="outline" className="rounded-2xl h-full border-slate-100 px-3 shrink-0" onClick={applyCoupon} disabled={applyingCoupon}>{applyingCoupon ? <Loader2 className="animate-spin w-4 h-4" /> : <Ticket className="w-4 h-4" />}</Button>
                           </div>
                       </div>
                   </div>
-
-                  {appliedCoupon && (
-                      <div className="bg-green-50 border border-green-100 p-4 rounded-[20px] flex items-center justify-between animate-in zoom-in-95">
-                          <div className="flex items-center gap-3 text-green-800">
-                              <div className="bg-green-100 p-2 rounded-lg"><Gift className="w-4 h-4" /></div>
-                              <p className="text-xs font-black uppercase tracking-wider">Desconto Ativado: {appliedCoupon.code}</p>
-                          </div>
-                          <button onClick={() => setAppliedCoupon(null)} className="text-green-600 p-1"><XCircle className="w-5 h-5" /></button>
-                      </div>
-                  )}
-
-                  <Button 
-                    className="w-full h-18 bg-black text-white font-black text-2xl rounded-[28px] shadow-2xl shadow-black/20 transition-all active:scale-95 py-8" 
-                    onClick={confirmRide} 
-                    disabled={isRequesting || calculatingRoute}
-                  >
-                      {isRequesting ? <Loader2 className="animate-spin w-8 h-8" /> : "PEDIR AGORA"}
-                  </Button>
+                  {appliedCoupon && <div className="bg-green-50 border border-green-100 p-4 rounded-[20px] flex items-center justify-between animate-in zoom-in-95"><div className="flex items-center gap-3 text-green-800"><div className="bg-green-100 p-2 rounded-lg"><Gift className="w-4 h-4" /></div><p className="text-xs font-black uppercase tracking-wider">Desconto Ativado: {appliedCoupon.code}</p></div><button onClick={() => setAppliedCoupon(null)} className="text-green-600 p-1"><XCircle className="w-5 h-5" /></button></div>}
+                  <Button className="w-full h-18 bg-black text-white font-black text-2xl rounded-[28px] shadow-2xl shadow-black/20 transition-all active:scale-95 py-8" onClick={confirmRide} disabled={isRequesting || calculatingRoute}>{isRequesting ? <Loader2 className="animate-spin w-8 h-8" /> : "PEDIR AGORA"}</Button>
               </div>
           </DrawerContent>
       </Drawer>
@@ -695,37 +531,22 @@ const ClientDashboard = () => {
       <div className="absolute inset-0 z-10 flex flex-col justify-end pb-28 pointer-events-none px-4">
         {step === 'waiting' && (
           <Card className="w-full max-w-md mx-auto pointer-events-auto bg-white/95 backdrop-blur-xl p-8 rounded-[32px] shadow-2xl border border-white/40 text-center animate-in zoom-in-95">
-              <div className="relative w-32 h-32 mx-auto mb-8">
-                  <div className="absolute inset-0 bg-yellow-400/20 rounded-full animate-ping"></div>
-                  <div className="relative bg-yellow-400 w-full h-full rounded-full flex items-center justify-center shadow-2xl shadow-yellow-500/50">
-                      <Search className="w-16 h-16 text-black animate-pulse" />
-                  </div>
-              </div>
+              <div className="relative w-32 h-32 mx-auto mb-8"><div className="absolute inset-0 bg-yellow-400/20 rounded-full animate-ping"></div><div className="relative bg-yellow-400 w-full h-full rounded-full flex items-center justify-center shadow-2xl shadow-yellow-500/50"><Search className="w-16 h-16 text-black animate-pulse" /></div></div>
               <h2 className="text-3xl font-black text-slate-900 mb-2">Buscando Motorista</h2>
               <p className="text-slate-500 font-medium mb-6">Enviando sua solicitação para os parceiros mais próximos...</p>
               <Button variant="ghost" className="text-red-500 font-bold h-14 rounded-2xl w-full" onClick={() => { if (ride) cancelRide(ride.id); setIsRequesting(false); setStep('search'); }}>CANCELAR SOLICITAÇÃO</Button>
           </Card>
         )}
-
         {step === 'active' && ride && (
           <Card className="w-full max-w-md mx-auto pointer-events-auto bg-white/95 backdrop-blur-xl p-0 rounded-[32px] shadow-2xl border border-white/40 overflow-hidden animate-in slide-in-from-bottom-8">
               <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
                   <Badge className="bg-yellow-500 text-black font-black uppercase tracking-widest text-[10px] px-3 py-1">{ride.status === 'ACCEPTED' ? 'A CAMINHO' : ride.status === 'ARRIVED' ? 'NO LOCAL' : 'EM VIAGEM'}</Badge>
-                  <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-white hover:bg-white/10 rounded-full"><Share2 className="w-4 h-4" /></Button>
-                      <span className="text-xs font-bold text-slate-400">#{ride.id.slice(0, 4)}</span>
-                  </div>
+                  <span className="text-xs font-bold text-slate-400">#{ride.id.slice(0, 4)}</span>
               </div>
               <div className="p-6">
                   <div className="flex items-center gap-5 mb-6">
-                      <Avatar className="w-20 h-20 border-4 border-white shadow-xl">
-                          <AvatarImage src={ride.driver_details?.avatar_url} />
-                          <AvatarFallback className="bg-slate-200 text-slate-500 font-bold">{ride.driver_details?.first_name?.[0]}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1">
-                          <h3 className="text-2xl font-black text-slate-900 leading-tight">{ride.driver_details?.first_name}</h3>
-                          <Badge variant="outline" className="mt-1 border-slate-200 text-slate-500 font-bold uppercase tracking-widest">{ride.driver_details?.car_model} • {ride.driver_details?.car_plate}</Badge>
-                      </div>
+                      <Avatar className="w-20 h-20 border-4 border-white shadow-xl"><AvatarImage src={ride.driver_details?.avatar_url} /><AvatarFallback className="bg-slate-200 text-slate-500 font-bold">{ride.driver_details?.first_name?.[0]}</AvatarFallback></Avatar>
+                      <div className="flex-1"><h3 className="text-2xl font-black text-slate-900 leading-tight">{ride.driver_details?.first_name}</h3><Badge variant="outline" className="mt-1 border-slate-200 text-slate-500 font-bold uppercase tracking-widest">{ride.driver_details?.car_model} • {ride.driver_details?.car_plate}</Badge></div>
                       <div className="flex flex-col gap-3">
                           <Button size="icon" variant="outline" className="h-12 w-12 rounded-2xl shadow-sm bg-white" onClick={() => setShowChat(true)}><MessageCircle className="w-5 h-5" /></Button>
                           <Button size="icon" variant="outline" className="h-12 w-12 rounded-2xl shadow-sm bg-white" onClick={() => window.open(`tel:${ride.driver_details?.phone}`)}><Phone className="w-5 h-5 text-green-600" /></Button>
@@ -738,7 +559,6 @@ const ClientDashboard = () => {
               </div>
           </Card>
         )}
-
         {step === 'rating' && ride && (
           <Card className="w-full max-w-md mx-auto pointer-events-auto bg-white/95 backdrop-blur-xl p-8 rounded-[32px] shadow-2xl border border-white/40 text-center animate-in zoom-in-95">
               <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"><CheckCircle2 className="w-12 h-12 text-green-600" /></div>
