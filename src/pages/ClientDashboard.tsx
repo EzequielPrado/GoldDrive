@@ -460,7 +460,7 @@ const ClientDashboard = () => {
       </div>
 
       {step === 'active' && (
-          <div className="absolute top-4 right-4 z-20 flex flex-col gap-3">
+          <div className="absolute top-24 right-4 z-20 flex flex-col gap-3">
               <Button variant="destructive" size="icon" className="h-12 w-12 rounded-full shadow-2xl animate-pulse border-4 border-white" onClick={handleSOS}><ShieldAlert className="w-6 h-6" /></Button>
               <Button variant="secondary" size="icon" className="h-12 w-12 rounded-full shadow-2xl bg-white border-4 border-white" onClick={handleShareRoute}><Share2 className="w-5 h-5 text-blue-600" /></Button>
           </div>
@@ -528,7 +528,7 @@ const ClientDashboard = () => {
               </div>
               {pickupLocation && destLocation && (
                   <div className="p-4 bg-white border-t border-slate-100">
-                      <Button className="w-full h-16 bg-black text-white font-black text-xl rounded-[24px] shadow-2xl" onClick={() => { setIsSearchingFull(false); unlockAudio(); setStep('confirm'); }}>CONFIRMAR ROTA</Button>
+                      <Button className="w-full h-16 bg-yellow-500 text-black hover:bg-yellow-400 font-black text-xl rounded-[24px] shadow-2xl" onClick={() => { setIsSearchingFull(false); unlockAudio(); setStep('confirm'); }}>CONFIRMAR ROTA</Button>
                   </div>
               )}
           </div>
@@ -578,7 +578,7 @@ const ClientDashboard = () => {
                       <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Nota para o motorista (Opcional)</Label>
                       <div className="relative">
                           <StickyNote className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                          <Input placeholder="Ex: Estou na porta do mercado..." value={rideNotes} onChange={e => setRideNotes(e.target.value)} className="h-12 pl-10 rounded-2xl bg-slate-50 border-slate-100 font-medium text-sm" />
+                          <Input placeholder="Ex: Estou na porta do mercado..." value={rideNotes} onChange={e => setRideNotes(e.target.value)} className="h-12 pl-10 rounded-2xl bg-slate-50 border-slate-100 font-medium text-sm text-slate-900 placeholder:text-slate-400" />
                       </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -592,13 +592,13 @@ const ClientDashboard = () => {
                       <div className="space-y-1.5">
                           <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Cupom</Label>
                           <div className="flex gap-2 h-12">
-                              <Input placeholder="CÓDIGO" value={couponCode} onChange={e => setCouponCode(e.target.value.toUpperCase())} className="uppercase rounded-2xl border-slate-100 bg-slate-50 font-black text-xs h-full" />
-                              <Button variant="outline" className="rounded-2xl h-full border-slate-100 px-3 shrink-0" onClick={applyCoupon} disabled={applyingCoupon}>{applyingCoupon ? <Loader2 className="animate-spin w-4 h-4" /> : <Ticket className="w-4 h-4" />}</Button>
+                              <Input placeholder="CÓDIGO" value={couponCode} onChange={e => setCouponCode(e.target.value.toUpperCase())} className="uppercase rounded-2xl border-slate-100 bg-slate-50 font-black text-xs h-full text-slate-900 placeholder:text-slate-400" />
+                              <Button variant="outline" className="rounded-2xl h-full border-slate-100 px-3 shrink-0 text-slate-900 bg-white hover:bg-slate-100" onClick={applyCoupon} disabled={applyingCoupon}>{applyingCoupon ? <Loader2 className="animate-spin w-4 h-4" /> : <Ticket className="w-4 h-4" />}</Button>
                           </div>
                       </div>
                   </div>
                   {appliedCoupon && <div className="bg-green-50 border border-green-100 p-4 rounded-[20px] flex items-center justify-between animate-in zoom-in-95"><div className="flex items-center gap-3 text-green-800"><div className="bg-green-100 p-2 rounded-lg"><Gift className="w-4 h-4" /></div><p className="text-xs font-black uppercase tracking-wider">Desconto Ativado: {appliedCoupon.code}</p></div><button onClick={() => setAppliedCoupon(null)} className="text-green-600 p-1"><XCircle className="w-5 h-5" /></button></div>}
-                  <Button className="w-full h-18 bg-black text-white font-black text-2xl rounded-[28px] shadow-2xl shadow-black/20 transition-all active:scale-95 py-8" onClick={confirmRide} disabled={isRequesting || calculatingRoute}>{isRequesting ? <Loader2 className="animate-spin w-8 h-8" /> : "PEDIR AGORA"}</Button>
+                  <Button className="w-full h-18 bg-yellow-500 text-black font-black text-2xl rounded-[28px] shadow-2xl shadow-yellow-500/20 transition-all active:scale-95 py-8 hover:bg-yellow-400" onClick={confirmRide} disabled={isRequesting || calculatingRoute}>{isRequesting ? <Loader2 className="animate-spin w-8 h-8 text-black" /> : "PEDIR AGORA"}</Button>
               </div>
           </DrawerContent>
       </Drawer>
@@ -659,7 +659,7 @@ const ClientDashboard = () => {
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Avalie {ride.driver_details?.first_name}</p>
                   <div className="flex justify-center gap-2">{[1,2,3,4,5].map(star => (<button key={star} onClick={() => { setRating(star); rateRide(ride.id, star, false); }} className="transition-transform active:scale-90"><Star className={`w-10 h-10 ${rating >= star ? 'fill-yellow-500 text-yellow-500' : 'text-gray-200'}`} /></button>))}</div>
               </div>
-              <Button className="w-full h-16 bg-black text-white font-black rounded-[24px]" onClick={() => { clearRide(); setStep('search'); }}>FECHAR E CONTINUAR</Button>
+              <Button className="w-full h-16 bg-yellow-500 text-black hover:bg-yellow-400 font-black rounded-[24px]" onClick={() => { clearRide(); setStep('search'); }}>FECHAR E CONTINUAR</Button>
           </Card>
         )}
 
