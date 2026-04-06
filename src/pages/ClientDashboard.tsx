@@ -65,7 +65,6 @@ const ClientDashboard = () => {
 
   const [categories, setCategories] = useState<any[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
-  const [pricingTiers, setPricingTiers] = useState<any[]>([]);
   const [appSettings, setAppSettings] = useState({ enableCash: true, enableWallet: true });
   const [categoryRules, setCategoryRules] = useState<Record<string, any>>({});
   const [historyItems, setHistoryItems] = useState<any[]>([]);
@@ -81,7 +80,6 @@ const ClientDashboard = () => {
   }, [searchParams]);
 
   const getCurrentLocation = useCallback((silent = false) => {
-      // PROD-FIX: Evita crash se o Google Maps ainda não tiver carregado
       if (!window.google || !window.google.maps) {
           if (!silent) showError("Aguarde o mapa carregar ou verifique sua conexão.");
           return;
@@ -89,7 +87,6 @@ const ClientDashboard = () => {
 
       if (!silent) setGpsLoading(true);
       navigator.geolocation.getCurrentPosition(async (pos) => {
-          // Double-check após aguardar a localização do usuário
           if (!window.google || !window.google.maps) {
               setGpsLoading(false);
               return;
@@ -115,11 +112,9 @@ const ClientDashboard = () => {
       }, { enableHighAccuracy: true, timeout: 10000 });
   }, []);
 
-  // Lógica de Geocodificação Reversa (Coordenada -> Endereço)
   const handleMapClick = async (lat: number, lng: number) => {
     if (!mapSelectionMode) return;
     
-    // PROD-FIX: Segurança contra falha de carregamento da API
     if (!window.google || !window.google.maps) {
         showError("Aguarde o mapa carregar ou verifique sua conexão.");
         return;
@@ -151,8 +146,7 @@ const ClientDashboard = () => {
 
   useEffect(() => {
     if (dataFetched.current) return;
-    
-    let isMounted = true; // PROD-FIX: Evita Memory Leaks
+    let isMounted = true; 
 
     const fetchInitialData = async () => {
         try {
@@ -166,9 +160,8 @@ const ClientDashboard = () => {
             if (!isMounted) return;
             if (profile) setUserProfile(profile); 
             
-            const [catsRes, tiersRes, settingsRes, adminConfigRes] = await Promise.all([
+            const [catsRes, settingsRes, adminConfigRes] = await Promise.all([
                 supabase.from('car_categories').select('*').eq('active', true).order('base_fare', { ascending: true }),
-                supabase.from('pricing_tiers').select('*').order('max_distance', { ascending: true }),
                 supabase.from('app_settings').select('*'),
                 supabase.from('admin_config').select('*')
             ]);
@@ -179,7 +172,6 @@ const ClientDashboard = () => {
                 setCategories(catsRes.data); 
                 if (catsRes.data.length > 0) setSelectedCategoryId(catsRes.data[0].id);
             }
-            if (tiersRes.data) setPricingTiers(tiersRes.data);
             
             if (settingsRes.data) {
                 const cash = settingsRes.data.find((s: any) => s.key === 'enable_cash');
@@ -200,25 +192,21 @@ const ClientDashboard = () => {
             }
 
             getCurrentLocation(true);
-
             dataFetched.current = true;
             setIsInitialSync(false);
         } catch (error) { 
             if (isMounted) {
                 setIsInitialSync(false);
-                // PROD-FIX: Feedback visual caso o supabase ou a internet falhe
                 showError("Erro de conexão. Verifique sua internet ou tente recarregar.");
             }
         }
     };
     fetchInitialData();
-    
     return () => { isMounted = false; };
   }, [navigate, getCurrentLocation]);
 
   useEffect(() => {
     let isMounted = true;
-
     if (activeTab === 'history' && userProfile?.id) {
         const fetchHistory = async () => {
             try {
@@ -233,13 +221,11 @@ const ClientDashboard = () => {
         };
         fetchHistory();
     }
-
     return () => { isMounted = false; };
   }, [activeTab, userProfile?.id]);
 
   useEffect(() => {
     if (rideLoading || isInitialSync) return;
-
     if (ride) {
       if (ride.status === 'SEARCHING') setStep('waiting');
       else if (['ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(ride.status)) setStep('active');
@@ -251,10 +237,8 @@ const ClientDashboard = () => {
   }, [ride, rideLoading, isInitialSync, isRequesting]);
 
   useEffect(() => {
-    let isMounted = true; // PROD-FIX
-
+    let isMounted = true; 
     if (pickupLocation && destLocation && step === 'confirm') {
-        // PROD-FIX: Segurança contra falha do SDK do Maps
         if (!window.google || !window.google.maps) {
             showError("O mapa ainda não foi carregado. Aguarde um momento.");
             setStep('search');
@@ -282,7 +266,6 @@ const ClientDashboard = () => {
             }
         }, (result, status) => {
             if (!isMounted) return;
-
             if (status === 'OK' && result) {
                 let totalDist = 0;
                 let totalDur = 0;
@@ -299,7 +282,6 @@ const ClientDashboard = () => {
             setCalculatingRoute(false);
         });
     }
-
     return () => { isMounted = false; };
   }, [pickupLocation, destLocation, stops, step]);
 
@@ -329,56 +311,50 @@ const ClientDashboard = () => {
       let timePrice = 0;
       let stopsPrice = 0;
 
-      if (category.name === 'Gold Driver' && pricingTiers.length > 0) {
-          const tier = pricingTiers.find(t => routeDistance <= Number(t.max_distance)) || pricingTiers[pricingTiers.length - 1];
-          price = Number(tier?.price || 15);
-          baseFare = price;
-      } else {
-          const rules = categoryRules[category.name] || {};
-          let isNight = false;
-          let nightKmPrice = 0;
+      const rules = categoryRules[category.name] || {};
+      let isNight = false;
+      let nightKmPrice = 0;
 
-          const checkNightPeriod = (startStr: string, endStr: string, kmVal: any) => {
-              if (!startStr || !endStr || !kmVal) return false;
-              const currentHour = new Date().getHours();
-              const currentMinute = new Date().getMinutes();
-              const currentTime = currentHour + (currentMinute / 60);
-              const startParts = startStr.split(':');
-              const endParts = endStr.split(':');
-              const start = parseInt(startParts[0]) + parseInt(startParts[1]) / 60;
-              const end = parseInt(endParts[0]) + parseInt(endParts[1]) / 60;
-              return start > end ? (currentTime >= start || currentTime <= end) : (currentTime >= start && currentTime <= end);
-          };
+      const checkNightPeriod = (startStr: string, endStr: string, kmVal: any) => {
+          if (!startStr || !endStr || !kmVal) return false;
+          const currentHour = new Date().getHours();
+          const currentMinute = new Date().getMinutes();
+          const currentTime = currentHour + (currentMinute / 60);
+          const startParts = startStr.split(':');
+          const endParts = endStr.split(':');
+          const start = parseInt(startParts[0]) + parseInt(startParts[1]) / 60;
+          const end = parseInt(endParts[0]) + parseInt(endParts[1]) / 60;
+          return start > end ? (currentTime >= start || currentTime <= end) : (currentTime >= start && currentTime <= end);
+      };
 
-          if (checkNightPeriod(rules.night_start_2, rules.night_end_2, rules.night_km_2)) {
-              isNight = true;
-              nightKmPrice = Number(rules.night_km_2);
-          } else if (checkNightPeriod(rules.night_start, rules.night_end, rules.night_km)) {
-              isNight = true;
-              nightKmPrice = Number(rules.night_km);
-          }
-
-          let appliedKmPrice = Number(category.cost_per_km);
-          const costPerMinute = Number(category.cost_per_minute || 0);
-          
-          if (isNight) {
-              appliedKmPrice = nightKmPrice;
-          } else {
-              const dist1 = Number(rules.dist_1 || 0);
-              const price1 = (rules.price_1 || rules.km_over_45) ? Number(rules.price_1 || rules.km_over_45) : null;
-              const dist2 = Number(rules.dist_2 || 0);
-              const price2 = (rules.price_2 || rules.km_over_10) ? Number(rules.price_2 || rules.km_over_10) : null;
-              let thresholds = [];
-              if (price1 !== null && dist1 > 0) thresholds.push({ dist: dist1, price: price1 });
-              if (price2 !== null && dist2 > 0) thresholds.push({ dist: dist2, price: price2 });
-              thresholds.sort((a, b) => b.dist - a.dist);
-              for (const t of thresholds) { if (routeDistance >= t.dist) { appliedKmPrice = t.price; break; } }
-          }
-
-          kmPrice = routeDistance * appliedKmPrice;
-          timePrice = routeDuration * costPerMinute;
-          price = baseFare + kmPrice + timePrice;
+      if (checkNightPeriod(rules.night_start_2, rules.night_end_2, rules.night_km_2)) {
+          isNight = true;
+          nightKmPrice = Number(rules.night_km_2);
+      } else if (checkNightPeriod(rules.night_start, rules.night_end, rules.night_km)) {
+          isNight = true;
+          nightKmPrice = Number(rules.night_km);
       }
+
+      let appliedKmPrice = Number(category.cost_per_km);
+      const costPerMinute = Number(category.cost_per_minute || 0);
+      
+      if (isNight) {
+          appliedKmPrice = nightKmPrice;
+      } else {
+          const dist1 = Number(rules.dist_1 || 0);
+          const price1 = (rules.price_1 || rules.km_over_45) ? Number(rules.price_1 || rules.km_over_45) : null;
+          const dist2 = Number(rules.dist_2 || 0);
+          const price2 = (rules.price_2 || rules.km_over_10) ? Number(rules.price_2 || rules.km_over_10) : null;
+          let thresholds = [];
+          if (price1 !== null && dist1 > 0) thresholds.push({ dist: dist1, price: price1 });
+          if (price2 !== null && dist2 > 0) thresholds.push({ dist: dist2, price: price2 });
+          thresholds.sort((a, b) => b.dist - a.dist);
+          for (const t of thresholds) { if (routeDistance >= t.dist) { appliedKmPrice = t.price; break; } }
+      }
+
+      kmPrice = routeDistance * appliedKmPrice;
+      timePrice = routeDuration * costPerMinute;
+      price = baseFare + kmPrice + timePrice;
 
       const validStops = stops.filter(s => s && s.lat && s.lon);
       stopsPrice = validStops.length * costPerStop;
@@ -400,14 +376,13 @@ const ClientDashboard = () => {
           stops: stopsPrice,
           multiplier: globalMultiplier
       };
-  }, [categories, pricingTiers, routeDistance, routeDuration, selectedCategoryId, categoryRules, globalMultiplier, appliedCoupon, stops, costPerStop]);
+  }, [categories, routeDistance, routeDuration, selectedCategoryId, categoryRules, globalMultiplier, appliedCoupon, stops, costPerStop]);
 
   const calculatePrice = (catId?: string) => calculatePriceDetails(catId).total;
 
   const confirmRide = async () => {
     if (isRequesting || !pickupLocation || !destLocation || !selectedCategoryId) return;
     
-    // PROD-FIX: Segurança contra categoria indefinida (Crash ao clicar no botão)
     const category = categories.find(c => c.id === selectedCategoryId);
     if (!category) {
         showError("Erro ao identificar a categoria. Tente novamente.");
@@ -485,7 +460,6 @@ const ClientDashboard = () => {
 
       <img src="/app-logo.png" alt="Gold" className="fixed top-4 left-1/2 -translate-x-1/2 h-8 opacity-90 z-[100] drop-shadow-md rounded-lg" />
       
-      {/* Overlay de Seleção no Mapa */}
       {mapSelectionMode && (
           <div className="absolute inset-0 z-[200] pointer-events-none flex flex-col">
               <div className="bg-slate-900/90 backdrop-blur-md p-6 text-white text-center pt-12 animate-in slide-in-from-top">

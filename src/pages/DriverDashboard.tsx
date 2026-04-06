@@ -61,6 +61,10 @@ const DriverDashboard = () => {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [trackingActive, setTrackingActive] = useState(false);
   
+  // Estados para Marcação no Mapa (Motorista)
+  const [mapSelectionMode, setMapSelectionMode] = useState<'pickup' | 'destination' | null>(null);
+  const [isReversingGeocode, setIsReversingGeocode] = useState(false);
+
   // Metas de Ganhos
   const [dailyGoal, setDailyGoal] = useState(() => Number(localStorage.getItem('driver_daily_goal')) || 200);
   const [isEditingGoal, setIsEditingGoal] = useState(false);
@@ -81,7 +85,6 @@ const DriverDashboard = () => {
 
   const [manualLoading, setManualLoading] = useState(false);
   const [categories, setCategories] = useState<any[]>([]);
-  const [pricingTiers, setPricingTiers] = useState<any[]>([]);
   const [categoryRules, setCategoryRules] = useState<Record<string, any>>({});
 
   // Driver Stats
@@ -218,13 +221,11 @@ const DriverDashboard = () => {
 
   useEffect(() => {
       const fetchPricing = async () => {
-          const [catsRes, tiersRes, adminConfigRes] = await Promise.all([
+          const [catsRes, adminConfigRes] = await Promise.all([
               supabase.from('car_categories').select('*').eq('active', true).order('base_fare', { ascending: true }),
-              supabase.from('pricing_tiers').select('*').order('max_distance', { ascending: true }),
               supabase.from('admin_config').select('*')
           ]);
           if (catsRes.data) setCategories(catsRes.data);
-          if (tiersRes.data) setPricingTiers(tiersRes.data);
           if (adminConfigRes.data) {
               const rules = adminConfigRes.data.find((c: any) => c.key === 'category_rules');
               if (rules && rules.value) {
@@ -239,6 +240,38 @@ const DriverDashboard = () => {
       };
       fetchPricing();
   }, []);
+
+  const handleMapClick = async (lat: number, lng: number) => {
+      if (!mapSelectionMode) return;
+      
+      if (!window.google || !window.google.maps) {
+          showError("Aguarde o mapa carregar ou verifique sua conexão.");
+          return;
+      }
+      
+      setIsReversingGeocode(true);
+      const geocoder = new google.maps.Geocoder();
+      
+      geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+          setIsReversingGeocode(false);
+          if (status === 'OK' && results?.[0]) {
+              const address = results[0].formatted_address;
+              const locationData = { lat, lon: lng, display_name: address };
+              
+              if (mapSelectionMode === 'pickup') {
+                  setPickupLocation(locationData);
+              } else {
+                  setDestLocation(locationData);
+              }
+              
+              setMapSelectionMode(null);
+              setShowManualRide(true);
+              showSuccess("Local definido pelo mapa!");
+          } else {
+              showError("Não foi possível identificar este endereço.");
+          }
+      });
+  };
 
   const calculateRouteDistance = useCallback(() => {
       if (!pickupLocation || !destLocation) return;
@@ -288,68 +321,64 @@ const DriverDashboard = () => {
       if (!category) return 15;
 
       let price = 0;
-      
-      if (category.name === 'Gold Driver' && pricingTiers.length > 0) {
-          const tier = pricingTiers.find(t => routeDistance <= Number(t.max_distance)) || pricingTiers[pricingTiers.length - 1];
-          price = Number(tier?.price || 15);
-      } else {
-          const rules = categoryRules[category.name] || {};
-          let isNight = false;
-          let nightKmPrice = 0;
+      let baseFare = Number(category.base_fare);
 
-          const checkNightPeriod = (startStr: string, endStr: string, kmVal: any) => {
-              if (!startStr || !endStr || !kmVal) return false;
-              const currentHour = new Date().getHours();
-              const currentMinute = new Date().getMinutes();
-              const currentTime = currentHour + (currentMinute / 60);
+      // Aplicando a mesma regra flexível e dinâmica do aplicativo de clientes!
+      const rules = categoryRules[category.name] || {};
+      let isNight = false;
+      let nightKmPrice = 0;
 
-              const startParts = startStr.split(':');
-              const endParts = endStr.split(':');
-              const start = parseInt(startParts[0]) + parseInt(startParts[1]) / 60;
-              const end = parseInt(endParts[0]) + parseInt(endParts[1]) / 60;
+      const checkNightPeriod = (startStr: string, endStr: string, kmVal: any) => {
+          if (!startStr || !endStr || !kmVal) return false;
+          const currentHour = new Date().getHours();
+          const currentMinute = new Date().getMinutes();
+          const currentTime = currentHour + (currentMinute / 60);
 
-              if (start > end) { 
-                  return currentTime >= start || currentTime <= end;
-              } else {
-                  return currentTime >= start && currentTime <= end;
-              }
-          };
+          const startParts = startStr.split(':');
+          const endParts = endStr.split(':');
+          const start = parseInt(startParts[0]) + parseInt(startParts[1]) / 60;
+          const end = parseInt(endParts[0]) + parseInt(endParts[1]) / 60;
 
-          if (checkNightPeriod(rules.night_start_2, rules.night_end_2, rules.night_km_2)) {
-              isNight = true;
-              nightKmPrice = Number(rules.night_km_2);
-          } else if (checkNightPeriod(rules.night_start, rules.night_end, rules.night_km)) {
-              isNight = true;
-              nightKmPrice = Number(rules.night_km);
-          }
-
-          let appliedKmPrice = Number(category.cost_per_km);
-          const baseFare = Number(category.base_fare);
-          const costPerMinute = Number(category.cost_per_minute || 0);
-          
-          if (isNight) {
-              appliedKmPrice = nightKmPrice;
+          if (start > end) { 
+              return currentTime >= start || currentTime <= end;
           } else {
-              const dist1 = Number(rules.dist_1 || 0);
-              const price1 = (rules.price_1 || rules.km_over_45) ? Number(rules.price_1 || rules.km_over_45) : null;
-              const dist2 = Number(rules.dist_2 || 0);
-              const price2 = (rules.price_2 || rules.km_over_10) ? Number(rules.price_2 || rules.km_over_10) : null;
+              return currentTime >= start && currentTime <= end;
+          }
+      };
 
-              let thresholds = [];
-              if (price1 !== null && dist1 > 0) thresholds.push({ dist: dist1, price: price1 });
-              if (price2 !== null && dist2 > 0) thresholds.push({ dist: dist2, price: price2 });
-              thresholds.sort((a, b) => b.dist - a.dist);
+      if (checkNightPeriod(rules.night_start_2, rules.night_end_2, rules.night_km_2)) {
+          isNight = true;
+          nightKmPrice = Number(rules.night_km_2);
+      } else if (checkNightPeriod(rules.night_start, rules.night_end, rules.night_km)) {
+          isNight = true;
+          nightKmPrice = Number(rules.night_km);
+      }
 
-              for (const t of thresholds) {
-                  if (routeDistance >= t.dist) {
-                      appliedKmPrice = t.price;
-                      break;
-                  }
+      let appliedKmPrice = Number(category.cost_per_km);
+      const costPerMinute = Number(category.cost_per_minute || 0);
+      
+      if (isNight) {
+          appliedKmPrice = nightKmPrice;
+      } else {
+          const dist1 = Number(rules.dist_1 || 0);
+          const price1 = (rules.price_1 || rules.km_over_45) ? Number(rules.price_1 || rules.km_over_45) : null;
+          const dist2 = Number(rules.dist_2 || 0);
+          const price2 = (rules.price_2 || rules.km_over_10) ? Number(rules.price_2 || rules.km_over_10) : null;
+
+          let thresholds = [];
+          if (price1 !== null && dist1 > 0) thresholds.push({ dist: dist1, price: price1 });
+          if (price2 !== null && dist2 > 0) thresholds.push({ dist: dist2, price: price2 });
+          thresholds.sort((a, b) => b.dist - a.dist);
+
+          for (const t of thresholds) {
+              if (routeDistance >= t.dist) {
+                  appliedKmPrice = t.price;
+                  break;
               }
           }
-
-          price = baseFare + (routeDistance * appliedKmPrice) + (routeDuration * costPerMinute);
       }
+
+      price = baseFare + (routeDistance * appliedKmPrice) + (routeDuration * costPerMinute);
 
       const validStops = stops.filter(s => s && s.lat && s.lon);
       price += validStops.length * costPerStop;
@@ -361,7 +390,7 @@ const DriverDashboard = () => {
       }
       
       return parseFloat(price.toFixed(2));
-  }, [categories, pricingTiers, routeDistance, routeDuration, categoryRules, globalMultiplier, stops, costPerStop]);
+  }, [categories, routeDistance, routeDuration, categoryRules, globalMultiplier, stops, costPerStop]);
 
   const checkProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -460,12 +489,48 @@ const DriverDashboard = () => {
     <div className="h-screen flex flex-col bg-slate-50 relative overflow-hidden font-sans">
       <img src="/app-logo.png" alt="Logo" className="fixed top-4 left-1/2 -translate-x-1/2 h-8 opacity-90 z-50 pointer-events-none drop-shadow-md rounded-lg" />
       
+      {/* Overlay de Seleção no Mapa */}
+      {mapSelectionMode && (
+          <div className="absolute inset-0 z-[200] pointer-events-none flex flex-col">
+              <div className="bg-slate-900/90 backdrop-blur-md p-6 text-white text-center pt-12 animate-in slide-in-from-top">
+                  <h3 className="text-lg font-black uppercase tracking-widest">
+                      {mapSelectionMode === 'pickup' ? 'Toque no local de embarque' : 'Toque no local de destino'}
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">Toque no mapa para selecionar o ponto exato.</p>
+              </div>
+              <div className="flex-1 flex items-center justify-center">
+                  <div className="relative mb-10 animate-bounce">
+                      <MapPin className={cn("w-12 h-12 stroke-[3px]", mapSelectionMode === 'pickup' ? "text-green-500" : "text-red-500")} />
+                      <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-1 bg-black/20 rounded-full blur-[2px]" />
+                  </div>
+              </div>
+              <div className="p-6 bg-white/10 backdrop-blur-sm pointer-events-auto flex justify-center">
+                  <Button 
+                    className="h-14 px-10 rounded-2xl bg-white text-black font-black shadow-2xl hover:bg-slate-100"
+                    onClick={() => { setMapSelectionMode(null); setShowManualRide(true); }}
+                  >
+                      VOLTAR PARA BUSCA
+                  </Button>
+              </div>
+              {isReversingGeocode && (
+                  <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px] flex items-center justify-center z-[210]">
+                      <div className="bg-white p-6 rounded-3xl flex flex-col items-center gap-3 shadow-2xl">
+                          <Loader2 className="w-8 h-8 animate-spin text-yellow-500" />
+                          <p className="text-sm font-bold text-slate-900 uppercase tracking-widest">Identificando local...</p>
+                      </div>
+                  </div>
+              )}
+          </div>
+      )}
+
       <div className="absolute inset-0 z-0">
           <GoogleMapComponent 
             className="h-full w-full" 
-            pickupLocation={pickupCoord} 
-            destinationLocation={destCoord} 
-            stops={isOnTrip ? currentStops : null}
+            pickupLocation={mapSelectionMode === 'pickup' ? pickupLocation : pickupCoord} 
+            destinationLocation={mapSelectionMode === 'destination' ? destLocation : destCoord} 
+            stops={isOnTrip ? currentStops : (showManualRide && stops.length > 0 ? stops : null)}
+            onMapClick={handleMapClick}
+            interactive={!!mapSelectionMode}
           />
       </div>
 
@@ -496,7 +561,7 @@ const DriverDashboard = () => {
           </div>
       )}
 
-      {activeTab === 'home' && !isOnTrip && !isCompleted && !isCancelled && isOnline && (
+      {activeTab === 'home' && !isOnTrip && !isCompleted && !isCancelled && isOnline && !mapSelectionMode && (
           <div className="absolute top-24 left-4 right-4 z-20 pointer-events-auto animate-in slide-in-from-top-4">
               <div className="bg-white/90 backdrop-blur-xl rounded-3xl p-5 shadow-xl border border-white/50">
                   <div className="flex justify-between items-center mb-4">
@@ -541,7 +606,7 @@ const DriverDashboard = () => {
           </div>
       )}
 
-      {isOnline && !isOnTrip && !isCompleted && !isCancelled && (
+      {isOnline && !isOnTrip && !isCompleted && !isCancelled && !mapSelectionMode && (
           <div className="absolute bottom-28 left-4 z-40 pointer-events-auto flex flex-col gap-3">
               <Button 
                 onClick={() => setShowManualRide(true)} 
@@ -552,14 +617,16 @@ const DriverDashboard = () => {
           </div>
       )}
 
-      <div className="absolute bottom-28 right-4 z-40 pointer-events-auto">
-          <Button size="icon" className="w-14 h-14 rounded-full bg-white text-slate-700 shadow-2xl border border-slate-100 hover:bg-slate-50" onClick={getCurrentLocation}>
-              {gpsLoading ? <Loader2 className="w-6 h-6 animate-spin text-blue-600" /> : <Navigation className="w-6 h-6 text-blue-600 fill-blue-600/20" />}
-          </Button>
-      </div>
+      {!mapSelectionMode && (
+          <div className="absolute bottom-28 right-4 z-40 pointer-events-auto">
+              <Button size="icon" className="w-14 h-14 rounded-full bg-white text-slate-700 shadow-2xl border border-slate-100 hover:bg-slate-50" onClick={getCurrentLocation}>
+                  {gpsLoading ? <Loader2 className="w-6 h-6 animate-spin text-blue-600" /> : <Navigation className="w-6 h-6 text-blue-600 fill-blue-600/20" />}
+              </Button>
+          </div>
+      )}
 
       <div className="absolute inset-0 z-10 flex flex-col justify-end pb-32 pointer-events-none p-4">
-         {activeTab === 'home' && (
+         {activeTab === 'home' && !mapSelectionMode && (
             <div className="w-full max-w-md mx-auto pointer-events-auto flex flex-col h-full">
                 {!ride && !isOnline && (
                     <div className="flex flex-col items-center w-full mt-auto mb-10 animate-in zoom-in-95">
@@ -737,7 +804,7 @@ const DriverDashboard = () => {
           </DialogContent>
       </Dialog>
 
-      <Dialog open={showManualRide} onOpenChange={setShowManualRide}>
+      <Dialog open={showManualRide && !mapSelectionMode} onOpenChange={setShowManualRide}>
           <DialogContent className="max-w-md bg-white rounded-[32px] border-0 shadow-2xl p-0 overflow-hidden outline-none">
               <DialogHeader className="p-6 bg-slate-900 text-white">
                   <DialogTitle className="text-2xl font-black">Nova Viagem de Rua</DialogTitle>
@@ -762,15 +829,32 @@ const DriverDashboard = () => {
                           <Label className="text-[10px] font-black uppercase text-slate-400 ml-1 tracking-widest">Local de Embarque</Label>
                           <div className="flex gap-2">
                               <GoogleLocationSearch placeholder="Onde o passageiro entrou?" onSelect={setPickupLocation} initialValue={pickupLocation?.display_name} className="flex-1" />
+                              <Button size="icon" variant="ghost" className="h-14 w-14 rounded-2xl bg-slate-50 text-slate-400 hover:text-blue-500" onClick={() => { setShowManualRide(false); setMapSelectionMode('pickup'); }}><Map className="w-5 h-5" /></Button>
                               <Button size="icon" variant="outline" className="h-14 w-14 rounded-2xl shrink-0 border-slate-200 bg-slate-50" onClick={getCurrentLocation} disabled={gpsLoading}>
                                   {gpsLoading ? <Loader2 className="animate-spin" /> : <MapPin className="w-5 h-5 text-slate-600" />}
                               </Button>
                           </div>
                       </div>
 
+                      {stops.map((stop, index) => (
+                          <div key={index} className="flex gap-2 items-center animate-in slide-in-from-left">
+                              <div className="w-10 flex justify-center shrink-0"><div className="w-3 h-3 rounded-full border-2 border-slate-300 bg-slate-100" /></div>
+                              <GoogleLocationSearch placeholder={`Parada ${index + 1}`} onSelect={(l) => { const newStops = [...stops]; newStops[index] = l; setStops(newStops); }} initialValue={stop?.display_name} className="flex-1" />
+                              <Button size="icon" variant="ghost" className="h-10 w-10 text-red-400" onClick={() => { const newStops = [...stops]; newStops.splice(index, 1); setStops(newStops); }}><X className="w-4 h-4" /></Button>
+                          </div>
+                      ))}
+
                       <div className="space-y-2">
                           <Label className="text-[10px] font-black uppercase text-slate-400 ml-1 tracking-widest">Destino Final</Label>
-                          <GoogleLocationSearch placeholder="Para onde vamos?" onSelect={setDestLocation} initialValue={destLocation?.display_name} />
+                          <div className="flex gap-2 items-center">
+                              <GoogleLocationSearch placeholder="Para onde vamos?" onSelect={setDestLocation} initialValue={destLocation?.display_name} className="flex-1" />
+                              <Button size="icon" variant="ghost" className="h-14 w-14 rounded-2xl bg-slate-50 text-slate-400 hover:text-red-500" onClick={() => { setShowManualRide(false); setMapSelectionMode('destination'); }}><Map className="w-5 h-5" /></Button>
+                              {stops.length < 2 && (
+                                  <Button size="icon" variant="outline" className="h-14 w-14 rounded-2xl shrink-0 border-slate-200 bg-slate-50" onClick={() => setStops([...stops, null])}>
+                                      <Plus className="w-5 h-5 text-slate-600" />
+                                  </Button>
+                              )}
+                          </div>
                       </div>
                   </div>
 
@@ -809,7 +893,8 @@ const DriverDashboard = () => {
           </DialogContent>
       </Dialog>
 
-      <FloatingDock activeTab={activeTab} onTabChange={tab => { if(tab === 'profile') navigate('/profile'); else if(tab === 'wallet') navigate('/wallet'); else setActiveTab(tab); }} role="driver" />
+      {!mapSelectionMode && <FloatingDock activeTab={activeTab} onTabChange={tab => { if(tab === 'profile') navigate('/profile'); else if(tab === 'wallet') navigate('/wallet'); else setActiveTab(tab); }} role="driver" />}
+      
       {showChat && ride && currentUserId && (<RideChat rideId={ride.id} currentUserId={currentUserId} role="driver" otherUserName={ride.client_details?.first_name || 'Passageiro'} otherUserAvatar={ride.client_details?.avatar_url} onClose={() => setShowChat(false)} />)}
     </div>
   );
