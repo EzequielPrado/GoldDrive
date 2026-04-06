@@ -81,8 +81,20 @@ const ClientDashboard = () => {
   }, [searchParams]);
 
   const getCurrentLocation = useCallback((silent = false) => {
+      // PROD-FIX: Evita crash se o Google Maps ainda não tiver carregado
+      if (!window.google || !window.google.maps) {
+          if (!silent) showError("Aguarde o mapa carregar ou verifique sua conexão.");
+          return;
+      }
+
       if (!silent) setGpsLoading(true);
       navigator.geolocation.getCurrentPosition(async (pos) => {
+          // Double-check após aguardar a localização do usuário
+          if (!window.google || !window.google.maps) {
+              setGpsLoading(false);
+              return;
+          }
+
           const geocoder = new google.maps.Geocoder();
           geocoder.geocode({ 
               location: { lat: pos.coords.latitude, lng: pos.coords.longitude } 
@@ -99,13 +111,19 @@ const ClientDashboard = () => {
           });
       }, (error) => { 
           setGpsLoading(false); 
-          if (!silent) showError("Ative a localização.");
-      }, { enableHighAccuracy: true, timeout: 5000 });
+          if (!silent) showError("Ative a localização do seu dispositivo.");
+      }, { enableHighAccuracy: true, timeout: 10000 });
   }, []);
 
   // Lógica de Geocodificação Reversa (Coordenada -> Endereço)
   const handleMapClick = async (lat: number, lng: number) => {
     if (!mapSelectionMode) return;
+    
+    // PROD-FIX: Segurança contra falha de carregamento da API
+    if (!window.google || !window.google.maps) {
+        showError("Aguarde o mapa carregar ou verifique sua conexão.");
+        return;
+    }
     
     setIsReversingGeocode(true);
     const geocoder = new google.maps.Geocoder();
@@ -133,12 +151,19 @@ const ClientDashboard = () => {
 
   useEffect(() => {
     if (dataFetched.current) return;
+    
+    let isMounted = true; // PROD-FIX: Evita Memory Leaks
+
     const fetchInitialData = async () => {
         try {
             const { data: { user } } = await supabase.auth.getUser();
-            if(!user) { navigate('/login'); return; }
+            if(!user) { 
+                if (isMounted) navigate('/login'); 
+                return; 
+            }
             
             const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(); 
+            if (!isMounted) return;
             if (profile) setUserProfile(profile); 
             
             const [catsRes, tiersRes, settingsRes, adminConfigRes] = await Promise.all([
@@ -147,6 +172,8 @@ const ClientDashboard = () => {
                 supabase.from('app_settings').select('*'),
                 supabase.from('admin_config').select('*')
             ]);
+
+            if (!isMounted) return;
 
             if (catsRes.data) {
                 setCategories(catsRes.data); 
@@ -177,23 +204,37 @@ const ClientDashboard = () => {
             dataFetched.current = true;
             setIsInitialSync(false);
         } catch (error) { 
-            setIsInitialSync(false);
+            if (isMounted) {
+                setIsInitialSync(false);
+                // PROD-FIX: Feedback visual caso o supabase ou a internet falhe
+                showError("Erro de conexão. Verifique sua internet ou tente recarregar.");
+            }
         }
     };
     fetchInitialData();
+    
+    return () => { isMounted = false; };
   }, [navigate, getCurrentLocation]);
 
   useEffect(() => {
+    let isMounted = true;
+
     if (activeTab === 'history' && userProfile?.id) {
         const fetchHistory = async () => {
-            const { data } = await supabase.from('rides')
-                .select(`*, driver:profiles!public_rides_driver_id_fkey(*)`)
-                .eq('customer_id', userProfile.id)
-                .order('created_at', { ascending: false });
-            if (data) setHistoryItems(data);
+            try {
+                const { data } = await supabase.from('rides')
+                    .select(`*, driver:profiles!public_rides_driver_id_fkey(*)`)
+                    .eq('customer_id', userProfile.id)
+                    .order('created_at', { ascending: false });
+                if (isMounted && data) setHistoryItems(data);
+            } catch (error) {
+                console.error("Erro ao buscar histórico");
+            }
         };
         fetchHistory();
     }
+
+    return () => { isMounted = false; };
   }, [activeTab, userProfile?.id]);
 
   useEffect(() => {
@@ -210,7 +251,16 @@ const ClientDashboard = () => {
   }, [ride, rideLoading, isInitialSync, isRequesting]);
 
   useEffect(() => {
+    let isMounted = true; // PROD-FIX
+
     if (pickupLocation && destLocation && step === 'confirm') {
+        // PROD-FIX: Segurança contra falha do SDK do Maps
+        if (!window.google || !window.google.maps) {
+            showError("O mapa ainda não foi carregado. Aguarde um momento.");
+            setStep('search');
+            return;
+        }
+
         setCalculatingRoute(true);
         const service = new google.maps.DirectionsService();
         
@@ -231,6 +281,8 @@ const ClientDashboard = () => {
                 trafficModel: google.maps.TrafficModel.BEST_GUESS
             }
         }, (result, status) => {
+            if (!isMounted) return;
+
             if (status === 'OK' && result) {
                 let totalDist = 0;
                 let totalDur = 0;
@@ -241,12 +293,14 @@ const ClientDashboard = () => {
                 setRouteDistance(totalDist / 1000);
                 setRouteDuration(totalDur / 60);
             } else {
-                showError("Localização inacessível para veículos.");
+                showError("Localização inacessível para veículos ou rota muito longa.");
                 setStep('search');
             }
             setCalculatingRoute(false);
         });
     }
+
+    return () => { isMounted = false; };
   }, [pickupLocation, destLocation, stops, step]);
 
   const applyCoupon = async () => {
@@ -352,14 +406,23 @@ const ClientDashboard = () => {
 
   const confirmRide = async () => {
     if (isRequesting || !pickupLocation || !destLocation || !selectedCategoryId) return;
+    
+    // PROD-FIX: Segurança contra categoria indefinida (Crash ao clicar no botão)
+    const category = categories.find(c => c.id === selectedCategoryId);
+    if (!category) {
+        showError("Erro ao identificar a categoria. Tente novamente.");
+        return;
+    }
+
     const validStops = stops.filter(s => s && s.lat && s.lon);
     const price = calculatePrice();
-    const category = categories.find(c => c.id === selectedCategoryId);
+    
     if (paymentMethod === 'WALLET' && (userProfile?.balance || 0) < price) { 
         setMissingAmount(price - (userProfile?.balance || 0)); 
         setShowBalanceAlert(true); 
         return; 
     }
+    
     setIsRequesting(true);
     try { 
         const success = await requestRide(
@@ -378,7 +441,10 @@ const ClientDashboard = () => {
             showSuccess("Motorista solicitado!");
             if (appliedCoupon) await supabase.from('coupons').update({ current_uses: appliedCoupon.current_uses + 1 }).eq('id', appliedCoupon.id);
         } else setIsRequesting(false);
-    } catch (e: any) { setIsRequesting(false); showError(e.message); }
+    } catch (e: any) { 
+        setIsRequesting(false); 
+        showError(e.message || "Falha ao processar solicitação."); 
+    }
   };
 
   const handleSOS = () => showError("🚨 ALERTA DE SEGURANÇA ENVIADO! Nossa central entrará em contato.");
