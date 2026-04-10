@@ -310,6 +310,7 @@ const ClientDashboard = () => {
       let kmPrice = 0;
       let timePrice = 0;
       let stopsPrice = 0;
+      let appliedMinFare = Number(category.min_fare);
 
       const rules = categoryRules[category.name] || {};
       let isNight = false;
@@ -330,9 +331,11 @@ const ClientDashboard = () => {
       if (checkNightPeriod(rules.night_start_2, rules.night_end_2, rules.night_km_2)) {
           isNight = true;
           nightKmPrice = Number(rules.night_km_2);
+          if (rules.night_min_fare_2) appliedMinFare = Number(rules.night_min_fare_2);
       } else if (checkNightPeriod(rules.night_start, rules.night_end, rules.night_km)) {
           isNight = true;
           nightKmPrice = Number(rules.night_km);
+          if (rules.night_min_fare) appliedMinFare = Number(rules.night_min_fare);
       }
 
       let appliedKmPrice = Number(category.cost_per_km);
@@ -361,7 +364,7 @@ const ClientDashboard = () => {
       price += stopsPrice;
       price = price * globalMultiplier;
 
-      if (price < Number(category.min_fare)) price = Number(category.min_fare);
+      if (price < appliedMinFare) price = appliedMinFare;
 
       if (appliedCoupon) {
           if (appliedCoupon.discount_type === 'PERCENTAGE') price = price - (price * (Number(appliedCoupon.discount_value) / 100));

@@ -22,8 +22,8 @@ import Wallet from "./pages/Wallet";
 import NotFound from "./pages/NotFound";
 import DriverPending from "./pages/DriverPending";
 
-// Chave de API do Google Maps fornecida
-const GOOGLE_MAPS_API_KEY = "AIzaSyDH9xzGXcD1Lkpk0zDeitDl0XWLc_-iH0I";
+// Busca a chave de API das variáveis de ambiente
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
 const queryClient = new QueryClient();
 
