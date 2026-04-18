@@ -108,5 +108,26 @@ export const useAuth = () => {
     }
   };
 
-  return { loading, handleSignIn, handleSignUp };
+  const handleResetPassword = async (email: string) => {
+    if (!email) {
+      showError("Por favor, preencha o email para recuperar a senha.");
+      return false;
+    }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin,
+      });
+      if (error) throw error;
+      showSuccess("E-mail de recuperação enviado! Verifique sua caixa de entrada.");
+      return true;
+    } catch (error: any) {
+      showError(error.message || "Erro ao solicitar recuperação de senha.");
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { loading, handleSignIn, handleSignUp, handleResetPassword };
 };

@@ -11,7 +11,7 @@ import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 
 const LoginClient = () => {
   const navigate = useNavigate();
-  const { loading, handleSignIn, handleSignUp } = useAuth();
+  const { loading, handleSignIn, handleSignUp, handleResetPassword } = useAuth();
   
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
@@ -79,9 +79,22 @@ const LoginClient = () => {
                             <Input type="email" placeholder="seu@email.com" className="h-14 pl-12" value={email} onChange={e => setEmail(e.target.value)} required />
                         </div>
                         
-                        <div className="relative">
-                            <Lock className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
-                            <Input type="password" placeholder="Sua senha" className="h-14 pl-12" value={password} onChange={e => setPassword(e.target.value)} required />
+                        <div className="space-y-2">
+                            <div className="relative">
+                                <Lock className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
+                                <Input type="password" placeholder="Sua senha" className="h-14 pl-12" value={password} onChange={e => setPassword(e.target.value)} required />
+                            </div>
+                            {!isSignUp && (
+                                <div className="text-right mt-1">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => handleResetPassword(email)} 
+                                        className="text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors"
+                                    >
+                                        Esqueci minha senha
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         <Button className="w-full h-14 text-lg font-bold rounded-2xl bg-black text-white hover:bg-zinc-800 transition-all" disabled={loading}>

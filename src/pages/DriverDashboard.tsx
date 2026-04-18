@@ -62,7 +62,7 @@ const DriverDashboard = () => {
   const [trackingActive, setTrackingActive] = useState(false);
   
   // Estados para Marcação no Mapa (Motorista)
-  const [mapSelectionMode, setMapSelectionMode] = useState<'pickup' | 'destination' | null>(null);
+  const [mapSelectionMode, setMapSelectionMode] = useState<string | null>(null);
   const [isReversingGeocode, setIsReversingGeocode] = useState(false);
 
   // Metas de Ganhos
@@ -95,7 +95,7 @@ const DriverDashboard = () => {
       totalRides: 0,
       avgRating: 5.0
   });
-  const [historyFilter, setHistoryFilter] = useState<'today' | 'week' | 'all'>('all');
+  const [historyFilter, setHistoryFilter] = useState<'today' | 'week' | 'month' | 'all'>('today');
 
   useEffect(() => {
     if (!isOnline || !currentUserId) {
@@ -210,6 +210,11 @@ const DriverDashboard = () => {
                    weekAgo.setDate(weekAgo.getDate() - 7);
                    weekAgo.setHours(0, 0, 0, 0);
                    query = query.gte('created_at', weekAgo.toISOString());
+               } else if (historyFilter === 'month') {
+                   const monthAgo = new Date();
+                   monthAgo.setMonth(monthAgo.getMonth() - 1);
+                   monthAgo.setHours(0, 0, 0, 0);
+                   query = query.gte('created_at', monthAgo.toISOString());
                }
 
                const { data } = await query;
@@ -260,8 +265,13 @@ const DriverDashboard = () => {
               
               if (mapSelectionMode === 'pickup') {
                   setPickupLocation(locationData);
-              } else {
+              } else if (mapSelectionMode === 'destination') {
                   setDestLocation(locationData);
+              } else if (mapSelectionMode.startsWith('stop-')) {
+                  const idx = parseInt(mapSelectionMode.split('-')[1]);
+                  const newStops = [...stops];
+                  newStops[idx] = locationData;
+                  setStops(newStops);
               }
               
               setMapSelectionMode(null);
@@ -497,13 +507,13 @@ const DriverDashboard = () => {
           <div className="absolute inset-0 z-[200] pointer-events-none flex flex-col">
               <div className="bg-slate-900/90 backdrop-blur-md p-6 text-white text-center pt-12 animate-in slide-in-from-top">
                   <h3 className="text-lg font-black uppercase tracking-widest">
-                      {mapSelectionMode === 'pickup' ? 'Toque no local de embarque' : 'Toque no local de destino'}
+                      {mapSelectionMode === 'pickup' ? 'Toque no local de embarque' : mapSelectionMode === 'destination' ? 'Toque no local de destino' : 'Toque no local da parada'}
                   </h3>
                   <p className="text-xs text-slate-400 mt-1">Toque no mapa para selecionar o ponto exato.</p>
               </div>
               <div className="flex-1 flex items-center justify-center">
                   <div className="relative mb-10 animate-bounce">
-                      <MapPin className={cn("w-12 h-12 stroke-[3px]", mapSelectionMode === 'pickup' ? "text-green-500" : "text-red-500")} />
+                      <MapPin className={cn("w-12 h-12 stroke-[3px]", mapSelectionMode === 'pickup' ? "text-green-500" : mapSelectionMode === 'destination' ? "text-red-500" : "text-blue-500")} />
                       <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-1 bg-black/20 rounded-full blur-[2px]" />
                   </div>
               </div>
@@ -716,12 +726,21 @@ const DriverDashboard = () => {
                     <Button variant="ghost" size="icon" onClick={() => setActiveTab('home')} className="rounded-full"><X className="w-5 h-5" /></Button>
                 </div>
 
-                <div className="flex gap-2 mb-6">
-                    {(['today', 'week', 'all'] as const).map(f => (
+                <div className="flex gap-2 mb-4">
+                    {(['today', 'week', 'month', 'all'] as const).map(f => (
                         <button key={f} onClick={() => setHistoryFilter(f)} className={cn("flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all", historyFilter === f ? "bg-slate-900 text-white shadow-lg" : "bg-slate-100 text-slate-400 hover:bg-slate-200")}>
-                            {f === 'today' ? 'Hoje' : f === 'week' ? 'Semana' : 'Tudo'}
+                            {f === 'today' ? 'Hoje' : f === 'week' ? 'Semana' : f === 'month' ? 'Mês' : 'Tudo'}
                         </button>
                     ))}
+                </div>
+
+                <div className="bg-slate-50 p-4 rounded-2xl mb-6 text-center border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                        Valor {historyFilter === 'today' ? 'Hoje' : historyFilter === 'week' ? 'na Semana' : historyFilter === 'month' ? 'no Mês' : 'Total'}
+                    </p>
+                    <p className="text-3xl font-black text-green-600">
+                        R$ {historyItems.reduce((acc, item) => acc + (item.status === 'COMPLETED' ? Number(item.driver_earnings || item.price * 0.8) : 0), 0).toFixed(2)}
+                    </p>
                 </div>
 
                 <ScrollArea className="flex-1">
@@ -830,31 +849,36 @@ const DriverDashboard = () => {
                   <div className="space-y-4">
                       <div className="space-y-2">
                           <Label className="text-[10px] font-black uppercase text-slate-400 ml-1 tracking-widest">Local de Embarque</Label>
-                          <div className="flex gap-2">
-                              <GoogleLocationSearch placeholder="Onde o passageiro entrou?" onSelect={setPickupLocation} initialValue={pickupLocation?.display_name} className="flex-1" />
-                              <Button size="icon" variant="ghost" className="h-14 w-14 rounded-2xl bg-slate-50 text-slate-400 hover:text-blue-500" onClick={() => { setShowManualRide(false); setMapSelectionMode('pickup'); }}><Map className="w-5 h-5" /></Button>
-                              <Button size="icon" variant="outline" className="h-14 w-14 rounded-2xl shrink-0 border-slate-200 bg-slate-50" onClick={getCurrentLocation} disabled={gpsLoading}>
-                                  {gpsLoading ? <Loader2 className="animate-spin" /> : <MapPin className="w-5 h-5 text-slate-600" />}
+                          <GoogleLocationSearch placeholder="Onde o passageiro entrou?" onSelect={setPickupLocation} initialValue={pickupLocation?.display_name} className="w-full" />
+                          <div className="flex gap-2 mt-2">
+                              <Button variant="ghost" className="flex-1 h-12 rounded-2xl bg-slate-50 text-slate-500 hover:text-blue-500 font-bold text-xs" onClick={() => { setShowManualRide(false); setMapSelectionMode('pickup'); }}><Map className="w-4 h-4 mr-2" /> Selecionar no Mapa</Button>
+                              <Button variant="outline" className="flex-1 h-12 rounded-2xl border-slate-200 bg-slate-50 text-slate-600 font-bold text-xs" onClick={getCurrentLocation} disabled={gpsLoading}>
+                                  {gpsLoading ? <Loader2 className="animate-spin mr-2" /> : <MapPin className="w-4 h-4 mr-2" />} Meu Local
                               </Button>
                           </div>
                       </div>
 
                       {stops.map((stop, index) => (
-                          <div key={index} className="flex gap-2 items-center animate-in slide-in-from-left">
-                              <div className="w-10 flex justify-center shrink-0"><div className="w-3 h-3 rounded-full border-2 border-slate-300 bg-slate-100" /></div>
-                              <GoogleLocationSearch placeholder={`Parada ${index + 1}`} onSelect={(l) => { const newStops = [...stops]; newStops[index] = l; setStops(newStops); }} initialValue={stop?.display_name} className="flex-1" />
-                              <Button size="icon" variant="ghost" className="h-10 w-10 text-red-400" onClick={() => { const newStops = [...stops]; newStops.splice(index, 1); setStops(newStops); }}><X className="w-4 h-4" /></Button>
+                          <div key={index} className="space-y-2 p-3 bg-slate-50/50 rounded-3xl border border-slate-100 animate-in slide-in-from-left">
+                              <div className="flex justify-between items-center px-1">
+                                  <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest flex items-center gap-2"><div className="w-2 h-2 rounded-full border border-slate-300 bg-slate-100" /> Parada {index + 1}</Label>
+                                  <Button variant="ghost" size="sm" className="h-6 text-[10px] text-red-500 font-bold hover:bg-red-50 rounded-full px-3" onClick={() => { const newStops = [...stops]; newStops.splice(index, 1); setStops(newStops); }}>Remover</Button>
+                              </div>
+                              <GoogleLocationSearch placeholder={`Onde é a parada ${index + 1}?`} onSelect={(l) => { const newStops = [...stops]; newStops[index] = l; setStops(newStops); }} initialValue={stop?.display_name} className="w-full" />
+                              <div className="flex gap-2 mt-2">
+                                  <Button variant="outline" className="flex-1 h-10 rounded-xl bg-white border-slate-200 text-slate-500 hover:text-blue-500 font-bold text-xs" onClick={() => { setShowManualRide(false); setMapSelectionMode(`stop-${index}`); }}><Map className="w-4 h-4 mr-2" /> Local no Mapa</Button>
+                              </div>
                           </div>
                       ))}
 
                       <div className="space-y-2">
                           <Label className="text-[10px] font-black uppercase text-slate-400 ml-1 tracking-widest">Destino Final</Label>
-                          <div className="flex gap-2 items-center">
-                              <GoogleLocationSearch placeholder="Para onde vamos?" onSelect={setDestLocation} initialValue={destLocation?.display_name} className="flex-1" />
-                              <Button size="icon" variant="ghost" className="h-14 w-14 rounded-2xl bg-slate-50 text-slate-400 hover:text-red-500" onClick={() => { setShowManualRide(false); setMapSelectionMode('destination'); }}><Map className="w-5 h-5" /></Button>
+                          <GoogleLocationSearch placeholder="Para onde vamos?" onSelect={setDestLocation} initialValue={destLocation?.display_name} className="w-full" />
+                          <div className="flex gap-2 mt-2">
+                              <Button variant="ghost" className="flex-1 h-12 rounded-2xl bg-slate-50 text-slate-500 hover:text-red-500 font-bold text-xs" onClick={() => { setShowManualRide(false); setMapSelectionMode('destination'); }}><Map className="w-4 h-4 mr-2" /> Selecionar no Mapa</Button>
                               {stops.length < 2 && (
-                                  <Button size="icon" variant="outline" className="h-14 w-14 rounded-2xl shrink-0 border-slate-200 bg-slate-50" onClick={() => setStops([...stops, null])}>
-                                      <Plus className="w-5 h-5 text-slate-600" />
+                                  <Button variant="outline" className="flex-1 h-12 rounded-2xl border-slate-200 bg-slate-50 text-slate-600 font-bold text-xs" onClick={() => setStops([...stops, null])}>
+                                      <Plus className="w-4 h-4 mr-2 text-slate-600" /> Adicionar Parada
                                   </Button>
                               )}
                           </div>

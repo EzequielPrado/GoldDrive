@@ -42,7 +42,7 @@ const ClientDashboard = () => {
   const [rideNotes, setRideNotes] = useState("");
 
   // Modo Seleção no Mapa
-  const [mapSelectionMode, setMapSelectionMode] = useState<'pickup' | 'destination' | null>(null);
+  const [mapSelectionMode, setMapSelectionMode] = useState<string | null>(null);
   const [isReversingGeocode, setIsReversingGeocode] = useState(false);
 
   const [routeDistance, setRouteDistance] = useState<number>(0); 
@@ -131,8 +131,13 @@ const ClientDashboard = () => {
             
             if (mapSelectionMode === 'pickup') {
                 setPickupLocation(locationData);
-            } else {
+            } else if (mapSelectionMode === 'destination') {
                 setDestLocation(locationData);
+            } else if (mapSelectionMode.startsWith('stop-')) {
+                const idx = parseInt(mapSelectionMode.split('-')[1]);
+                const newStops = [...stops];
+                newStops[idx] = locationData;
+                setStops(newStops);
             }
             
             setMapSelectionMode(null);
@@ -467,13 +472,13 @@ const ClientDashboard = () => {
           <div className="absolute inset-0 z-[200] pointer-events-none flex flex-col">
               <div className="bg-slate-900/90 backdrop-blur-md p-6 text-white text-center pt-12 animate-in slide-in-from-top">
                   <h3 className="text-lg font-black uppercase tracking-widest">
-                      {mapSelectionMode === 'pickup' ? 'Toque no local de embarque' : 'Toque no local de destino'}
+                      {mapSelectionMode === 'pickup' ? 'Toque no local de embarque' : mapSelectionMode === 'destination' ? 'Toque no local de destino' : 'Toque no local da parada'}
                   </h3>
                   <p className="text-xs text-slate-400 mt-1">Toque no mapa para selecionar o ponto exato.</p>
               </div>
               <div className="flex-1 flex items-center justify-center">
                   <div className="relative mb-10 animate-bounce">
-                      <MapPin className={cn("w-12 h-12 stroke-[3px]", mapSelectionMode === 'pickup' ? "text-green-500" : "text-red-500")} />
+                      <MapPin className={cn("w-12 h-12 stroke-[3px]", mapSelectionMode === 'pickup' ? "text-green-500" : mapSelectionMode === 'destination' ? "text-red-500" : "text-blue-500")} />
                       <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-1 bg-black/20 rounded-full blur-[2px]" />
                   </div>
               </div>
@@ -535,25 +540,38 @@ const ClientDashboard = () => {
                   <div className="space-y-3 relative">
                       <div className="absolute left-[34px] top-10 bottom-10 w-0.5 bg-slate-100 -z-10" />
                       
-                      <div className="flex gap-2 items-center">
-                        <div className="w-10 flex justify-center shrink-0"><div className="w-3 h-3 rounded-full bg-blue-500" /></div>
-                        <GoogleLocationSearch placeholder="Local de embarque" onSelect={setPickupLocation} initialValue={pickupLocation?.display_name} className="flex-1" />
-                        <Button size="icon" variant="ghost" className="h-14 w-14 rounded-2xl bg-slate-50 text-slate-400 hover:text-blue-500" onClick={() => { setIsSearchingFull(false); setMapSelectionMode('pickup'); }}><MapView className="w-5 h-5" /></Button>
+                      <div className="flex gap-2 items-start">
+                        <div className="w-10 flex justify-center shrink-0 mt-5"><div className="w-3 h-3 rounded-full bg-blue-500" /></div>
+                        <div className="flex-1 space-y-2">
+                            <GoogleLocationSearch placeholder="Local de embarque" onSelect={setPickupLocation} initialValue={pickupLocation?.display_name} className="w-full" />
+                            <div className="flex gap-2">
+                                <Button variant="outline" className="flex-1 h-10 rounded-2xl border-slate-200 bg-slate-50 text-slate-600 font-bold text-xs" onClick={() => { setIsSearchingFull(false); setMapSelectionMode('pickup'); }}><MapView className="w-4 h-4 mr-2" /> Mapa</Button>
+                            </div>
+                        </div>
                       </div>
 
                       {stops.map((stop, index) => (
-                          <div key={index} className="flex gap-2 items-center animate-in slide-in-from-left">
-                              <div className="w-10 flex justify-center shrink-0"><div className="w-3 h-3 rounded-full border-2 border-slate-300 bg-white" /></div>
-                              <GoogleLocationSearch placeholder={`Parada ${index + 1}`} onSelect={(l) => { const newStops = [...stops]; newStops[index] = l; setStops(newStops); }} initialValue={stop?.display_name} className="flex-1" />
-                              <Button size="icon" variant="ghost" className="h-10 w-10 text-red-400" onClick={() => { const newStops = [...stops]; newStops.splice(index, 1); setStops(newStops); }}><X className="w-4 h-4" /></Button>
+                          <div key={index} className="flex gap-2 items-start animate-in slide-in-from-left">
+                              <div className="w-10 flex justify-center shrink-0 mt-5"><div className="w-3 h-3 rounded-full border-2 border-slate-300 bg-white" /></div>
+                              <div className="flex-1 space-y-2">
+                                  <GoogleLocationSearch placeholder={`Parada ${index + 1}`} onSelect={(l) => { const newStops = [...stops]; newStops[index] = l; setStops(newStops); }} initialValue={stop?.display_name} className="w-full" />
+                                  <div className="flex gap-2">
+                                      <Button variant="outline" className="flex-1 h-10 rounded-2xl border-slate-200 bg-slate-50 text-slate-600 font-bold text-xs" onClick={() => { setIsSearchingFull(false); setMapSelectionMode(`stop-${index}`); }}><MapView className="w-4 h-4 mr-2" /> Mapa</Button>
+                                      <Button variant="ghost" className="h-10 px-3 text-red-500 hover:text-red-600 rounded-xl font-bold text-xs bg-red-50 hover:bg-red-100" onClick={() => { const newStops = [...stops]; newStops.splice(index, 1); setStops(newStops); }}>Remover</Button>
+                                  </div>
+                              </div>
                           </div>
                       ))}
 
-                      <div className="flex gap-2 items-center">
-                          <div className="w-10 flex justify-center shrink-0"><div className="w-3 h-3 bg-yellow-500 rounded-sm" /></div>
-                          <GoogleLocationSearch placeholder="Seu destino final" onSelect={setDestLocation} initialValue={destLocation?.display_name} className="flex-1" />
-                          <Button size="icon" variant="ghost" className="h-14 w-14 rounded-2xl bg-slate-50 text-slate-400 hover:text-red-500" onClick={() => { setIsSearchingFull(false); setMapSelectionMode('destination'); }}><MapView className="w-5 h-5" /></Button>
-                          {stops.length < 2 && <Button size="icon" variant="ghost" className="h-12 w-12 rounded-full text-slate-400" onClick={() => setStops([...stops, null])}><Plus className="w-5 h-5" /></Button>}
+                      <div className="flex gap-2 items-start">
+                          <div className="w-10 flex justify-center shrink-0 mt-5"><div className="w-3 h-3 bg-yellow-500 rounded-sm" /></div>
+                          <div className="flex-1 space-y-2">
+                              <GoogleLocationSearch placeholder="Seu destino final" onSelect={setDestLocation} initialValue={destLocation?.display_name} className="w-full" />
+                              <div className="flex gap-2">
+                                  <Button variant="outline" className="flex-1 h-10 rounded-2xl border-slate-200 bg-slate-50 text-slate-600 font-bold text-xs" onClick={() => { setIsSearchingFull(false); setMapSelectionMode('destination'); }}><MapView className="w-4 h-4 mr-2" /> Mapa</Button>
+                                  {stops.length < 2 && <Button variant="outline" className="h-10 px-4 rounded-xl text-slate-600 border-slate-200 bg-slate-50 font-bold text-xs" onClick={() => setStops([...stops, null])}><Plus className="w-4 h-4 mr-1" /> Parada</Button>}
+                              </div>
+                          </div>
                       </div>
                   </div>
               </div>
