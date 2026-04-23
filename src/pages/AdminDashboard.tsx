@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Users, Car, Settings, Wallet, 
   Map as MapIcon, LogOut, RefreshCw, Shield,
   Sun, Moon, PanelLeftClose, PanelLeftOpen, DollarSign, Clock, 
-  CheckCircle, TrendingUp, Trash2, Edit, Mail, Search,
+  CheckCircle, TrendingUp, Trash2, Edit, Mail, Search, Image as ImageIcon, Upload,
   CreditCard, BellRing, Save, AlertTriangle, Smartphone, Globe,
   Menu, Banknote, FileText, Check, X, ExternalLink, Camera, User,
   Moon as MoonIcon, List, Plus, Power, Pencil, Star, Calendar, ArrowUpRight, ArrowDownLeft,
@@ -26,6 +26,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { showSuccess, showError } from "@/utils/toast";
 import { Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -47,6 +48,8 @@ const AdminDashboard = () => {
   const [globalMultiplier, setGlobalMultiplier] = useState("1.0");
   const [costPerStop, setCostPerStop] = useState("2.50");
   const [savingSettings, setSavingSettings] = useState(false);
+  const [promoBanner, setPromoBanner] = useState({ imageUrl: '', link: '', active: false });
+  const [isUploadingBanner, setIsUploadingBanner] = useState(false);
 
   // Cupons
   const [coupons, setCoupons] = useState<any[]>([]);
@@ -114,6 +117,11 @@ const AdminDashboard = () => {
             const rulesObj = adminConfigs.find(c => c.key === 'category_rules');
             if (rulesObj && rulesObj.value) {
                 try { setCategoryRules(JSON.parse(rulesObj.value)); } catch (e) { setCategoryRules({}); }
+            }
+
+            const bannerObj = adminConfigs.find(c => c.key === 'promotional_banner');
+            if (bannerObj && bannerObj.value) {
+                try { setPromoBanner(JSON.parse(bannerObj.value)); } catch (e) {}
             }
         }
 
@@ -226,11 +234,21 @@ const AdminDashboard = () => {
       try {
           await saveAdminConfig('min_car_year', minCarYear, 'Ano mínimo permitido para cadastro de veículos');
           await saveAdminConfig('cost_per_stop', costPerStop, 'Custo adicional cobrado por cada parada extra');
+          await saveAdminConfig('promotional_banner', JSON.stringify(promoBanner), 'Banner Promocional do App do Cliente');
           showSuccess("Configurações salvas com sucesso!");
       } catch (e: any) {
           showError(e.message || "Erro ao salvar configurações.");
       } finally {
           setSavingSettings(false);
+      }
+  };
+
+  const handleSaveBanner = async () => {
+      try {
+          await saveAdminConfig('promotional_banner', JSON.stringify(promoBanner), 'Banner Promocional do App do Cliente');
+          showSuccess("Banner salvo com sucesso! O cliente precisa reabrir o app para visualizar.");
+      } catch (e: any) {
+          showError(e.message || "Erro ao salvar banner.");
       }
   };
 
@@ -241,6 +259,28 @@ const AdminDashboard = () => {
     } catch(e: any) { 
         showError(e.message || "Erro ao atualizar tarifa."); 
     }
+  };
+
+  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setIsUploadingBanner(true);
+      try {
+          const fileExt = file.name.split('.').pop();
+          const fileName = `banner_${Math.random()}.${fileExt}`;
+          const filePath = `${fileName}`;
+
+          const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file);
+          if (uploadError) throw uploadError;
+
+          const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
+          setPromoBanner(prev => ({ ...prev, imageUrl: data.publicUrl }));
+          showSuccess("Imagem enviada! Salve as configurações gerais para aplicar.");
+      } catch (err: any) {
+          showError("Erro ao enviar imagem.");
+      } finally {
+          setIsUploadingBanner(false);
+      }
   };
 
   const handleCreateCoupon = async () => {
@@ -324,14 +364,54 @@ const AdminDashboard = () => {
           <div className="max-w-7xl mx-auto space-y-10">
               
               {/* Header Mobile/Top */}
-              <div className="flex justify-between items-center bg-white p-6 rounded-[32px] shadow-sm border border-slate-100">
-                  <div>
-                      <h1 className="text-3xl font-black tracking-tight text-slate-900">
-                          {activeTab === 'overview' ? 'Painel Geral' : activeTab === 'requests' ? 'Solicitações de Motoristas' : activeTab === 'rides' ? 'Monitor de Corridas' : activeTab === 'users' ? 'Gestão de Usuários' : activeTab === 'coupons' ? 'Promoções e Descontos' : 'Taxas e Configurações'}
-                      </h1>
-                      <p className="text-slate-500 font-medium mt-1 text-sm">Bem-vindo de volta, Administrador.</p>
+              <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center bg-white p-6 rounded-[32px] shadow-sm border border-slate-100 relative">
+                  <div className="flex items-center gap-4">
+                      {/* Menu Mobile Toggle */}
+                      <Sheet>
+                          <SheetTrigger asChild>
+                              <Button variant="outline" size="icon" className="lg:hidden h-12 w-12 rounded-2xl border-slate-200">
+                                  <Menu className="w-6 h-6 text-slate-700" />
+                              </Button>
+                          </SheetTrigger>
+                          <SheetContent side="left" className="w-[300px] p-0 border-r-0">
+                              <SheetHeader className="p-8 border-b border-slate-100 text-left">
+                                  <SheetTitle className="flex items-center gap-3 font-black text-2xl">
+                                      <div className="w-10 h-10 bg-yellow-500 rounded-xl flex items-center justify-center text-black shadow-md">G</div>
+                                      <span className="text-slate-900">Gold<span className="text-yellow-500">Admin</span></span>
+                                  </SheetTitle>
+                              </SheetHeader>
+                              <nav className="p-4 space-y-2 overflow-y-auto">
+                                  <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'overview' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
+                                      <LayoutDashboard className="w-5 h-5" /> Painel Geral
+                                  </button>
+                                  <button onClick={() => setActiveTab('requests')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'requests' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
+                                      <FileText className="w-5 h-5" /> Solicitações {stats.pendingDrivers > 0 && <Badge className="ml-auto bg-red-500 text-white">{stats.pendingDrivers}</Badge>}
+                                  </button>
+                                  <button onClick={() => setActiveTab('rides')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'rides' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
+                                      <MapIcon className="w-5 h-5" /> Corridas
+                                  </button>
+                                  <button onClick={() => setActiveTab('users')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'users' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
+                                      <Users className="w-5 h-5" /> Usuários
+                                  </button>
+                                  <button onClick={() => setActiveTab('config')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'config' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
+                                      <Settings className="w-5 h-5" /> Taxas e Config.
+                                  </button>
+                                  <button onClick={() => setActiveTab('coupons')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'coupons' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
+                                      <Ticket className="w-5 h-5" /> Cupons
+                                  </button>
+                              </nav>
+                          </SheetContent>
+                      </Sheet>
+                      {/* Fim Menu Mobile Toggle */}
+                      
+                      <div>
+                          <h1 className="text-2xl md:text-3xl font-black tracking-tight text-slate-900">
+                              {activeTab === 'overview' ? 'Painel Geral' : activeTab === 'requests' ? 'Solicitações de Motoristas' : activeTab === 'rides' ? 'Monitor de Corridas' : activeTab === 'users' ? 'Gestão de Usuários' : activeTab === 'coupons' ? 'Promoções e Descontos' : 'Taxas e Configurações'}
+                          </h1>
+                          <p className="text-slate-500 font-medium mt-1 text-xs md:text-sm">Bem-vindo de volta, Administrador.</p>
+                      </div>
                   </div>
-                  <Button onClick={fetchData} variant="outline" className="h-12 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50" disabled={loading}>{loading ? <Loader2 className="animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />} Atualizar</Button>
+                  <Button onClick={fetchData} variant="outline" className="w-full md:w-auto h-12 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50" disabled={loading}>{loading ? <Loader2 className="animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />} Atualizar</Button>
               </div>
 
               {/* OVERVIEW */}
@@ -669,7 +749,7 @@ const AdminDashboard = () => {
                                                 </div>
 
                                                 {/* Segundo Horário */}
-                                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-in slide-in-from-top-2">
+                                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pb-4 border-b border-slate-100 animate-in slide-in-from-top-2">
                                                     <div className="space-y-2">
                                                         <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Valor KM Noturno 2 (R$)</Label>
                                                         <Input type="number" step="0.01" value={categoryRules[cat.name]?.night_km_2 || ''} onChange={e => handleRuleChange(cat.name, 'night_km_2', e.target.value)} placeholder="Ex: 4.00" className="font-black text-slate-900 h-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
@@ -685,6 +765,26 @@ const AdminDashboard = () => {
                                                     <div className="space-y-2">
                                                         <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Término 2</Label>
                                                         <Input type="time" value={categoryRules[cat.name]?.night_end_2 || ''} onChange={e => handleRuleChange(cat.name, 'night_end_2', e.target.value)} className="font-black text-slate-900 h-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+                                                    </div>
+                                                </div>
+
+                                                {/* Terceiro Horário */}
+                                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-in slide-in-from-top-2">
+                                                    <div className="space-y-2">
+                                                        <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Valor KM Noturno 3 (R$)</Label>
+                                                        <Input type="number" step="0.01" value={categoryRules[cat.name]?.night_km_3 || ''} onChange={e => handleRuleChange(cat.name, 'night_km_3', e.target.value)} placeholder="Ex: 5.00" className="font-black text-slate-900 h-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label className="text-[10px] font-bold text-slate-900 uppercase tracking-widest">Valor Mínimo 3 (R$)</Label>
+                                                        <Input type="number" step="0.01" value={categoryRules[cat.name]?.night_min_fare_3 || ''} onChange={e => handleRuleChange(cat.name, 'night_min_fare_3', e.target.value)} placeholder="Ex: 20.00" className="font-black text-blue-600 h-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Início 3</Label>
+                                                        <Input type="time" value={categoryRules[cat.name]?.night_start_3 || ''} onChange={e => handleRuleChange(cat.name, 'night_start_3', e.target.value)} className="font-black text-slate-900 h-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Término 3</Label>
+                                                        <Input type="time" value={categoryRules[cat.name]?.night_end_3 || ''} onChange={e => handleRuleChange(cat.name, 'night_end_3', e.target.value)} className="font-black text-slate-900 h-10 bg-slate-50 border-slate-200 focus:bg-white transition-colors" />
                                                     </div>
                                                 </div>
                                               </div>
@@ -741,6 +841,67 @@ const AdminDashboard = () => {
                                   </div>
                               </CardContent>
                           </Card>
+
+                          {/* Banner Promocional */}
+                          <Card className="rounded-[32px] border border-slate-100 shadow-xl overflow-hidden bg-white">
+                              <CardHeader className="p-8 border-b border-slate-100 bg-purple-50">
+                                  <CardTitle className="text-xl font-black text-slate-900 flex items-center gap-2"><ImageIcon className="w-5 h-5 text-purple-600" /> Banner Promocional</CardTitle>
+                                  <CardDescription className="text-slate-600">Exiba um anúncio ou novidade direto na tela inicial dos passageiros.</CardDescription>
+                              </CardHeader>
+                              <CardContent className="p-8 space-y-4">
+                                  <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                                      <div>
+                                          <h4 className="font-black text-slate-900">Ativar Banner</h4>
+                                          <p className="text-sm font-medium text-slate-500">Mostrar aos clientes</p>
+                                      </div>
+                                      <Switch checked={promoBanner.active} onCheckedChange={(val) => setPromoBanner({...promoBanner, active: val})} />
+                                  </div>
+
+                                  <div className="space-y-2 pt-2">
+                                      <div className="flex justify-between items-end">
+                                        <Label className="text-xs font-bold text-slate-900 uppercase tracking-widest">Imagem do Banner</Label>
+                                        <span className="text-[10px] text-slate-400 font-bold">Tamanho Ideal: 800x300px</span>
+                                      </div>
+                                      {promoBanner.imageUrl ? (
+                                          <div className="relative w-full aspect-[21/9] rounded-2xl overflow-hidden group border border-slate-200">
+                                              <img src={promoBanner.imageUrl} alt="Banner" className="w-full h-full object-cover" />
+                                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                  <Label className="cursor-pointer bg-white text-black font-bold px-4 py-2 rounded-xl shadow-lg flex items-center gap-2">
+                                                      <Upload className="w-4 h-4" /> Trocar Imagem
+                                                      <Input type="file" className="hidden" accept="image/*" onChange={handleBannerUpload} disabled={isUploadingBanner} />
+                                                  </Label>
+                                              </div>
+                                          </div>
+                                      ) : (
+                                          <Label className="w-full aspect-[21/9] border-2 border-dashed border-slate-300 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 transition-colors text-slate-500 hover:text-slate-700">
+                                              {isUploadingBanner ? <Loader2 className="w-8 h-8 animate-spin" /> : <Upload className="w-8 h-8 mb-2" />}
+                                              <span className="font-bold text-sm">Fazer Upload do Banner</span>
+                                              <Input type="file" className="hidden" accept="image/*" onChange={handleBannerUpload} disabled={isUploadingBanner} />
+                                          </Label>
+                                      )}
+                                  </div>
+
+                                  <div className="space-y-2 pt-2">
+                                      <Label className="text-xs font-bold text-slate-900 uppercase tracking-widest">Link de Redirecionamento (Opcional)</Label>
+                                      <Input 
+                                          placeholder="Ex: https://wa.me/55999999999" 
+                                          value={promoBanner.link} 
+                                          onChange={(e) => setPromoBanner({...promoBanner, link: e.target.value})} 
+                                          className="h-12 font-medium text-slate-900 border-slate-200 bg-slate-50"
+                                      />
+                                  </div>
+                                  
+                                  <div className="pt-2">
+                                      <Button 
+                                          onClick={handleSaveBanner} 
+                                          className="w-full h-14 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-md"
+                                      >
+                                          Salvar Banner
+                                      </Button>
+                                  </div>
+                              </CardContent>
+                          </Card>
+
 
                           {/* Formas de Pagamento */}
                           <Card className="rounded-[32px] border border-slate-100 shadow-xl overflow-hidden bg-white">
@@ -818,7 +979,7 @@ const AdminDashboard = () => {
                   {/* Veículo */}
                   <div className="space-y-4">
                       <h4 className="text-xs font-black text-slate-400 uppercase tracking-[2px] ml-1">Dados do Veículo</h4>
-                      <div className="grid grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
                               <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Modelo</p>
                               <p className="font-bold text-slate-900 truncate">{selectedUser?.car_model || 'N/A'}</p>
@@ -893,7 +1054,7 @@ const AdminDashboard = () => {
                   </div>
               </div>
               
-              <DialogFooter className="p-8 bg-slate-50 flex gap-4 border-t border-slate-100">
+              <DialogFooter className="p-8 bg-slate-50 flex flex-col sm:flex-row gap-4 border-t border-slate-100">
                   <Button 
                     variant="outline" 
                     className="flex-1 h-14 rounded-2xl text-red-600 border-red-200 hover:bg-red-50 font-bold" 

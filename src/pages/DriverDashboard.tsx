@@ -357,7 +357,11 @@ const DriverDashboard = () => {
           }
       };
 
-      if (checkNightPeriod(rules.night_start_2, rules.night_end_2, rules.night_km_2)) {
+      if (checkNightPeriod(rules.night_start_3, rules.night_end_3, rules.night_km_3)) {
+          isNight = true;
+          nightKmPrice = Number(rules.night_km_3);
+          if (rules.night_min_fare_3) appliedMinFare = Number(rules.night_min_fare_3);
+      } else if (checkNightPeriod(rules.night_start_2, rules.night_end_2, rules.night_km_2)) {
           isNight = true;
           nightKmPrice = Number(rules.night_km_2);
           if (rules.night_min_fare_2) appliedMinFare = Number(rules.night_min_fare_2);

@@ -69,6 +69,8 @@ const ClientDashboard = () => {
   const [categoryRules, setCategoryRules] = useState<Record<string, any>>({});
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [rating, setRating] = useState(0);
+  const [promoBanner, setPromoBanner] = useState<any>(null);
+  const [driverStats, setDriverStats] = useState({ total_rides: 0, rating: 5.0, member_since: '' });
 
   const dataFetched = useRef(false);
 
@@ -194,6 +196,11 @@ const ClientDashboard = () => {
 
                 const stopRes = adminConfigRes.data.find((c: any) => c.key === 'cost_per_stop');
                 if (stopRes && stopRes.value) setCostPerStop(Number(stopRes.value) || 2.50);
+
+                const bannerRes = adminConfigRes.data.find((c: any) => c.key === 'promotional_banner');
+                if (bannerRes && bannerRes.value) {
+                    try { setPromoBanner(JSON.parse(bannerRes.value)); } catch(e) {}
+                }
             }
 
             getCurrentLocation(true);
@@ -228,6 +235,31 @@ const ClientDashboard = () => {
     }
     return () => { isMounted = false; };
   }, [activeTab, userProfile?.id]);
+
+  useEffect(() => {
+     let isMounted = true;
+     if (ride?.driver_details?.id && step === 'active') {
+         const fetchStats = async () => {
+             const { data: ridesData } = await supabase.from('rides')
+                 .select('customer_rating')
+                 .eq('driver_id', ride.driver_details.id)
+                 .eq('status', 'COMPLETED');
+             
+             if (!isMounted) return;
+             if (ridesData) {
+                 const rated = ridesData.filter(r => r.customer_rating);
+                 const avg = rated.length > 0 ? rated.reduce((a, b) => a + b.customer_rating, 0) / rated.length : 5.0;
+                 setDriverStats({
+                     total_rides: ridesData.length,
+                     rating: avg,
+                     member_since: ride.driver_details.created_at ? new Date(ride.driver_details.created_at).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) : '2024'
+                 });
+             }
+         };
+         fetchStats();
+     }
+     return () => { isMounted = false; };
+  }, [ride?.driver_details?.id, step]);
 
   useEffect(() => {
     if (rideLoading || isInitialSync) return;
@@ -333,7 +365,11 @@ const ClientDashboard = () => {
           return start > end ? (currentTime >= start || currentTime <= end) : (currentTime >= start && currentTime <= end);
       };
 
-      if (checkNightPeriod(rules.night_start_2, rules.night_end_2, rules.night_km_2)) {
+      if (checkNightPeriod(rules.night_start_3, rules.night_end_3, rules.night_km_3)) {
+          isNight = true;
+          nightKmPrice = Number(rules.night_km_3);
+          if (rules.night_min_fare_3) appliedMinFare = Number(rules.night_min_fare_3);
+      } else if (checkNightPeriod(rules.night_start_2, rules.night_end_2, rules.night_km_2)) {
           isNight = true;
           nightKmPrice = Number(rules.night_km_2);
           if (rules.night_min_fare_2) appliedMinFare = Number(rules.night_min_fare_2);
@@ -515,7 +551,17 @@ const ClientDashboard = () => {
       )}
 
       {activeTab === 'home' && step === 'search' && !isSearchingFull && !mapSelectionMode && (
-          <div className="absolute bottom-32 left-4 right-4 z-20 pointer-events-auto max-w-md mx-auto animate-in slide-in-from-bottom-10">
+          <div className="absolute bottom-32 left-4 right-4 z-20 pointer-events-auto max-w-md mx-auto flex flex-col gap-4 animate-in slide-in-from-bottom-10">
+              
+              {promoBanner?.active && promoBanner?.imageUrl && (
+                  <div 
+                    className="w-full rounded-[24px] overflow-hidden shadow-2xl shadow-black/10 border border-white/20 cursor-pointer animate-in zoom-in-95 hover:scale-[1.02] transition-transform"
+                    onClick={() => { if(promoBanner.link) window.open(promoBanner.link, '_blank'); }}
+                  >
+                      <img src={promoBanner.imageUrl} alt="Promo" className="w-full object-cover max-h-32" />
+                  </div>
+              )}
+
               <div className="bg-white rounded-[32px] p-2 shadow-2xl shadow-black/20 border border-slate-100 flex items-center">
                   <button onClick={() => setIsSearchingFull(true)} className="flex-1 h-14 flex items-center px-6 gap-4 text-left">
                       <div className="w-3 h-3 bg-yellow-500 rounded-full shadow-[0_0_10px_rgba(234,179,8,0.5)]" />
@@ -680,11 +726,15 @@ const ClientDashboard = () => {
                   <span className="text-xs font-bold text-slate-400">#{ride.id.slice(0, 4)}</span>
               </div>
               <div className="p-6">
-                  <div className="flex items-center gap-5 mb-6">
-                      <Avatar className="w-20 h-20 border-4 border-white shadow-xl"><AvatarImage src={ride.driver_details?.avatar_url} /><AvatarFallback className="bg-slate-200 text-slate-500 font-bold">{ride.driver_details?.first_name?.[0]}</AvatarFallback></Avatar>
-                      <div className="flex-1">
-                          <h3 className="text-2xl font-black text-slate-900 leading-tight">{ride.driver_details?.first_name}</h3>
+                  <div className="flex items-start gap-4 mb-6">
+                      <div className="relative">
+                          <Avatar className="w-16 h-16 md:w-20 md:h-20 border-4 border-white shadow-xl"><AvatarImage src={ride.driver_details?.avatar_url} /><AvatarFallback className="bg-slate-200 text-slate-500 font-bold">{ride.driver_details?.first_name?.[0]}</AvatarFallback></Avatar>
+                          <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white px-2 py-0.5 rounded-full border border-slate-200 shadow-sm flex items-center gap-1 text-[10px] font-black"><Star className="w-3 h-3 fill-yellow-500 text-yellow-500" /> {driverStats.rating.toFixed(1)}</div>
+                      </div>
+                      <div className="flex-1 mt-1">
+                          <h3 className="text-xl md:text-2xl font-black text-slate-900 leading-tight">{ride.driver_details?.first_name}</h3>
                           <Badge variant="outline" className="mt-1 border-slate-200 text-slate-500 font-bold uppercase tracking-widest">{ride.driver_details?.car_model} • {ride.driver_details?.car_plate}</Badge>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-2">{driverStats.total_rides} viagens • Na GoldDrive desde {driverStats.member_since}</p>
                       </div>
                       <div className="flex flex-col gap-3">
                           <Button 
