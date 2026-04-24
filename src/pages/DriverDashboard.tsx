@@ -85,6 +85,7 @@ const DriverDashboard = () => {
   const [costPerStop, setCostPerStop] = useState(2.50);
 
   const [manualLoading, setManualLoading] = useState(false);
+  const [manualPaymentMethod, setManualPaymentMethod] = useState<'CASH' | 'CARD_MACHINE'>('CASH');
   const [categories, setCategories] = useState<any[]>([]);
   const [categoryRules, setCategoryRules] = useState<Record<string, any>>({});
 
@@ -466,6 +467,7 @@ const DriverDashboard = () => {
               { lat: pickupLocation.lat, lng: pickupLocation.lon },
               { lat: destLocation.lat, lng: destLocation.lon },
               price, `${routeDistance.toFixed(1)} km`, category?.name || 'Manual',
+              manualPaymentMethod,
               validStops
           );
           
@@ -912,6 +914,30 @@ const DriverDashboard = () => {
                                   </Button>
                               )}
                           </div>
+                      </div>
+                  </div>
+
+                  <div className="space-y-3">
+                      <Label className="text-[10px] font-black uppercase text-slate-400 ml-1 tracking-widest">Forma de Pagamento</Label>
+                      <div className="grid grid-cols-2 gap-3">
+                          <button 
+                            onClick={() => setManualPaymentMethod('CASH')}
+                            className={cn(
+                                "flex items-center justify-center gap-2 h-14 rounded-2xl border-2 transition-all font-bold",
+                                manualPaymentMethod === 'CASH' ? "bg-green-50 border-green-500 text-green-700 shadow-sm" : "bg-white border-slate-100 text-slate-400"
+                            )}
+                          >
+                              <Banknote className="w-5 h-5" /> Dinheiro
+                          </button>
+                          <button 
+                            onClick={() => setManualPaymentMethod('CARD_MACHINE')}
+                            className={cn(
+                                "flex items-center justify-center gap-2 h-14 rounded-2xl border-2 transition-all font-bold",
+                                manualPaymentMethod === 'CARD_MACHINE' ? "bg-slate-900 border-slate-900 text-white shadow-lg" : "bg-white border-slate-100 text-slate-400"
+                            )}
+                          >
+                              <CreditCard className="w-5 h-5" /> Cartão
+                          </button>
                       </div>
                   </div>
 

@@ -68,7 +68,7 @@ const ClientDashboard = () => {
 
   const [categories, setCategories] = useState<any[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
-  const [appSettings, setAppSettings] = useState({ enableCash: true, enableCardMachine: false });
+  const [appSettings, setAppSettings] = useState({ enableCash: true, enableCardMachine: false, enableCoupons: true });
   const [categoryRules, setCategoryRules] = useState<Record<string, any>>({});
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [rating, setRating] = useState(0);
@@ -187,7 +187,12 @@ const ClientDashboard = () => {
             if (settingsRes.data) {
                 const cash = settingsRes.data.find((s: any) => s.key === 'enable_cash');
                 const cardMachine = settingsRes.data.find((s: any) => s.key === 'enable_card_machine');
-                setAppSettings({ enableCash: cash?.value ?? true, enableCardMachine: cardMachine?.value ?? false });
+                const coupons = settingsRes.data.find((s: any) => s.key === 'enable_coupons');
+                setAppSettings({ 
+                    enableCash: cash?.value ?? true, 
+                    enableCardMachine: cardMachine?.value ?? false,
+                    enableCoupons: coupons?.value ?? true
+                });
             }
 
             if (adminConfigRes.data) {
@@ -756,13 +761,15 @@ const ClientDashboard = () => {
                               {appSettings.enableCardMachine && <button onClick={() => setPaymentMethod('CARD_MACHINE')} className={cn("shrink-0 px-4 h-12 rounded-2xl border-2 flex items-center justify-center gap-2 transition-all", paymentMethod === 'CARD_MACHINE' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-100 text-slate-400')}><CreditCard className="w-4 h-4" /> <span className="text-[10px] font-black">MAQUININHA {cardMachineFee > 0 && `(+${cardMachineFee}%)`}</span></button>}
                           </div>
                       </div>
-                      <div className="space-y-1.5">
-                          <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Cupom</Label>
-                          <div className="flex gap-2 h-12">
-                              <Input placeholder="CÓDIGO" value={couponCode} onChange={e => setCouponCode(e.target.value.toUpperCase())} className="uppercase rounded-2xl border-slate-100 bg-slate-50 font-black text-xs h-full text-slate-900 placeholder:text-slate-400" />
-                              <Button variant="outline" className="rounded-2xl h-full border-slate-100 px-3 shrink-0 text-slate-900 bg-white hover:bg-slate-100" onClick={applyCoupon} disabled={applyingCoupon}>{applyingCoupon ? <Loader2 className="animate-spin w-4 h-4" /> : <Ticket className="w-4 h-4" />}</Button>
+                      {appSettings.enableCoupons && (
+                          <div className="space-y-1.5">
+                              <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Cupom</Label>
+                              <div className="flex gap-2 h-12">
+                                  <Input placeholder="CÓDIGO" value={couponCode} onChange={e => setCouponCode(e.target.value.toUpperCase())} className="uppercase rounded-2xl border-slate-100 bg-slate-50 font-black text-xs h-full text-slate-900 placeholder:text-slate-400" />
+                                  <Button variant="outline" className="rounded-2xl h-full border-slate-100 px-3 shrink-0 text-slate-900 bg-white hover:bg-slate-100" onClick={applyCoupon} disabled={applyingCoupon}>{applyingCoupon ? <Loader2 className="animate-spin w-4 h-4" /> : <Ticket className="w-4 h-4" />}</Button>
+                              </div>
                           </div>
-                      </div>
+                      )}
                   </div>
                   {appliedCoupon && <div className="bg-green-50 border border-green-100 p-4 rounded-[20px] flex items-center justify-between animate-in zoom-in-95"><div className="flex items-center gap-3 text-green-800"><div className="bg-green-100 p-2 rounded-lg"><Gift className="w-4 h-4" /></div><p className="text-xs font-black uppercase tracking-wider">Desconto Ativado: {appliedCoupon.code}</p></div><button onClick={() => setAppliedCoupon(null)} className="text-green-600 p-1"><XCircle className="w-5 h-5" /></button></div>}
                   <Button className="w-full h-18 bg-yellow-500 text-black font-black text-2xl rounded-[28px] shadow-2xl shadow-yellow-500/20 transition-all active:scale-95 py-8 hover:bg-yellow-400" onClick={confirmRide} disabled={isRequesting || calculatingRoute}>{isRequesting ? <Loader2 className="animate-spin w-8 h-8 text-black" /> : "PEDIR AGORA"}</Button>

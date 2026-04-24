@@ -47,7 +47,7 @@ const AdminDashboard = () => {
   // Configurações e Categorias (Taxas)
   const [carCategories, setCarCategories] = useState<any[]>([]);
   const [categoryRules, setCategoryRules] = useState<Record<string, any>>({});
-  const [appSettings, setAppSettings] = useState({ enable_cash: true, enable_card_machine: false });
+  const [appSettings, setAppSettings] = useState({ enable_cash: true, enable_card_machine: false, enable_coupons: true });
   const [cardMachineFee, setCardMachineFee] = useState("0.00");
   const [minCarYear, setMinCarYear] = useState("2010"); 
   const [globalMultiplier, setGlobalMultiplier] = useState("1.0");
@@ -104,9 +104,11 @@ const AdminDashboard = () => {
         if (settings) {
             const cashObj = settings.find(s => s.key === 'enable_cash');
             const cardMachineObj = settings.find(s => s.key === 'enable_card_machine');
+            const couponObj = settings.find(s => s.key === 'enable_coupons');
             setAppSettings({
                 enable_cash: cashObj ? cashObj.value : true,
-                enable_card_machine: cardMachineObj ? cardMachineObj.value : false
+                enable_card_machine: cardMachineObj ? cardMachineObj.value : false,
+                enable_coupons: couponObj ? couponObj.value : true
             });
         }
 
@@ -679,22 +681,22 @@ const AdminDashboard = () => {
                                   <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
                                       <div className="md:col-span-2">
                                           <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Código (Ex: BEMVINDO)</Label>
-                                          <Input value={newCoupon.code} onChange={e => setNewCoupon({...newCoupon, code: e.target.value.toUpperCase()})} className="uppercase h-12 mt-1 font-black text-lg bg-white" placeholder="BEMVINDO20" />
+                                          <Input value={newCoupon.code} onChange={e => setNewCoupon({...newCoupon, code: e.target.value.toUpperCase()})} className="uppercase h-12 mt-1 font-black text-lg bg-white text-slate-900" placeholder="BEMVINDO20" />
                                       </div>
                                       <div>
                                           <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Tipo de Desconto</Label>
-                                          <select value={newCoupon.type} onChange={e => setNewCoupon({...newCoupon, type: e.target.value})} className="w-full mt-1 h-12 rounded-xl border border-input bg-white px-3 font-bold text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                                          <select value={newCoupon.type} onChange={e => setNewCoupon({...newCoupon, type: e.target.value})} className="w-full mt-1 h-12 rounded-xl border border-input bg-white px-3 font-bold text-sm text-slate-900 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                                               <option value="PERCENTAGE">Porcentagem (%)</option>
                                               <option value="FIXED">Valor Fixo (R$)</option>
                                           </select>
                                       </div>
                                       <div>
                                           <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Valor</Label>
-                                          <Input type="number" step="0.01" value={newCoupon.value} onChange={e => setNewCoupon({...newCoupon, value: e.target.value})} className="h-12 mt-1 font-black text-lg bg-white" placeholder="Ex: 10" />
+                                          <Input type="number" step="0.01" value={newCoupon.value} onChange={e => setNewCoupon({...newCoupon, value: e.target.value})} className="h-12 mt-1 font-black text-lg bg-white text-slate-900" placeholder="Ex: 10" />
                                       </div>
                                       <div>
                                           <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Qtd. Limite</Label>
-                                          <Input type="number" value={newCoupon.max_uses} onChange={e => setNewCoupon({...newCoupon, max_uses: e.target.value})} className="h-12 mt-1 font-black text-lg bg-white" />
+                                          <Input type="number" value={newCoupon.max_uses} onChange={e => setNewCoupon({...newCoupon, max_uses: e.target.value})} className="h-12 mt-1 font-black text-lg bg-white text-slate-900" />
                                       </div>
                                   </div>
                                   <Button onClick={handleCreateCoupon} className="mt-6 bg-yellow-500 hover:bg-yellow-400 text-black h-12 px-8 font-black shadow-md rounded-xl">Criar Cupom</Button>
@@ -1089,6 +1091,16 @@ const AdminDashboard = () => {
                                           </div>
                                       </div>
                                       <Switch checked={appSettings.enable_card_machine} onCheckedChange={() => handleToggleSetting('enable_card_machine', appSettings.enable_card_machine)} />
+                                  </div>
+                                  <div className="flex items-center justify-between p-5 bg-slate-50 rounded-2xl border border-slate-200 transition-colors hover:bg-slate-100">
+                                      <div className="flex gap-4 items-center">
+                                          <div className="p-3 bg-white rounded-xl shadow-sm border border-slate-200"><Ticket className="w-6 h-6 text-yellow-600" /></div>
+                                          <div>
+                                              <h4 className="font-black text-slate-900">Cupons de Desconto</h4>
+                                              <p className="text-sm font-medium text-slate-500">Habilitar sistema de cupons no app.</p>
+                                          </div>
+                                      </div>
+                                      <Switch checked={appSettings.enable_coupons} onCheckedChange={() => handleToggleSetting('enable_coupons', appSettings.enable_coupons)} />
                                   </div>
                               </CardContent>
                           </Card>
