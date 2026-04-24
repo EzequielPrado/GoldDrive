@@ -83,6 +83,7 @@ const DriverDashboard = () => {
   const [routeDuration, setRouteDuration] = useState<number>(0);
   const [globalMultiplier, setGlobalMultiplier] = useState(1.0);
   const [costPerStop, setCostPerStop] = useState(2.50);
+  const [cardMachineFee, setCardMachineFee] = useState(0);
 
   const [manualLoading, setManualLoading] = useState(false);
   const [manualPaymentMethod, setManualPaymentMethod] = useState<'CASH' | 'CARD_MACHINE'>('CASH');
@@ -243,6 +244,9 @@ const DriverDashboard = () => {
 
               const stopRes = adminConfigRes.data.find((c: any) => c.key === 'cost_per_stop');
               if (stopRes && stopRes.value) setCostPerStop(Number(stopRes.value) || 2.50);
+
+              const machineFeeRes = adminConfigRes.data.find((c: any) => c.key === 'card_machine_fee');
+              if (machineFeeRes && machineFeeRes.value) setCardMachineFee(Number(machineFeeRes.value) || 0);
 
               const broadcastRes = adminConfigRes.data.find((c: any) => c.key === 'global_broadcast');
               if (broadcastRes && broadcastRes.value) setGlobalBroadcastMessage(broadcastRes.value);
@@ -407,12 +411,16 @@ const DriverDashboard = () => {
 
       price = price * globalMultiplier;
 
+      if (manualPaymentMethod === 'CARD_MACHINE' && cardMachineFee > 0) {
+          price = price * (1 + (cardMachineFee / 100));
+      }
+
       if (price < appliedMinFare) {
           price = appliedMinFare;
       }
       
       return parseFloat(price.toFixed(2));
-  }, [categories, routeDistance, routeDuration, categoryRules, globalMultiplier, stops, costPerStop]);
+  }, [categories, routeDistance, routeDuration, categoryRules, globalMultiplier, stops, costPerStop, manualPaymentMethod, cardMachineFee]);
 
   const checkProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
