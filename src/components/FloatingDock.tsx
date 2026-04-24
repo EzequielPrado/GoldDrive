@@ -1,5 +1,5 @@
 import React from "react";
-import { Home, Clock, Wallet, User } from "lucide-react";
+import { Home, Clock, User } from "lucide-react";
 
 interface FloatingDockProps {
   activeTab: string;
@@ -11,7 +11,6 @@ const FloatingDock = ({ activeTab, onTabChange, role }: FloatingDockProps) => {
   const items = [
     { id: 'home', icon: Home, label: 'Início' },
     { id: 'history', icon: Clock, label: 'Viagens' },
-    { id: 'wallet', icon: Wallet, label: 'Carteira' },
     { id: 'profile', icon: User, label: 'Perfil' },
   ];
 

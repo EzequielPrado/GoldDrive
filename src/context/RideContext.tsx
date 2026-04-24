@@ -36,6 +36,7 @@ interface RideContextType {
   startRide: (rideId: string) => Promise<void>;
   finishRide: (rideId: string) => Promise<void>;
   completeStop: (rideId: string, stopIndex: number, currentStops: any[]) => Promise<void>;
+  addStopToActiveRide: (rideId: string, newStop: any, extraCost: number) => Promise<void>;
   rateRide: (rideId: string, rating: number, isDriver: boolean, comment?: string) => Promise<void>;
   confirmArrival: (rideId: string) => Promise<void>;
   addBalance: (amount: number) => Promise<void>;
@@ -298,6 +299,27 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           if (error) throw error;
       } catch (e: any) { toast({ title: "Erro ao confirmar parada", description: e.message, variant: "destructive" }); }
   };
+  const addStopToActiveRide = async (rideId: string, newStop: any, extraCost: number) => {
+      try {
+          const { data: rideData, error: fetchError } = await supabase.from('rides').select('stops, price').eq('id', rideId).single();
+          if (fetchError) throw fetchError;
+          
+          const currentStops = rideData.stops || [];
+          const newStops = [...currentStops, newStop];
+          const newPrice = Number(rideData.price) + extraCost;
+          
+          const { error: updateError } = await supabase.from('rides').update({ 
+              stops: newStops,
+              price: newPrice 
+          }).eq('id', rideId);
+          
+          if (updateError) throw updateError;
+          toast({ title: "Parada adicionada", description: "O trajeto e o valor foram atualizados." });
+      } catch (e: any) { 
+          toast({ title: "Erro ao adicionar parada", description: e.message, variant: "destructive" }); 
+          throw e;
+      }
+  };
   const finishRide = async (rideId: string) => { await supabase.from('rides').update({ status: 'COMPLETED' }).eq('id', rideId); };
   const rateRide = async (rideId: string, rating: number, isDriver: boolean, comment?: string) => {
       const updateData = isDriver ? { customer_rating: rating } : { driver_rating: rating, review_comment: comment };
@@ -315,7 +337,7 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
   return (
     <RideContext.Provider value={{ 
         ride, availableRides, loading, requestRide, createManualRide, cancelRide, acceptRide, rejectRide, 
-        startRide, finishRide, completeStop, rateRide, confirmArrival, addBalance, clearRide, refreshAvailableRides, unlockAudio, currentUserId, userRole 
+        startRide, finishRide, completeStop, addStopToActiveRide, rateRide, confirmArrival, addBalance, clearRide, refreshAvailableRides, unlockAudio, currentUserId, userRole 
     }}>
       {children}
     </RideContext.Provider>

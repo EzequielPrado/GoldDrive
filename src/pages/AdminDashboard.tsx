@@ -9,7 +9,7 @@ import {
   CreditCard, BellRing, Save, AlertTriangle, Smartphone, Globe,
   Menu, Banknote, FileText, Check, X, ExternalLink, Camera, User,
   Moon as MoonIcon, List, Plus, Power, Pencil, Star, Calendar, ArrowUpRight, ArrowDownLeft,
-  Activity, BarChart3, PieChart, Coins, Lock, Unlock, Calculator, Info, MapPin, Zap, XCircle,
+  Activity, BarChart3, Coins, Lock, Unlock, Calculator, Info, MapPin, Zap, XCircle,
   Ban, Percent, Navigation, PlusCircle, UserPlus, Eye, Ticket
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,10 @@ import { showSuccess, showError } from "@/utils/toast";
 import { Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import GoogleMapComponent from '@/components/GoogleMapComponent';
+
+const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -43,7 +47,8 @@ const AdminDashboard = () => {
   // Configurações e Categorias (Taxas)
   const [carCategories, setCarCategories] = useState<any[]>([]);
   const [categoryRules, setCategoryRules] = useState<Record<string, any>>({});
-  const [appSettings, setAppSettings] = useState({ enable_cash: true, enable_wallet: true });
+  const [appSettings, setAppSettings] = useState({ enable_cash: true, enable_wallet: true, enable_card_machine: false });
+  const [cardMachineFee, setCardMachineFee] = useState("0.00");
   const [minCarYear, setMinCarYear] = useState("2010"); 
   const [globalMultiplier, setGlobalMultiplier] = useState("1.0");
   const [costPerStop, setCostPerStop] = useState("2.50");
@@ -54,6 +59,9 @@ const AdminDashboard = () => {
   // Cupons
   const [coupons, setCoupons] = useState<any[]>([]);
   const [newCoupon, setNewCoupon] = useState({ code: '', type: 'PERCENTAGE', value: '', max_uses: '100' });
+
+  // Mensagem Global
+  const [globalMessage, setGlobalMessage] = useState("");
 
   // Estados de Gerenciamento
   const [selectedUser, setSelectedUser] = useState<any>(null);
@@ -97,9 +105,11 @@ const AdminDashboard = () => {
         if (settings) {
             const cashObj = settings.find(s => s.key === 'enable_cash');
             const walletObj = settings.find(s => s.key === 'enable_wallet');
+            const cardMachineObj = settings.find(s => s.key === 'enable_card_machine');
             setAppSettings({
                 enable_cash: cashObj ? cashObj.value : true,
-                enable_wallet: walletObj ? walletObj.value : true
+                enable_wallet: walletObj ? walletObj.value : true,
+                enable_card_machine: cardMachineObj ? cardMachineObj.value : false
             });
         }
 
@@ -114,6 +124,9 @@ const AdminDashboard = () => {
             const stopObj = adminConfigs.find(c => c.key === 'cost_per_stop');
             if (stopObj && stopObj.value) setCostPerStop(stopObj.value);
 
+            const cardMachineFeeObj = adminConfigs.find(c => c.key === 'card_machine_fee');
+            if (cardMachineFeeObj && cardMachineFeeObj.value) setCardMachineFee(cardMachineFeeObj.value);
+
             const rulesObj = adminConfigs.find(c => c.key === 'category_rules');
             if (rulesObj && rulesObj.value) {
                 try { setCategoryRules(JSON.parse(rulesObj.value)); } catch (e) { setCategoryRules({}); }
@@ -123,6 +136,9 @@ const AdminDashboard = () => {
             if (bannerObj && bannerObj.value) {
                 try { setPromoBanner(JSON.parse(bannerObj.value)); } catch (e) {}
             }
+
+            const msgObj = adminConfigs.find(c => c.key === 'global_broadcast');
+            if (msgObj && msgObj.value) setGlobalMessage(msgObj.value);
         }
 
         try {
@@ -234,6 +250,8 @@ const AdminDashboard = () => {
       try {
           await saveAdminConfig('min_car_year', minCarYear, 'Ano mínimo permitido para cadastro de veículos');
           await saveAdminConfig('cost_per_stop', costPerStop, 'Custo adicional cobrado por cada parada extra');
+          await saveAdminConfig('card_machine_fee', cardMachineFee, 'Taxa adicional cobrada por pagamento na maquininha');
+          await saveAdminConfig('global_broadcast', globalMessage, 'Mensagem global exibida para todos os usuários');
           await saveAdminConfig('promotional_banner', JSON.stringify(promoBanner), 'Banner Promocional do App do Cliente');
           showSuccess("Configurações salvas com sucesso!");
       } catch (e: any) {
@@ -314,6 +332,56 @@ const AdminDashboard = () => {
       navigate('/');
   };
 
+  const handleExportCSV = () => {
+      const csvData = rides.map(r => ({
+          ID: r.id,
+          Data: new Date(r.created_at).toLocaleString(),
+          Passageiro: r.customer?.first_name || r.guest_name || '',
+          Motorista: r.driver?.first_name || '',
+          Origem: r.pickup_address,
+          Destino: r.destination_address,
+          Valor: r.price,
+          Status: r.status,
+          Pagamento: r.payment_method
+      }));
+      
+      if(csvData.length === 0) {
+          showError("Não há corridas para exportar.");
+          return;
+      }
+
+      const headers = Object.keys(csvData[0]).join(',');
+      const rows = csvData.map(obj => Object.values(obj).map(val => `"${val}"`).join(','));
+      const csvString = [headers, ...rows].join('\n');
+      
+      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `corridas_export_${new Date().getTime()}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+  };
+
+  const getChartDataByStatus = () => {
+      const counts: Record<string, number> = {};
+      rides.forEach(r => { counts[r.status] = (counts[r.status] || 0) + 1; });
+      return Object.keys(counts).map(k => ({ name: k, value: counts[k] }));
+  };
+
+  const getChartDataByDate = () => {
+      const days: Record<string, number> = {};
+      rides.forEach(r => { 
+          if(r.status === 'COMPLETED') {
+              const date = new Date(r.created_at).toLocaleDateString();
+              days[date] = (days[date] || 0) + Number(r.price);
+          }
+      });
+      return Object.keys(days).slice(0, 7).map(k => ({ data: k, Faturamento: days[k] }));
+  };
+
   const StatCard = ({ title, value, icon: Icon, colorClass }: any) => (
       <Card className="border-0 shadow-lg overflow-hidden relative bg-white">
           <CardContent className="p-6">
@@ -342,7 +410,10 @@ const AdminDashboard = () => {
                  <FileText className="w-5 h-5" /> Solicitações {stats.pendingDrivers > 0 && <Badge className="ml-auto bg-red-500 text-white">{stats.pendingDrivers}</Badge>}
              </button>
              <button onClick={() => setActiveTab('rides')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'rides' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
-                 <MapIcon className="w-5 h-5" /> Corridas
+                 <List className="w-5 h-5" /> Corridas
+             </button>
+             <button onClick={() => setActiveTab('map')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'map' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
+                 <MapIcon className="w-5 h-5" /> Mapa Operacional
              </button>
              <button onClick={() => setActiveTab('users')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'users' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
                  <Users className="w-5 h-5" /> Usuários
@@ -373,14 +444,14 @@ const AdminDashboard = () => {
                                   <Menu className="w-6 h-6 text-slate-700" />
                               </Button>
                           </SheetTrigger>
-                          <SheetContent side="left" className="w-[300px] p-0 border-r-0">
+                          <SheetContent side="left" className="w-[300px] p-0 border-r-0 flex flex-col h-full">
                               <SheetHeader className="p-8 border-b border-slate-100 text-left">
                                   <SheetTitle className="flex items-center gap-3 font-black text-2xl">
                                       <div className="w-10 h-10 bg-yellow-500 rounded-xl flex items-center justify-center text-black shadow-md">G</div>
                                       <span className="text-slate-900">Gold<span className="text-yellow-500">Admin</span></span>
                                   </SheetTitle>
                               </SheetHeader>
-                              <nav className="p-4 space-y-2 overflow-y-auto">
+                              <nav className="p-4 space-y-2 overflow-y-auto flex-1">
                                   <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'overview' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
                                       <LayoutDashboard className="w-5 h-5" /> Painel Geral
                                   </button>
@@ -388,7 +459,10 @@ const AdminDashboard = () => {
                                       <FileText className="w-5 h-5" /> Solicitações {stats.pendingDrivers > 0 && <Badge className="ml-auto bg-red-500 text-white">{stats.pendingDrivers}</Badge>}
                                   </button>
                                   <button onClick={() => setActiveTab('rides')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'rides' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
-                                      <MapIcon className="w-5 h-5" /> Corridas
+                                      <List className="w-5 h-5" /> Corridas
+                                  </button>
+                                  <button onClick={() => setActiveTab('map')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'map' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
+                                      <MapIcon className="w-5 h-5" /> Mapa
                                   </button>
                                   <button onClick={() => setActiveTab('users')} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'users' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}>
                                       <Users className="w-5 h-5" /> Usuários
@@ -400,13 +474,16 @@ const AdminDashboard = () => {
                                       <Ticket className="w-5 h-5" /> Cupons
                                   </button>
                               </nav>
+                              <div className="p-4 border-t border-slate-100 mt-auto">
+                                  <Button variant="ghost" className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-50 font-bold h-12 rounded-xl" onClick={handleLogout}><LogOut className="mr-3 w-5 h-5" /> Sair</Button>
+                              </div>
                           </SheetContent>
                       </Sheet>
                       {/* Fim Menu Mobile Toggle */}
                       
                       <div>
                           <h1 className="text-2xl md:text-3xl font-black tracking-tight text-slate-900">
-                              {activeTab === 'overview' ? 'Painel Geral' : activeTab === 'requests' ? 'Solicitações de Motoristas' : activeTab === 'rides' ? 'Monitor de Corridas' : activeTab === 'users' ? 'Gestão de Usuários' : activeTab === 'coupons' ? 'Promoções e Descontos' : 'Taxas e Configurações'}
+                              {activeTab === 'overview' ? 'Painel Geral' : activeTab === 'requests' ? 'Solicitações' : activeTab === 'rides' ? 'Histórico de Corridas' : activeTab === 'map' ? 'Mapa Operacional' : activeTab === 'users' ? 'Gestão de Usuários' : activeTab === 'coupons' ? 'Promoções e Descontos' : 'Taxas e Configurações'}
                           </h1>
                           <p className="text-slate-500 font-medium mt-1 text-xs md:text-sm">Bem-vindo de volta, Administrador.</p>
                       </div>
@@ -424,10 +501,42 @@ const AdminDashboard = () => {
                           <StatCard title="Novos Cadastros" value={stats.pendingDrivers} icon={UserPlus} colorClass="bg-purple-500" />
                       </div>
 
-                      <Card className="rounded-[32px] border border-slate-100 shadow-xl overflow-hidden bg-white">
-                          <CardHeader className="p-8 border-b border-slate-100"><CardTitle className="text-xl font-black text-slate-900">Corridas em Tempo Real</CardTitle></CardHeader>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+                          <Card className="rounded-[32px] border border-slate-100 shadow-xl bg-white">
+                              <CardHeader><CardTitle className="text-lg font-black">Faturamento Diário (Últimos Dias)</CardTitle></CardHeader>
+                              <CardContent className="h-72">
+                                  <ResponsiveContainer width="100%" height="100%">
+                                      <BarChart data={getChartDataByDate()}>
+                                          <XAxis dataKey="data" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                                          <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `R$${value}`} />
+                                          <RechartsTooltip formatter={(value: any) => [`R$ ${Number(value).toFixed(2)}`, 'Faturamento']} />
+                                          <Bar dataKey="Faturamento" fill="#eab308" radius={[4, 4, 0, 0]} />
+                                      </BarChart>
+                                  </ResponsiveContainer>
+                              </CardContent>
+                          </Card>
+                          <Card className="rounded-[32px] border border-slate-100 shadow-xl bg-white">
+                              <CardHeader><CardTitle className="text-lg font-black">Status das Corridas</CardTitle></CardHeader>
+                              <CardContent className="h-72 flex items-center justify-center">
+                                  <ResponsiveContainer width="100%" height="100%">
+                                      <PieChart>
+                                          <Pie data={getChartDataByStatus()} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                                              {getChartDataByStatus().map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                                          </Pie>
+                                          <RechartsTooltip />
+                                      </PieChart>
+                                  </ResponsiveContainer>
+                              </CardContent>
+                          </Card>
+                      </div>
+
+                      <Card className="rounded-[32px] border border-slate-100 shadow-xl overflow-hidden bg-white mt-8">
+                          <CardHeader className="p-8 border-b border-slate-100 flex flex-row items-center justify-between">
+                              <CardTitle className="text-xl font-black text-slate-900">Corridas Recentes</CardTitle>
+                              <Button variant="outline" size="sm" onClick={() => setActiveTab('rides')}>Ver Todas</Button>
+                          </CardHeader>
                           <Table>
-                              <TableHeader><TableRow className="bg-slate-50 border-0"><TableHead className="pl-8 text-slate-500">ID / Data</TableHead><TableHead className="text-slate-500">Passageiro</TableHead><TableHead className="text-slate-500">Motorista</TableHead><TableHead className="text-slate-500">Valor</TableHead><TableHead className="text-slate-500">Status</TableHead><TableHead className="text-right pr-8 text-slate-500">Ação</TableHead></TableRow></TableHeader>
+                              <TableHeader><TableRow className="bg-slate-50 border-0"><TableHead className="pl-8 text-slate-500">ID / Data</TableHead><TableHead className="text-slate-500">Passageiro</TableHead><TableHead className="text-slate-500">Motorista</TableHead><TableHead className="text-slate-500">Valor</TableHead><TableHead className="text-slate-500">Status</TableHead></TableRow></TableHeader>
                               <TableBody>
                                   {rides.slice(0, 5).map(ride => (
                                       <TableRow key={ride.id} className="border-b border-slate-50 hover:bg-slate-50/50">
@@ -436,7 +545,6 @@ const AdminDashboard = () => {
                                           <TableCell>{ride.driver ? <div className="flex items-center gap-3"><Avatar className="h-8 w-8"><AvatarImage src={ride.driver?.avatar_url} /><AvatarFallback>{ride.driver?.first_name?.[0]}</AvatarFallback></Avatar><span className="font-bold text-sm text-slate-900">{ride.driver?.first_name}</span></div> : <span className="text-xs text-slate-400">Pendente...</span>}</TableCell>
                                           <TableCell className="font-black text-slate-900">R$ {Number(ride.price).toFixed(2)}</TableCell>
                                           <TableCell><Badge className={`text-black font-bold border-0 ${ride.status === 'COMPLETED' ? 'bg-green-100 text-green-700' : ride.status === 'CANCELLED' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>{ride.status}</Badge></TableCell>
-                                          <TableCell className="text-right pr-8"><Button variant="ghost" size="sm" onClick={() => { setActiveTab('rides'); }} className="text-slate-600">Ver Todas</Button></TableCell>
                                       </TableRow>
                                   ))}
                               </TableBody>
@@ -474,7 +582,10 @@ const AdminDashboard = () => {
                   <div className="animate-in fade-in duration-500">
                        <Card className="rounded-[32px] border border-slate-100 shadow-xl overflow-hidden bg-white">
                           <CardHeader className="p-8 border-b border-slate-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                              <div><CardTitle className="text-2xl font-black text-slate-900">Monitoramento de Viagens</CardTitle><CardDescription className="text-slate-500">Acompanhe todas as atividades da plataforma.</CardDescription></div>
+                              <div><CardTitle className="text-2xl font-black text-slate-900">Histórico de Corridas</CardTitle><CardDescription className="text-slate-500">Acompanhe todas as atividades da plataforma.</CardDescription></div>
+                              <Button onClick={handleExportCSV} variant="outline" className="h-10 bg-white border-slate-200 text-slate-700 hover:bg-slate-50 font-bold">
+                                  Exportar CSV
+                              </Button>
                           </CardHeader>
                           <Table>
                               <TableHeader><TableRow className="bg-slate-50"><TableHead className="pl-8 text-slate-500">Início / Destino</TableHead><TableHead className="text-slate-500">Pessoas Envolvidas</TableHead><TableHead className="text-slate-500">Pagamento</TableHead><TableHead className="text-slate-500">Valor</TableHead><TableHead className="text-slate-500">Status</TableHead></TableRow></TableHeader>
@@ -494,6 +605,20 @@ const AdminDashboard = () => {
                   </div>
               )}
 
+              {/* MAPA OPERACIONAL */}
+              {activeTab === 'map' && (
+                  <div className="h-[600px] w-full animate-in slide-in-from-bottom-4 duration-500 rounded-[32px] overflow-hidden shadow-2xl border border-slate-100 relative bg-slate-100">
+                      <div className="absolute top-6 left-6 z-10 bg-white/95 backdrop-blur-md p-5 rounded-2xl shadow-xl border border-slate-100">
+                          <h3 className="font-black text-slate-900 text-xl flex items-center gap-2"><Navigation className="w-5 h-5 text-blue-600" /> Live Tracking</h3>
+                          <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">{drivers.filter(d => d.is_online).length} Motoristas Online</p>
+                      </div>
+                      <GoogleMapComponent 
+                          activeDrivers={drivers.filter(d => d.is_online && d.current_lat && d.current_lng).map(d => ({ id: d.id, lat: d.current_lat, lon: d.current_lng }))}
+                          interactive={true}
+                      />
+                  </div>
+              )}
+
               {/* USERS */}
               {activeTab === 'users' && (
                   <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
@@ -505,14 +630,13 @@ const AdminDashboard = () => {
                           <TabsContent value="drivers">
                               <Card className="rounded-[32px] border border-slate-100 shadow-xl overflow-hidden bg-white">
                                   <Table>
-                                      <TableHeader><TableRow className="bg-slate-50"><TableHead className="pl-8 text-slate-500">Motorista</TableHead><TableHead className="text-slate-500">Veículo</TableHead><TableHead className="text-slate-500">Status</TableHead><TableHead className="text-slate-500">Saldo</TableHead><TableHead className="text-right pr-8 text-slate-500">Ações</TableHead></TableRow></TableHeader>
+                                      <TableHeader><TableRow className="bg-slate-50"><TableHead className="pl-8 text-slate-500">Motorista</TableHead><TableHead className="text-slate-500">Veículo</TableHead><TableHead className="text-slate-500">Status</TableHead><TableHead className="text-right pr-8 text-slate-500">Ações</TableHead></TableRow></TableHeader>
                                       <TableBody>
                                           {drivers.map(d => (
                                               <TableRow key={d.id} className={`border-slate-100 ${d.is_blocked ? 'opacity-60 bg-slate-50' : 'hover:bg-slate-50/50'}`}>
                                                   <TableCell className="pl-8 py-5"><div className="flex items-center gap-4"><Avatar className="h-10 w-10"><AvatarImage src={d.avatar_url} /><AvatarFallback>{d.first_name?.[0]}</AvatarFallback></Avatar><div><p className="font-bold text-slate-900 flex items-center gap-2">{d.first_name} {d.last_name} {d.is_blocked && <Ban className="w-3 h-3 text-red-500" />}</p><p className="text-xs text-slate-500">{d.email}</p></div></div></TableCell>
                                                   <TableCell><p className="text-xs font-bold text-slate-900">{d.car_model || '---'} {d.car_year && `(${d.car_year})`}</p><p className="text-[10px] text-slate-500 uppercase font-mono">{d.car_plate || '---'}</p></TableCell>
                                                   <TableCell><Badge className={`border-0 font-bold ${d.driver_status === 'APPROVED' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{d.driver_status}</Badge></TableCell>
-                                                  <TableCell className="font-bold text-slate-900">R$ {Number(d.balance).toFixed(2)}</TableCell>
                                                   <TableCell className="text-right pr-8 flex items-center justify-end gap-2 py-6">
                                                        <Button variant="outline" size="sm" onClick={() => handleToggleBlock(d)} className={`rounded-xl font-bold ${d.is_blocked ? 'text-green-600 border-green-200 hover:bg-green-50' : 'text-red-600 border-red-200 hover:bg-red-50'}`}>{d.is_blocked ? 'Desbloquear' : 'Bloquear'}</Button>
                                                   </TableCell>
@@ -525,13 +649,12 @@ const AdminDashboard = () => {
                           <TabsContent value="clients">
                               <Card className="rounded-[32px] border border-slate-100 shadow-xl overflow-hidden bg-white">
                                   <Table>
-                                      <TableHeader><TableRow className="bg-slate-50"><TableHead className="pl-8 text-slate-500">Passageiro</TableHead><TableHead className="text-slate-500">Data Cadastro</TableHead><TableHead className="text-slate-500">Saldo Carteira</TableHead><TableHead className="text-right pr-8 text-slate-500">Ações</TableHead></TableRow></TableHeader>
+                                      <TableHeader><TableRow className="bg-slate-50"><TableHead className="pl-8 text-slate-500">Passageiro</TableHead><TableHead className="text-slate-500">Data Cadastro</TableHead><TableHead className="text-right pr-8 text-slate-500">Ações</TableHead></TableRow></TableHeader>
                                       <TableBody>
                                           {passengers.map(p => (
                                               <TableRow key={p.id} className={`border-slate-100 ${p.is_blocked ? 'opacity-60 bg-slate-50' : 'hover:bg-slate-50/50'}`}>
                                                   <TableCell className="pl-8 py-5"><div className="flex items-center gap-4"><Avatar className="h-10 w-10"><AvatarImage src={p.avatar_url} /><AvatarFallback>{p.first_name?.[0]}</AvatarFallback></Avatar><div><p className="font-bold text-slate-900 flex items-center gap-2">{p.first_name} {p.last_name} {p.is_blocked && <Ban className="w-3 h-3 text-red-500" />}</p><p className="text-xs text-slate-500">{p.email}</p></div></div></TableCell>
                                                   <TableCell className="text-slate-500 text-sm font-medium">{new Date(p.created_at).toLocaleDateString()}</TableCell>
-                                                  <TableCell className="font-black text-blue-600">R$ {Number(p.balance).toFixed(2)}</TableCell>
                                                   <TableCell className="text-right pr-8 flex items-center justify-end gap-2 py-6">
                                                        <Button variant="outline" size="sm" onClick={() => handleToggleBlock(p)} className={`rounded-xl font-bold ${p.is_blocked ? 'text-green-600 border-green-200 hover:bg-green-50' : 'text-red-600 border-red-200 hover:bg-red-50'}`}>{p.is_blocked ? 'Desbloquear' : 'Bloquear'}</Button>
                                                   </TableCell>
@@ -606,6 +729,34 @@ const AdminDashboard = () => {
               {activeTab === 'config' && (
                   <div className="space-y-8 animate-in fade-in duration-500">
                       
+                      {/* MENSAGEM GLOBAL */}
+                      <Card className="rounded-[32px] border border-slate-100 shadow-xl overflow-hidden bg-white">
+                          <CardHeader className="p-8 border-b border-slate-100 bg-red-50">
+                              <CardTitle className="text-xl font-black text-red-700 flex items-center gap-2"><BellRing className="w-5 h-5" /> Comunicado Global (Push / Banner)</CardTitle>
+                              <CardDescription className="text-red-900/60 font-medium">Envie um alerta ou recado para aparecer instantaneamente no aplicativo de todos os usuários (motoristas e passageiros).</CardDescription>
+                          </CardHeader>
+                          <CardContent className="p-8">
+                              <div className="flex flex-col md:flex-row items-end gap-4">
+                                  <div className="flex-1 w-full">
+                                      <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Texto da Notificação (Deixe vazio para desativar)</Label>
+                                      <Input 
+                                          value={globalMessage} 
+                                          onChange={(e) => setGlobalMessage(e.target.value)} 
+                                          placeholder="Ex: Alerta: Devido às fortes chuvas, a tarifa dinâmica está ativa."
+                                          className="h-14 font-bold text-slate-900 text-base border-slate-200 bg-white mt-2"
+                                      />
+                                  </div>
+                                  <Button 
+                                      onClick={handleSaveGlobalConfigs} 
+                                      disabled={savingSettings}
+                                      className="h-14 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl px-8 w-full md:w-auto shadow-md"
+                                  >
+                                      {savingSettings ? <Loader2 className="w-5 h-5 animate-spin" /> : "Disparar Alerta"}
+                                  </Button>
+                              </div>
+                          </CardContent>
+                      </Card>
+
                       {/* TARIFA DINÂMICA MULTIPLICADOR */}
                       <Card className="rounded-[32px] border border-slate-100 shadow-xl overflow-hidden bg-white mb-8">
                           <CardHeader className="p-8 border-b border-slate-100 bg-blue-50">
@@ -820,6 +971,18 @@ const AdminDashboard = () => {
                                   </div>
 
                                   <div className="space-y-3 bg-white p-4 rounded-2xl border border-slate-100">
+                                      <Label className="text-xs font-bold text-slate-900 uppercase tracking-widest">Taxa de Maquininha (%)</Label>
+                                      <Input 
+                                          type="number" 
+                                          step="0.01"
+                                          value={cardMachineFee} 
+                                          onChange={(e) => setCardMachineFee(e.target.value)} 
+                                          className="h-14 font-black text-slate-900 text-xl border-slate-200 bg-slate-50"
+                                      />
+                                      <p className="text-xs text-slate-500">Porcentagem cobrada a mais sobre o valor da viagem caso o cliente escolha pagar na maquininha do motorista.</p>
+                                  </div>
+
+                                  <div className="space-y-3 bg-white p-4 rounded-2xl border border-slate-100">
                                       <Label className="text-sm font-bold text-slate-900">Ano Mínimo do Veículo</Label>
                                       <Input 
                                           type="number" 
@@ -922,13 +1085,13 @@ const AdminDashboard = () => {
                                   </div>
                                   <div className="flex items-center justify-between p-5 bg-slate-50 rounded-2xl border border-slate-200 transition-colors hover:bg-slate-100">
                                       <div className="flex gap-4 items-center">
-                                          <div className="p-3 bg-white rounded-xl shadow-sm border border-slate-200"><Wallet className="w-6 h-6 text-blue-600" /></div>
+                                          <div className="p-3 bg-white rounded-xl shadow-sm border border-slate-200"><CreditCard className="w-6 h-6 text-slate-900" /></div>
                                           <div>
-                                              <h4 className="font-black text-slate-900">Carteira (Wallet)</h4>
-                                              <p className="text-sm font-medium text-slate-500">Permitir usar saldo do app.</p>
+                                              <h4 className="font-black text-slate-900">Pagamento na Maquininha</h4>
+                                              <p className="text-sm font-medium text-slate-500">Permitir pagamento com cartão na maquininha do motorista.</p>
                                           </div>
                                       </div>
-                                      <Switch checked={appSettings.enable_wallet} onCheckedChange={() => handleToggleSetting('enable_wallet', appSettings.enable_wallet)} />
+                                      <Switch checked={appSettings.enable_card_machine} onCheckedChange={() => handleToggleSetting('enable_card_machine', appSettings.enable_card_machine)} />
                                   </div>
                               </CardContent>
                           </Card>

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import GoogleMapComponent from "@/components/GoogleMapComponent";
 import { 
-  MapPin, Car, Loader2, Star, ChevronRight, Clock, Wallet, ArrowLeft, History, MessageCircle, CheckCircle2, AlertTriangle, Banknote, XCircle, Ticket, Plus, X, Search, MousePointer2, Gift, Phone, Flag, User, ArrowRight, Navigation, LocateFixed, SearchCode, Map as MapIcon, ShieldAlert, Home, Briefcase, Share2, Info, StickyNote, SeparatorHorizontal, TrendingUp, Map as MapView
+  MapPin, Car, Loader2, Star, ChevronRight, Clock, Wallet, ArrowLeft, History, MessageCircle, CheckCircle2, AlertTriangle, Banknote, XCircle, Ticket, Plus, X, Search, MousePointer2, Gift, Phone, Flag, User, ArrowRight, Navigation, LocateFixed, SearchCode, Map as MapIcon, ShieldAlert, Home, Briefcase, Share2, Info, StickyNote, SeparatorHorizontal, TrendingUp, Map as MapView, CreditCard
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,12 +28,17 @@ import { cn } from "@/lib/utils";
 const ClientDashboard = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { ride, loading: rideLoading, requestRide, cancelRide, rateRide, clearRide, currentUserId, unlockAudio } = useRide();
+  const { ride, loading: rideLoading, requestRide, cancelRide, rateRide, clearRide, currentUserId, unlockAudio, addStopToActiveRide } = useRide();
+  
+  const [isAddingStop, setIsAddingStop] = useState(false);
+  const [newStop, setNewStop] = useState<any>(null);
+  const [isSubmittingStop, setIsSubmittingStop] = useState(false);
   
   const [activeTab, setActiveTab] = useState("home");
   const [step, setStep] = useState<'search' | 'confirm' | 'waiting' | 'active' | 'rating'>('search');
   const [isInitialSync, setIsInitialSync] = useState(true);
   const [isSearchingFull, setIsSearchingFull] = useState(false);
+  const [activeDrivers, setActiveDrivers] = useState<{ id: string, lat: number, lon: number }[]>([]);
   
   // Estados para localização
   const [pickupLocation, setPickupLocation] = useState<{ lat: number, lon: number, display_name: string } | null>(null);
@@ -48,35 +53,34 @@ const ClientDashboard = () => {
   const [routeDistance, setRouteDistance] = useState<number>(0); 
   const [routeDuration, setRouteDuration] = useState<number>(0); 
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
-  const [paymentMethod, setPaymentMethod] = useState<'WALLET' | 'CASH'>('CASH');
-  
+  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD_MACHINE'>('CASH');
   const [isRequesting, setIsRequesting] = useState(false);
   const [calculatingRoute, setCalculatingRoute] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [showChat, setShowChat] = useState(false);
-  const [showBalanceAlert, setShowBalanceAlert] = useState(false);
-  const [missingAmount, setMissingAmount] = useState(0);
 
   const [globalMultiplier, setGlobalMultiplier] = useState(1.0);
   const [costPerStop, setCostPerStop] = useState(2.50);
+  const [cardMachineFee, setCardMachineFee] = useState(0);
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
   const [applyingCoupon, setApplyingCoupon] = useState(false);
 
   const [categories, setCategories] = useState<any[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
-  const [appSettings, setAppSettings] = useState({ enableCash: true, enableWallet: true });
+  const [appSettings, setAppSettings] = useState({ enableCash: true, enableCardMachine: false });
   const [categoryRules, setCategoryRules] = useState<Record<string, any>>({});
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [rating, setRating] = useState(0);
   const [promoBanner, setPromoBanner] = useState<any>(null);
   const [driverStats, setDriverStats] = useState({ total_rides: 0, rating: 5.0, member_since: '' });
+  const [globalBroadcastMessage, setGlobalBroadcastMessage] = useState("");
 
   const dataFetched = useRef(false);
 
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    if (tabParam && ['home', 'history', 'wallet', 'profile'].includes(tabParam)) {
+    if (tabParam && ['home', 'history', 'profile'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [searchParams]);
@@ -183,7 +187,8 @@ const ClientDashboard = () => {
             if (settingsRes.data) {
                 const cash = settingsRes.data.find((s: any) => s.key === 'enable_cash');
                 const wallet = settingsRes.data.find((s: any) => s.key === 'enable_wallet');
-                setAppSettings({ enableCash: cash?.value ?? true, enableWallet: wallet?.value ?? true });
+                const cardMachine = settingsRes.data.find((s: any) => s.key === 'enable_card_machine');
+                setAppSettings({ enableCash: cash?.value ?? true, enableWallet: wallet?.value ?? true, enableCardMachine: cardMachine?.value ?? false });
             }
 
             if (adminConfigRes.data) {
@@ -197,10 +202,16 @@ const ClientDashboard = () => {
                 const stopRes = adminConfigRes.data.find((c: any) => c.key === 'cost_per_stop');
                 if (stopRes && stopRes.value) setCostPerStop(Number(stopRes.value) || 2.50);
 
+                const machineFeeRes = adminConfigRes.data.find((c: any) => c.key === 'card_machine_fee');
+                if (machineFeeRes && machineFeeRes.value) setCardMachineFee(Number(machineFeeRes.value) || 0);
+
                 const bannerRes = adminConfigRes.data.find((c: any) => c.key === 'promotional_banner');
                 if (bannerRes && bannerRes.value) {
                     try { setPromoBanner(JSON.parse(bannerRes.value)); } catch(e) {}
                 }
+
+                const broadcastRes = adminConfigRes.data.find((c: any) => c.key === 'global_broadcast');
+                if (broadcastRes && broadcastRes.value) setGlobalBroadcastMessage(broadcastRes.value);
             }
 
             getCurrentLocation(true);
@@ -272,6 +283,31 @@ const ClientDashboard = () => {
       if (!isRequesting) setStep('search');
     }
   }, [ride, rideLoading, isInitialSync, isRequesting]);
+
+  useEffect(() => {
+      let isMounted = true;
+      if (step !== 'search' && step !== 'waiting') return;
+
+      const fetchDrivers = async () => {
+          try {
+              const { data } = await supabase.from('profiles')
+                  .select('id, current_lat, current_lng, is_online')
+                  .eq('role', 'driver')
+                  .eq('is_online', true)
+                  .not('current_lat', 'is', null)
+                  .not('current_lng', 'is', null)
+                  .limit(10);
+              
+              if (isMounted && data) {
+                  setActiveDrivers(data.map(d => ({ id: d.id, lat: d.current_lat, lon: d.current_lng })));
+              }
+          } catch (e) { console.error("Erro ao buscar motoristas ativos", e); }
+      };
+
+      fetchDrivers();
+      const interval = setInterval(fetchDrivers, 10000); // Atualiza a cada 10 segundos
+      return () => { isMounted = false; clearInterval(interval); };
+  }, [step]);
 
   useEffect(() => {
     let isMounted = true; 
@@ -403,6 +439,13 @@ const ClientDashboard = () => {
       const validStops = stops.filter(s => s && s.lat && s.lon);
       stopsPrice = validStops.length * costPerStop;
       price += stopsPrice;
+      
+      let machineFee = 0;
+      if (paymentMethod === 'CARD_MACHINE') {
+          machineFee = price * (cardMachineFee / 100);
+          price += machineFee;
+      }
+      
       price = price * globalMultiplier;
 
       if (price < appliedMinFare) price = appliedMinFare;
@@ -418,9 +461,10 @@ const ClientDashboard = () => {
           km: kmPrice,
           time: timePrice,
           stops: stopsPrice,
+          machineFee,
           multiplier: globalMultiplier
       };
-  }, [categories, routeDistance, routeDuration, selectedCategoryId, categoryRules, globalMultiplier, appliedCoupon, stops, costPerStop]);
+  }, [categories, routeDistance, routeDuration, selectedCategoryId, categoryRules, globalMultiplier, appliedCoupon, stops, costPerStop, paymentMethod, cardMachineFee]);
 
   const calculatePrice = (catId?: string) => calculatePriceDetails(catId).total;
 
@@ -487,6 +531,17 @@ const ClientDashboard = () => {
       } else showError("Compartilhamento não suportado neste navegador.");
   };
 
+  const handleConfirmNewStop = async () => {
+      if (!newStop || !ride) return;
+      setIsSubmittingStop(true);
+      try {
+          await addStopToActiveRide(ride.id, newStop, costPerStop);
+          setIsAddingStop(false);
+          setNewStop(null);
+      } catch (e) { console.error(e); } 
+      finally { setIsSubmittingStop(false); }
+  };
+
   if (isInitialSync) return <div className="h-screen w-full flex items-center justify-center bg-zinc-950"><Loader2 className="w-10 h-10 animate-spin text-yellow-500" /></div>;
 
   return (
@@ -496,6 +551,7 @@ const ClientDashboard = () => {
             pickupLocation={step === 'confirm' || step === 'active' || mapSelectionMode === 'pickup' ? pickupLocation : null} 
             destinationLocation={step === 'confirm' || step === 'active' || mapSelectionMode === 'destination' ? destLocation : null} 
             driverLocation={ride?.driver_details?.current_lat ? { lat: ride.driver_details.current_lat, lon: ride.driver_details.current_lng } : null}
+            activeDrivers={step === 'search' || step === 'waiting' ? activeDrivers : null}
             stops={stops.length > 0 ? stops : null}
             onMapClick={handleMapClick}
             interactive={!!mapSelectionMode}
@@ -504,6 +560,16 @@ const ClientDashboard = () => {
 
       <img src="/app-logo.png" alt="Gold" className="fixed top-4 left-1/2 -translate-x-1/2 h-8 opacity-90 z-[100] drop-shadow-md rounded-lg" />
       
+      {globalBroadcastMessage && (
+          <div className="fixed top-14 left-4 right-4 z-[100] bg-red-600/90 backdrop-blur-md p-3 rounded-2xl shadow-xl flex items-start gap-3 animate-in slide-in-from-top-4">
+              <BellRing className="w-5 h-5 text-white shrink-0 mt-0.5" />
+              <div className="flex-1">
+                  <p className="text-white font-bold text-sm leading-tight">{globalBroadcastMessage}</p>
+              </div>
+              <button onClick={() => setGlobalBroadcastMessage("")} className="bg-white/20 p-1 rounded-full text-white hover:bg-white/30"><X className="w-4 h-4" /></button>
+          </div>
+      )}
+
       {mapSelectionMode && (
           <div className="absolute inset-0 z-[200] pointer-events-none flex flex-col">
               <div className="bg-slate-900/90 backdrop-blur-md p-6 text-white text-center pt-12 animate-in slide-in-from-top">
@@ -661,6 +727,7 @@ const ClientDashboard = () => {
                                 <div className="flex justify-between"><span>Distância ({routeDistance.toFixed(1)}km)</span><span className="font-bold">R$ {calculatePriceDetails().km.toFixed(2)}</span></div>
                                 <div className="flex justify-between"><span>Tempo ({Math.round(routeDuration)}min)</span><span className="font-bold">R$ {calculatePriceDetails().time.toFixed(2)}</span></div>
                                 {calculatePriceDetails().stops > 0 && <div className="flex justify-between"><span>Paradas</span><span className="font-bold">R$ {calculatePriceDetails().stops.toFixed(2)}</span></div>}
+                                {calculatePriceDetails().machineFee > 0 && <div className="flex justify-between"><span>Taxa Maquininha</span><span className="font-bold">R$ {calculatePriceDetails().machineFee.toFixed(2)}</span></div>}
                                 <Separator className="my-2" />
                                 <div className="flex justify-between text-sm font-black"><span>Total Estimado</span><span>R$ {calculatePriceDetails().total.toFixed(2)}</span></div>
                             </div>
@@ -691,9 +758,9 @@ const ClientDashboard = () => {
                   <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                           <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Pagamento</Label>
-                          <div className="flex gap-2">
-                              {appSettings.enableCash && <button onClick={() => setPaymentMethod('CASH')} className={cn("flex-1 h-12 rounded-2xl border-2 flex items-center justify-center gap-2 transition-all", paymentMethod === 'CASH' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-100 text-slate-400')}><Banknote className="w-4 h-4" /> <span className="text-[10px] font-black">DINHEIRO</span></button>}
-                              {appSettings.enableWallet && <button onClick={() => setPaymentMethod('WALLET')} className={cn("flex-1 h-12 rounded-2xl border-2 flex items-center justify-center gap-2 transition-all", paymentMethod === 'WALLET' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-100 text-slate-400')}><Wallet className="w-4 h-4" /> <span className="text-[10px] font-black">CARTEIRA</span></button>}
+                          <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-1">
+                              {appSettings.enableCash && <button onClick={() => setPaymentMethod('CASH')} className={cn("shrink-0 px-4 h-12 rounded-2xl border-2 flex items-center justify-center gap-2 transition-all", paymentMethod === 'CASH' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-100 text-slate-400')}><Banknote className="w-4 h-4" /> <span className="text-[10px] font-black">DINHEIRO</span></button>}
+                              {appSettings.enableCardMachine && <button onClick={() => setPaymentMethod('CARD_MACHINE')} className={cn("shrink-0 px-4 h-12 rounded-2xl border-2 flex items-center justify-center gap-2 transition-all", paymentMethod === 'CARD_MACHINE' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-100 text-slate-400')}><CreditCard className="w-4 h-4" /> <span className="text-[10px] font-black">MAQUININHA {cardMachineFee > 0 && `(+${cardMachineFee}%)`}</span></button>}
                           </div>
                       </div>
                       <div className="space-y-1.5">
@@ -754,7 +821,14 @@ const ClientDashboard = () => {
                           </Button>
                       </div>
                   </div>
-                  <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                  <div className="flex flex-col gap-3">
+                      {ride.status === 'IN_PROGRESS' && (
+                          <Button variant="outline" className="w-full border-slate-200 text-slate-700 font-bold text-xs h-12 rounded-2xl bg-slate-50" onClick={() => setIsAddingStop(true)}>
+                              <Plus className="w-4 h-4 mr-2" /> Adicionar Parada (R$ {costPerStop.toFixed(2)})
+                          </Button>
+                      )}
+                  </div>
+                  <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-100">
                       <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Pagamento</p><p className="font-black text-slate-900">{ride.payment_method}</p></div>
                       <div className="text-right"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total</p><p className="text-3xl font-black text-slate-900">R$ {Number(ride.price).toFixed(2)}</p></div>
                   </div>
@@ -813,21 +887,22 @@ const ClientDashboard = () => {
          )}
       </div>
 
-      <Dialog open={showBalanceAlert} onOpenChange={setShowBalanceAlert}>
-          <DialogContent className="max-w-sm rounded-[32px] border-0 shadow-2xl p-8">
-              <div className="text-center">
-                  <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6"><Wallet className="w-10 h-10 text-red-600" /></div>
-                  <DialogTitle className="text-2xl font-black text-slate-900 mb-2">Saldo Insuficiente</DialogTitle>
-                  <DialogDescription className="font-medium text-slate-500 mb-6">Faltam R$ {missingAmount.toFixed(2)} para realizar esta corrida. Deseja recarregar?</DialogDescription>
-                  <div className="space-y-3">
-                      <Button className="w-full h-14 bg-black text-white font-black rounded-2xl" onClick={() => navigate('/wallet')}>RECARREGAR AGORA</Button>
-                      <Button variant="ghost" className="w-full h-14 text-slate-500 font-bold" onClick={() => { setPaymentMethod('CASH'); setShowBalanceAlert(false); }}>ALTERAR PARA DINHEIRO</Button>
-                  </div>
+      <Dialog open={isAddingStop} onOpenChange={(open) => { if(!open) { setIsAddingStop(false); setNewStop(null); } }}>
+          <DialogContent className="max-w-xs bg-white rounded-[32px] border-0 shadow-2xl p-6">
+              <DialogTitle className="text-xl font-black text-slate-900 mb-2">Adicionar Parada</DialogTitle>
+              <DialogDescription className="text-sm font-medium text-slate-500 mb-4">
+                  O valor da corrida aumentará em <strong>R$ {costPerStop.toFixed(2)}</strong>. O motorista será notificado.
+              </DialogDescription>
+              <div className="space-y-4">
+                  <GoogleLocationSearch placeholder="Busque o endereço" onSelect={setNewStop} className="w-full" />
+                  <Button className="w-full h-14 bg-black text-white font-black rounded-2xl shadow-xl" onClick={handleConfirmNewStop} disabled={!newStop || isSubmittingStop}>
+                      {isSubmittingStop ? <Loader2 className="w-6 h-6 animate-spin" /> : "CONFIRMAR PARADA"}
+                  </Button>
               </div>
           </DialogContent>
       </Dialog>
 
-      {!mapSelectionMode && <FloatingDock activeTab={activeTab} onTabChange={tab => { if(tab === 'profile') navigate('/profile'); else if(tab === 'wallet') navigate('/wallet'); else setActiveTab(tab); }} role="client" />}
+      {!mapSelectionMode && <FloatingDock activeTab={activeTab} onTabChange={tab => { if(tab === 'profile') navigate('/profile'); else setActiveTab(tab); }} role="client" />}
 
       {showChat && ride && currentUserId && (
           <RideChat 

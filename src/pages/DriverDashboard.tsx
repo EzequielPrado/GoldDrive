@@ -6,7 +6,7 @@ import {
   MessageCircle, Phone, Smartphone, Map, Flag, CheckCircle2, UserPlus, 
   Clock, X, MousePointer2, Loader2, ChevronRight, Banknote, XCircle, 
   Zap, Plus, StickyNote, TrendingUp, Calendar, Filter, ShieldAlert, 
-  Target, Check, Pencil, User 
+  Target, Check, Pencil, User, CreditCard 
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -60,6 +60,7 @@ const DriverDashboard = () => {
   const [showManualRide, setShowManualRide] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [trackingActive, setTrackingActive] = useState(false);
+  const [globalBroadcastMessage, setGlobalBroadcastMessage] = useState("");
   
   // Estados para Marcação no Mapa (Motorista)
   const [mapSelectionMode, setMapSelectionMode] = useState<string | null>(null);
@@ -241,6 +242,9 @@ const DriverDashboard = () => {
 
               const stopRes = adminConfigRes.data.find((c: any) => c.key === 'cost_per_stop');
               if (stopRes && stopRes.value) setCostPerStop(Number(stopRes.value) || 2.50);
+
+              const broadcastRes = adminConfigRes.data.find((c: any) => c.key === 'global_broadcast');
+              if (broadcastRes && broadcastRes.value) setGlobalBroadcastMessage(broadcastRes.value);
           }
       };
       fetchPricing();
@@ -579,7 +583,18 @@ const DriverDashboard = () => {
       )}
 
       {activeTab === 'home' && !isOnTrip && !isCompleted && !isCancelled && isOnline && !mapSelectionMode && (
-          <div className="absolute top-24 left-4 right-4 z-20 pointer-events-auto animate-in slide-in-from-top-4">
+          <div className="absolute top-20 left-4 right-4 z-20 pointer-events-auto flex flex-col gap-4 animate-in slide-in-from-top-4">
+              
+              {globalBroadcastMessage && (
+                  <div className="bg-red-600/90 backdrop-blur-md p-3 rounded-2xl shadow-xl flex items-start gap-3">
+                      <BellRing className="w-5 h-5 text-white shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                          <p className="text-white font-bold text-sm leading-tight">{globalBroadcastMessage}</p>
+                      </div>
+                      <button onClick={() => setGlobalBroadcastMessage("")} className="bg-white/20 p-1 rounded-full text-white hover:bg-white/30"><X className="w-4 h-4" /></button>
+                  </div>
+              )}
+
               <div className="bg-white/90 backdrop-blur-xl rounded-3xl p-5 shadow-xl border border-white/50">
                   <div className="flex justify-between items-center mb-4">
                       <div className="flex flex-col">
@@ -685,7 +700,11 @@ const DriverDashboard = () => {
                 {isOnTrip && (
                     <div className="bg-white p-6 rounded-[32px] shadow-2xl border border-gray-100 mt-auto animate-in zoom-in-95">
                         <div className="flex items-center justify-between mb-6">
-                            <Badge className="bg-yellow-500 text-black font-black uppercase tracking-widest text-[10px] px-3 py-1">{ride?.status === 'ACCEPTED' ? 'A CAMINHO' : ride?.status === 'ARRIVED' ? 'NO LOCAL' : 'EM VIAGEM'}</Badge>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <Badge className="bg-yellow-500 text-black font-black uppercase tracking-widest text-[10px] px-3 py-1">{ride?.status === 'ACCEPTED' ? 'A CAMINHO' : ride?.status === 'ARRIVED' ? 'NO LOCAL' : 'EM VIAGEM'}</Badge>
+                                {ride?.payment_method === 'CARD_MACHINE' && <Badge className="bg-slate-900 text-white font-black uppercase tracking-widest text-[10px] px-2 py-1 flex items-center gap-1"><CreditCard className="w-3 h-3"/> MAQUININHA</Badge>}
+                                {ride?.payment_method === 'CASH' && <Badge className="bg-green-600 text-white font-black uppercase tracking-widest text-[10px] px-2 py-1 flex items-center gap-1"><Banknote className="w-3 h-3"/> DINHEIRO</Badge>}
+                            </div>
                             <span className="font-black text-lg">R$ {Number(ride?.price).toFixed(2)}</span>
                         </div>
                         <ScrollArea className="max-h-[35vh]">
@@ -812,9 +831,16 @@ const DriverDashboard = () => {
                           <div className="flex justify-between items-center">
                               <div className="flex items-center gap-3">
                                   <Avatar className="w-12 h-12 border-2 border-yellow-500"><AvatarImage src={r.client_details?.avatar_url} /><AvatarFallback className="font-bold bg-slate-100">{r.client_details?.first_name?.[0]}</AvatarFallback></Avatar>
-                                  <div><p className="font-black text-slate-900 text-lg leading-tight">{r.client_details?.first_name}</p><Badge className="bg-slate-900 text-white text-[9px] px-2 py-0.5 uppercase">{r.category}</Badge></div>
+                                  <div>
+                                      <p className="font-black text-slate-900 text-lg leading-tight">{r.client_details?.first_name}</p>
+                                      <div className="flex flex-wrap gap-1 mt-1">
+                                          <Badge className="bg-slate-900 text-white text-[9px] px-2 py-0.5 uppercase">{r.category}</Badge>
+                                          {r.payment_method === 'CARD_MACHINE' && <Badge className="bg-slate-900 text-white text-[9px] px-2 py-0.5 uppercase flex items-center gap-1"><CreditCard className="w-2.5 h-2.5"/> MAQUININHA</Badge>}
+                                          {r.payment_method === 'CASH' && <Badge className="bg-green-600 text-white text-[9px] px-2 py-0.5 uppercase flex items-center gap-1"><Banknote className="w-2.5 h-2.5"/> DINHEIRO</Badge>}
+                                      </div>
+                                  </div>
                               </div>
-                              <div className="text-right"><p className="text-[10px] font-bold text-gray-400 uppercase mb-0.5">Valor</p><span className="text-2xl font-black text-green-600">R$ {Number(r.price).toFixed(2)}</span></div>
+                              <div className="text-right shrink-0"><p className="text-[10px] font-bold text-gray-400 uppercase mb-0.5">Valor</p><span className="text-xl font-black text-green-600">R$ {Number(r.price).toFixed(2)}</span></div>
                           </div>
                           <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-3">
                               <p className="text-xs font-bold text-slate-700 line-clamp-1">📍 {r.pickup_address}</p>
@@ -924,7 +950,7 @@ const DriverDashboard = () => {
           </DialogContent>
       </Dialog>
 
-      {!mapSelectionMode && <FloatingDock activeTab={activeTab} onTabChange={tab => { if(tab === 'profile') navigate('/profile'); else if(tab === 'wallet') navigate('/wallet'); else setActiveTab(tab); }} role="driver" />}
+      {!mapSelectionMode && <FloatingDock activeTab={activeTab} onTabChange={tab => { if(tab === 'profile') navigate('/profile'); else setActiveTab(tab); }} role="driver" />}
       
       {showChat && ride && currentUserId && (<RideChat rideId={ride.id} currentUserId={currentUserId} role="driver" otherUserName={ride.client_details?.first_name || 'Passageiro'} otherUserAvatar={ride.client_details?.avatar_url} onClose={() => setShowChat(false)} />)}
     </div>

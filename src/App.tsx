@@ -18,7 +18,6 @@ import ClientDashboard from "./pages/ClientDashboard";
 import DriverDashboard from "./pages/DriverDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import Profile from "./pages/Profile";
-import Wallet from "./pages/Wallet";
 import NotFound from "./pages/NotFound";
 import DriverPending from "./pages/DriverPending";
 
@@ -90,12 +89,6 @@ const App = () => {
                       <Route path="/profile" element={
                         <ProtectedRoute allowedRoles={['client', 'driver', 'admin']}>
                           <Profile />
-                        </ProtectedRoute>
-                      } />
-                      
-                      <Route path="/wallet" element={
-                        <ProtectedRoute allowedRoles={['client', 'driver', 'admin']}>
-                          <Wallet />
                         </ProtectedRoute>
                       } />
 

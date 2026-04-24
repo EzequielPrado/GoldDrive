@@ -8,6 +8,7 @@ interface MapProps {
   pickupLocation?: { lat: number; lon: number } | null;
   destinationLocation?: { lat: number; lon: number } | null;
   driverLocation?: { lat: number; lon: number } | null;
+  activeDrivers?: { id: string; lat: number; lon: number }[] | null;
   stops?: { lat: number; lon: number }[] | null;
   onMapClick?: (lat: number, lng: number) => void;
   interactive?: boolean;
@@ -70,6 +71,7 @@ const GoogleMapComponent = ({
     pickupLocation, 
     destinationLocation,
     driverLocation,
+    activeDrivers,
     stops,
     onMapClick,
     interactive = false
@@ -131,6 +133,19 @@ const GoogleMapComponent = ({
                 }}
             />
         )}
+
+        {/* MARCADORES DE MOTORISTAS DISPONÍVEIS (CARRINHOS NO MAPA) */}
+        {activeDrivers && !driverLocation && activeDrivers.map(driver => (
+            <Marker 
+                key={driver.id}
+                position={{ lat: driver.lat, lng: driver.lon }}
+                icon={{
+                    url: "https://cdn-icons-png.flaticon.com/512/3082/3082349.png", 
+                    scaledSize: new google.maps.Size(35, 35),
+                    anchor: new google.maps.Point(17.5, 17.5)
+                }}
+            />
+        ))}
       </Map>
     </div>
   );
