@@ -47,7 +47,7 @@ const AdminDashboard = () => {
   // Configurações e Categorias (Taxas)
   const [carCategories, setCarCategories] = useState<any[]>([]);
   const [categoryRules, setCategoryRules] = useState<Record<string, any>>({});
-  const [appSettings, setAppSettings] = useState({ enable_cash: true, enable_wallet: true, enable_card_machine: false });
+  const [appSettings, setAppSettings] = useState({ enable_cash: true, enable_card_machine: false });
   const [cardMachineFee, setCardMachineFee] = useState("0.00");
   const [minCarYear, setMinCarYear] = useState("2010"); 
   const [globalMultiplier, setGlobalMultiplier] = useState("1.0");
@@ -101,14 +101,11 @@ const AdminDashboard = () => {
         const { data: cats } = await supabase.from('car_categories').select('*').order('base_fare', { ascending: true });
         if (cats) setCarCategories(cats);
 
-        const { data: settings } = await supabase.from('app_settings').select('*');
         if (settings) {
             const cashObj = settings.find(s => s.key === 'enable_cash');
-            const walletObj = settings.find(s => s.key === 'enable_wallet');
             const cardMachineObj = settings.find(s => s.key === 'enable_card_machine');
             setAppSettings({
                 enable_cash: cashObj ? cashObj.value : true,
-                enable_wallet: walletObj ? walletObj.value : true,
                 enable_card_machine: cardMachineObj ? cardMachineObj.value : false
             });
         }

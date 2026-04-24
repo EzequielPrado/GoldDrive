@@ -139,7 +139,7 @@ const DriverDashboard = () => {
 
   useEffect(() => {
       const tabParam = searchParams.get('tab');
-      if (tabParam && ['home', 'history', 'wallet', 'profile'].includes(tabParam)) setActiveTab(tabParam);
+      if (tabParam && ['home', 'history', 'profile'].includes(tabParam)) setActiveTab(tabParam);
   }, [searchParams]);
 
   useEffect(() => { checkProfile(); }, [activeTab]);

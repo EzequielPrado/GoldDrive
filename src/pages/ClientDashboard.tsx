@@ -186,9 +186,8 @@ const ClientDashboard = () => {
             
             if (settingsRes.data) {
                 const cash = settingsRes.data.find((s: any) => s.key === 'enable_cash');
-                const wallet = settingsRes.data.find((s: any) => s.key === 'enable_wallet');
                 const cardMachine = settingsRes.data.find((s: any) => s.key === 'enable_card_machine');
-                setAppSettings({ enableCash: cash?.value ?? true, enableWallet: wallet?.value ?? true, enableCardMachine: cardMachine?.value ?? false });
+                setAppSettings({ enableCash: cash?.value ?? true, enableCardMachine: cardMachine?.value ?? false });
             }
 
             if (adminConfigRes.data) {
@@ -479,12 +478,6 @@ const ClientDashboard = () => {
 
     const validStops = stops.filter(s => s && s.lat && s.lon);
     const price = calculatePrice();
-    
-    if (paymentMethod === 'WALLET' && (userProfile?.balance || 0) < price) { 
-        setMissingAmount(price - (userProfile?.balance || 0)); 
-        setShowBalanceAlert(true); 
-        return; 
-    }
     
     setIsRequesting(true);
     try { 
