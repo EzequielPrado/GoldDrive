@@ -101,6 +101,8 @@ const AdminDashboard = () => {
         const { data: cats } = await supabase.from('car_categories').select('*').order('base_fare', { ascending: true });
         if (cats) setCarCategories(cats);
 
+        const { data: settings } = await supabase.from('app_settings').select('*');
+
         if (settings) {
             const cashObj = settings.find(s => s.key === 'enable_cash');
             const cardMachineObj = settings.find(s => s.key === 'enable_card_machine');
