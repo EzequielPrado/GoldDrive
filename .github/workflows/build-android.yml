@@ -18,7 +18,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'npm'
 
       - name: Setup Java (Android SDK)
         uses: actions/setup-java@v4
@@ -41,6 +40,9 @@ jobs:
 
       - name: Sync Capacitor
         run: npx cap sync android
+
+      - name: Gerar ícones e splash screen
+        run: npx capacitor-assets generate --android
 
       - name: Tornar Gradlew executável
         run: chmod +x android/gradlew
