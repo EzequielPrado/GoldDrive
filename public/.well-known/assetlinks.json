@@ -1,0 +1,15 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "br.com.goldmobilidade.twa",
+      "sha256_cert_fingerprints": [
+        "2C:A1:9E:46:C9:58:DE:F5:85:9E:72:C2:45:E5:24:7E:29:2F:0E:22:45:69:5C:6C:BA:3E:F4:DF:85:34:E0:0A"
+      ]
+    }
+  }
+]
