@@ -1,4 +1,4 @@
-package com.golddrive.app;
+package br.com.goldmobilidade.twa;
 
 import com.getcapacitor.BridgeActivity;
 
