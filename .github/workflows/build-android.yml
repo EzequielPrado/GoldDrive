@@ -30,7 +30,9 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Instalar dependências
-        run: npm ci
+        run: |
+          rm -f package-lock.json
+          npm install
 
       - name: Build do projeto Web
         env:
