@@ -73,9 +73,19 @@ jobs:
         working-directory: android
         run: ./gradlew bundleRelease
 
-      - name: Upload AAB (Play Store)
+      - name: Sign AAB (Google Play Store)
+        uses: r0adkll/sign-android-release@v1
+        id: sign_aab
+        with:
+          releaseDirectory: android/app/build/outputs/bundle/release
+          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+
+      - name: Upload AAB Assinado (Play Store)
         uses: actions/upload-artifact@v4
         with:
-          name: GoldDrive-release-bundle
-          path: android/app/build/outputs/bundle/release/app-release.aab
+          name: GoldDrive-release-bundle-signed
+          path: ${{steps.sign_aab.outputs.signedReleaseFile}}
           retention-days: 30

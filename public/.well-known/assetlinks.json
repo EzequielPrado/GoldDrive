@@ -6,9 +6,9 @@
     ],
     "target": {
       "namespace": "android_app",
-      "package_name": "br.com.goldmobilidade.twa",
+      "package_name": "com.golddrive.app",
       "sha256_cert_fingerprints": [
-        "2C:A1:9E:46:C9:58:DE:F5:85:9E:72:C2:45:E5:24:7E:29:2F:0E:22:45:69:5C:6C:BA:3E:F4:DF:85:34:E0:0A"
+        "CA:A9:63:8C:10:6E:DC:8A:8B:03:D0:EA:55:E3:E7:31:4A:C3:DF:76:ED:D0:8C:4D:F7:A4:BC:F2:92:83:51:F6"
       ]
     }
   }
