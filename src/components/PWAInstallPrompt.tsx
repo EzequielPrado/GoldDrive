@@ -88,7 +88,7 @@ const PWAInstallPrompt = ({ openForce, onCloseForce }: PWAProps) => {
                     <p className="text-slate-600">Clique abaixo para instalar automaticamente:</p>
                     <Button 
                         onClick={handleInstallClick}
-                        className="w-full h-16 rounded-2xl bg-black text-white hover:bg-zinc-800 font-black text-lg shadow-xl flex items-center justify-center gap-3 animate-pulse"
+                        className="w-full h-16 rounded-2xl bg-slate-900 text-white hover:bg-zinc-800 font-black text-lg shadow-xl flex items-center justify-center gap-3 animate-pulse"
                     >
                         <Smartphone className="w-6 h-6" /> INSTALAR AGORA
                     </Button>
@@ -150,7 +150,7 @@ const PWAInstallPrompt = ({ openForce, onCloseForce }: PWAProps) => {
         </div>
 
         <div className="p-6 pt-0">
-            <Button onClick={handleDismiss} variant={deferredPrompt ? "ghost" : "default"} className={`w-full h-14 rounded-2xl font-bold text-lg ${deferredPrompt ? 'text-gray-500' : 'bg-black text-white hover:bg-zinc-800'}`}>
+            <Button onClick={handleDismiss} variant={deferredPrompt ? "ghost" : "default"} className={`w-full h-14 rounded-2xl font-bold text-lg ${deferredPrompt ? 'text-gray-500' : 'bg-slate-900 text-white hover:bg-zinc-800'}`}>
                 {deferredPrompt ? "Agora não" : "Entendi"}
             </Button>
         </div>

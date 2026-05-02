@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import GoogleLocationSearch from "@/components/GoogleLocationSearch";
 import { cn } from "@/lib/utils";
+import { getCurrentPosition } from "@/utils/native";
 
 const NavigationBlock = ({ label, lat, lng, address, icon: Icon = MapPin }: any) => {
     const openMap = (app: 'waze' | 'google') => {
@@ -105,19 +106,24 @@ const DriverDashboard = () => {
         return;
     }
 
-    const updateLocation = () => {
-        navigator.geolocation.getCurrentPosition(async (pos) => {
-            const { error } = await supabase.from('profiles').update({
-                current_lat: pos.coords.latitude,
-                current_lng: pos.coords.longitude,
-                last_active: new Date().toISOString()
-            }).eq('id', currentUserId);
-            
-            if (!error) setTrackingActive(true);
-        }, (err) => {
+    const updateLocation = async () => {
+        try {
+            const pos = await getCurrentPosition();
+            if (pos) {
+                const { error } = await supabase.from('profiles').update({
+                    current_lat: pos.lat,
+                    current_lng: pos.lng,
+                    last_active: new Date().toISOString()
+                }).eq('id', currentUserId);
+                
+                if (!error) setTrackingActive(true);
+            } else {
+                setTrackingActive(false);
+            }
+        } catch (err) {
             console.error("Erro GPS:", err);
             setTrackingActive(false);
-        }, { enableHighAccuracy: true });
+        }
     };
 
     updateLocation();
@@ -484,17 +490,21 @@ const DriverDashboard = () => {
       }
   };
 
-  const getCurrentLocation = () => {
+  const getCurrentLocation = async () => {
       setGpsLoading(true);
-      navigator.geolocation.getCurrentPosition(async (pos) => {
+      const pos = await getCurrentPosition();
+      if (pos) {
           const geocoder = new google.maps.Geocoder();
-          geocoder.geocode({ location: { lat: pos.coords.latitude, lng: pos.coords.longitude } }, (results, status) => {
+          geocoder.geocode({ location: { lat: pos.lat, lng: pos.lng } }, (results, status) => {
               if (status === 'OK' && results?.[0]) {
-                  setPickupLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude, display_name: results[0].formatted_address });
+                  setPickupLocation({ lat: pos.lat, lon: pos.lng, display_name: results[0].formatted_address });
               }
               setGpsLoading(false);
           });
-      }, (error) => { setGpsLoading(false); showError("GPS desativado."); }, { enableHighAccuracy: true });
+      } else {
+          setGpsLoading(false);
+          showError("Ative a localização do seu dispositivo.");
+      }
   };
 
   const isOnTrip = !!ride && ['ACCEPTED', 'ARRIVED', 'IN_PROGRESS'].includes(ride?.status || '');
@@ -686,7 +696,7 @@ const DriverDashboard = () => {
                     <div className="bg-white p-8 rounded-[32px] shadow-2xl text-center border border-gray-100 mt-auto animate-in zoom-in-95">
                         <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6"><XCircle className="w-10 h-10 text-red-600" /></div>
                         <h2 className="text-3xl font-black text-slate-900 mb-2">Corrida Cancelada</h2>
-                        <Button className="w-full h-14 bg-black text-white font-bold rounded-2xl shadow-xl" onClick={() => clearRide()}>VOLTAR</Button>
+                        <Button className="w-full h-14 bg-slate-900 text-white font-bold rounded-2xl shadow-xl" onClick={() => clearRide()}>VOLTAR</Button>
                     </div>
                 )}
 
@@ -694,8 +704,41 @@ const DriverDashboard = () => {
                     <div className="bg-white p-8 rounded-[32px] shadow-2xl text-center border border-gray-100 mt-auto animate-in zoom-in-95">
                         <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"><DollarSign className="w-10 h-10 text-green-600" /></div>
                         <h2 className="text-3xl font-black text-slate-900 mb-2">R$ {Number(ride.price).toFixed(2)}</h2>
-                        <div className="flex justify-center gap-3 mb-6">{[1,2,3,4,5].map(star => (<button key={star} onClick={() => setRating(star)} className="transition-transform active:scale-90"><Star className={`w-10 h-10 ${rating >= star ? 'fill-yellow-500 text-yellow-500' : 'text-gray-200'}`} /></button>))}</div>
-                        <Button className="w-full h-14 bg-black text-white font-bold rounded-2xl shadow-xl" onClick={async () => { await rateRide(ride.id, rating || 5, true); clearRide(); setRating(0); }}>PRÓXIMA CORRIDA</Button>
+                        
+                        {ride.ride_type === 'MANUAL' ? (
+                            <div className="mb-6 space-y-3">
+                                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Forma de Pagamento</p>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button 
+                                        onClick={() => setManualPaymentMethod('CASH')}
+                                        className={cn(
+                                            "flex items-center justify-center gap-2 h-12 rounded-xl border-2 transition-all font-bold text-xs",
+                                            manualPaymentMethod === 'CASH' ? "bg-green-50 border-green-500 text-green-700 shadow-sm" : "bg-white border-slate-100 text-slate-400"
+                                        )}
+                                    >
+                                        <Banknote className="w-4 h-4" /> Dinheiro
+                                    </button>
+                                    <button 
+                                        onClick={() => setManualPaymentMethod('CARD_MACHINE')}
+                                        className={cn(
+                                            "flex items-center justify-center gap-2 h-12 rounded-xl border-2 transition-all font-bold text-xs",
+                                            manualPaymentMethod === 'CARD_MACHINE' ? "bg-slate-900 border-slate-900 text-white shadow-lg" : "bg-white border-slate-100 text-slate-400"
+                                        )}
+                                    >
+                                        <CreditCard className="w-4 h-4" /> Cartão
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex justify-center gap-3 mb-6">{[1,2,3,4,5].map(star => (<button key={star} onClick={() => setRating(star)} className="transition-transform active:scale-90"><Star className={`w-10 h-10 ${rating >= star ? 'fill-yellow-500 text-yellow-500' : 'text-gray-200'}`} /></button>))}</div>
+                        )}
+
+                        <Button className="w-full h-14 bg-slate-900 text-white font-bold rounded-2xl shadow-xl" onClick={async () => { 
+                            if (ride.ride_type === 'MANUAL') {
+                                await supabase.from('rides').update({ payment_method: manualPaymentMethod }).eq('id', ride.id);
+                            }
+                            await rateRide(ride.id, rating || 5, true); clearRide(); setRating(0); 
+                        }}>PRÓXIMA CORRIDA</Button>
                     </div>
                 )}
 
@@ -917,30 +960,6 @@ const DriverDashboard = () => {
                       </div>
                   </div>
 
-                  <div className="space-y-3">
-                      <Label className="text-[10px] font-black uppercase text-slate-400 ml-1 tracking-widest">Forma de Pagamento</Label>
-                      <div className="grid grid-cols-2 gap-3">
-                          <button 
-                            onClick={() => setManualPaymentMethod('CASH')}
-                            className={cn(
-                                "flex items-center justify-center gap-2 h-14 rounded-2xl border-2 transition-all font-bold",
-                                manualPaymentMethod === 'CASH' ? "bg-green-50 border-green-500 text-green-700 shadow-sm" : "bg-white border-slate-100 text-slate-400"
-                            )}
-                          >
-                              <Banknote className="w-5 h-5" /> Dinheiro
-                          </button>
-                          <button 
-                            onClick={() => setManualPaymentMethod('CARD_MACHINE')}
-                            className={cn(
-                                "flex items-center justify-center gap-2 h-14 rounded-2xl border-2 transition-all font-bold",
-                                manualPaymentMethod === 'CARD_MACHINE' ? "bg-slate-900 border-slate-900 text-white shadow-lg" : "bg-white border-slate-100 text-slate-400"
-                            )}
-                          >
-                              <CreditCard className="w-5 h-5" /> Cartão
-                          </button>
-                      </div>
-                  </div>
-
                   {pickupLocation && destLocation && (
                       <div className="bg-yellow-50 p-6 rounded-[28px] border-2 border-yellow-200 text-center animate-in zoom-in-95">
                           {manualLoading ? (
@@ -950,12 +969,12 @@ const DriverDashboard = () => {
                               </div>
                           ) : (
                               <>
-                                  <p className="text-[10px] font-black text-yellow-700 uppercase tracking-widest mb-1">Valor da Corrida</p>
-                                  <h3 className="text-5xl font-black text-black tracking-tighter">R$ {calculatePrice().toFixed(2)}</h3>
-                                  <div className="flex justify-center gap-3 mt-3">
-                                      <Badge className="bg-white/50 text-yellow-800 font-bold border-yellow-200">{routeDistance.toFixed(1)} km</Badge>
-                                      <Badge className="bg-white/50 text-yellow-800 font-bold border-yellow-200">{Math.round(routeDuration)} min</Badge>
+                                  <p className="text-[10px] font-black text-yellow-700 uppercase tracking-widest mb-2">Trajeto Calculado</p>
+                                  <div className="flex justify-center gap-3">
+                                      <Badge className="bg-white/50 text-yellow-800 font-bold border-yellow-200 text-sm py-1">{routeDistance.toFixed(1)} km</Badge>
+                                      <Badge className="bg-white/50 text-yellow-800 font-bold border-yellow-200 text-sm py-1">{Math.round(routeDuration)} min</Badge>
                                   </div>
+                                  <p className="text-xs font-bold text-yellow-700 mt-4">O valor da corrida e a forma de pagamento serão exibidos no final da viagem.</p>
                               </>
                           )}
                       </div>
@@ -965,7 +984,7 @@ const DriverDashboard = () => {
                   <div className="flex gap-3 w-full">
                       <Button variant="ghost" className="flex-1 h-14 rounded-2xl font-bold text-slate-400" onClick={() => setShowManualRide(false)}>CANCELAR</Button>
                       <Button 
-                        className="flex-[2] h-14 bg-black text-white font-black rounded-2xl shadow-xl text-lg disabled:opacity-50" 
+                        className="flex-[2] h-14 bg-slate-900 text-white font-black rounded-2xl shadow-xl text-lg disabled:opacity-50" 
                         onClick={handleCreateManual} 
                         disabled={manualLoading || !destLocation || !passengerName || !pickupLocation}
                       >

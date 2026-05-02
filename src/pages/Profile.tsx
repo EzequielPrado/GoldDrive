@@ -239,7 +239,7 @@ const Profile = () => {
             <div className="mt-16 text-center">
                 <h1 className="text-2xl font-black text-slate-900 leading-tight mb-1">{profile.first_name} {profile.last_name}</h1>
                 <div className="flex items-center justify-center gap-2 mb-6">
-                    <Badge className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${profile.role === 'driver' ? 'bg-black text-white' : 'bg-blue-600 text-white'}`}>
+                    <Badge className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${profile.role === 'driver' ? 'bg-slate-900 text-white' : 'bg-blue-600 text-white'}`}>
                         {profile.role === 'driver' ? 'Motorista' : 'Passageiro'}
                     </Badge>
                     {profile.role === 'driver' && (

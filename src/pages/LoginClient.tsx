@@ -97,7 +97,7 @@ const LoginClient = () => {
                             )}
                         </div>
 
-                        <Button className="w-full h-14 text-lg font-bold rounded-2xl bg-black text-white hover:bg-zinc-800 transition-all" disabled={loading}>
+                        <Button className="w-full h-14 text-lg font-bold rounded-2xl bg-slate-900 text-white hover:bg-zinc-800 transition-all" disabled={loading}>
                             {loading ? <Loader2 className="animate-spin" /> : (isSignUp ? "Cadastrar" : "Entrar")}
                         </Button>
                    </form>

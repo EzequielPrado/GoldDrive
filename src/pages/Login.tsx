@@ -26,7 +26,7 @@ const Login = () => {
     switch(activeTab) {
         case 'driver': return 'bg-yellow-500 hover:bg-yellow-600 ring-yellow-500 text-black';
         case 'admin': return 'bg-slate-900 hover:bg-slate-800 ring-slate-900';
-        default: return 'bg-black hover:bg-zinc-800 ring-black';
+        default: return 'bg-slate-900 hover:bg-zinc-800 ring-slate-900 text-white';
     }
   };
 
@@ -70,7 +70,7 @@ const Login = () => {
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4 relative overflow-hidden">
       <PWAInstallPrompt openForce={showPwaHelp} onCloseForce={() => setShowPwaHelp(false)} />
       <div className={`absolute top-0 left-0 right-0 h-1/2 transition-colors duration-500 ease-in-out -z-10 ${
-          activeTab === 'driver' ? 'bg-yellow-500' : activeTab === 'admin' ? 'bg-slate-900' : 'bg-black'
+          activeTab === 'driver' ? 'bg-yellow-500' : activeTab === 'admin' ? 'bg-slate-900' : 'bg-slate-900'
       }`} />
       <div className="mb-8 text-center text-white z-10 flex flex-col items-center">
         <img src="/app-logo.png" alt="Gold Mobile" className="w-48 h-auto mb-2 drop-shadow-lg rounded-xl" />

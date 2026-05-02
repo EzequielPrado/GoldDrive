@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">GoldDrive</string>
+    <string name="title_activity_main">GoldDrive</string>
+    <string name="package_name">com.golddrive.app</string>
+    <string name="custom_url_scheme">com.golddrive.app</string>
+</resources>

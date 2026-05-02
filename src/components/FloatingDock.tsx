@@ -15,7 +15,7 @@ const FloatingDock = ({ activeTab, onTabChange, role }: FloatingDockProps) => {
   ];
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-auto max-w-[90%]">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-auto max-w-[90%] pb-[env(safe-area-inset-bottom)]">
       {/* Liquid Glass Container */}
       <div className="flex items-center gap-1 p-2 bg-black/80 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl shadow-black/50">
         {items.map((item) => {

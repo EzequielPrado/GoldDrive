@@ -24,6 +24,7 @@ import FloatingDock from "@/components/FloatingDock";
 import RideChat from "@/components/RideChat";
 import GoogleLocationSearch from "@/components/GoogleLocationSearch";
 import { cn } from "@/lib/utils";
+import { getCurrentPosition } from "@/utils/native";
 
 const ClientDashboard = () => {
   const navigate = useNavigate();
@@ -92,30 +93,33 @@ const ClientDashboard = () => {
       }
 
       if (!silent) setGpsLoading(true);
-      navigator.geolocation.getCurrentPosition(async (pos) => {
-          if (!window.google || !window.google.maps) {
-              setGpsLoading(false);
-              return;
-          }
-
-          const geocoder = new google.maps.Geocoder();
-          geocoder.geocode({ 
-              location: { lat: pos.coords.latitude, lng: pos.coords.longitude } 
-          }, (results, status) => {
-              if (status === 'OK' && results?.[0]) {
-                  setPickupLocation({ 
-                      lat: pos.coords.latitude, 
-                      lon: pos.coords.longitude, 
-                      display_name: results[0].formatted_address 
-                  });
-                  if (!silent) showSuccess("Sua localização atualizada!");
-              }
-              setGpsLoading(false);
-          });
-      }, (error) => { 
+      const pos = await getCurrentPosition();
+      
+      if (!pos) {
           setGpsLoading(false); 
           if (!silent) showError("Ative a localização do seu dispositivo.");
-      }, { enableHighAccuracy: true, timeout: 10000 });
+          return;
+      }
+
+      if (!window.google || !window.google.maps) {
+          setGpsLoading(false);
+          return;
+      }
+
+      const geocoder = new google.maps.Geocoder();
+      geocoder.geocode({ 
+          location: { lat: pos.lat, lng: pos.lng } 
+      }, (results, status) => {
+          if (status === 'OK' && results?.[0]) {
+              setPickupLocation({ 
+                  lat: pos.lat, 
+                  lon: pos.lng, 
+                  display_name: results[0].formatted_address 
+              });
+              if (!silent) showSuccess("Sua localização atualizada!");
+          }
+          setGpsLoading(false);
+      });
   }, []);
 
   const handleMapClick = async (lat: number, lng: number) => {
@@ -895,7 +899,7 @@ const ClientDashboard = () => {
               </DialogDescription>
               <div className="space-y-4">
                   <GoogleLocationSearch placeholder="Busque o endereço" onSelect={setNewStop} className="w-full" />
-                  <Button className="w-full h-14 bg-black text-white font-black rounded-2xl shadow-xl" onClick={handleConfirmNewStop} disabled={!newStop || isSubmittingStop}>
+                  <Button className="w-full h-14 bg-slate-900 text-white font-black rounded-2xl shadow-xl" onClick={handleConfirmNewStop} disabled={!newStop || isSubmittingStop}>
                       {isSubmittingStop ? <Loader2 className="w-6 h-6 animate-spin" /> : "CONFIRMAR PARADA"}
                   </Button>
               </div>

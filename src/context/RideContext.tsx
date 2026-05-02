@@ -78,19 +78,23 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
       }
   }, [userRole, currentUserId]);
 
-  const unlockAudio = () => {
+  const unlockAudio = async () => {
       if (audioRef.current) {
           audioRef.current.play().then(() => {
               audioRef.current?.pause();
               if (audioRef.current) audioRef.current.currentTime = 0;
           }).catch(e => console.log("Unlock audio failed", e));
       }
-      if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+      
+      const { requestPermissions, isNative } = await import('@/utils/native');
+      if (isNative) {
+          await requestPermissions();
+      } else if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
           Notification.requestPermission();
       }
   };
 
-  const playNotification = (title = "Nova Corrida!", body = "Passageiro aguardando motorista") => {
+  const playNotification = async (title = "Nova Corrida!", body = "Passageiro aguardando motorista") => {
       if (audioRef.current) {
           audioRef.current.currentTime = 0;
           audioRef.current.play().catch(() => console.log("Áudio bloqueado"));
@@ -101,11 +105,10 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           className: "bg-yellow-500 text-black border-2 border-black font-black shadow-2xl z-[9999]",
           duration: 10000,
       });
-      if ('Notification' in window && navigator.serviceWorker && Notification.permission === 'granted') {
-          navigator.serviceWorker.ready.then(reg => {
-              reg.showNotification(title, { body, icon: '/app-logo.png', badge: '/app-logo.png', vibrate: [200, 100, 200] } as any);
-          });
-      }
+      
+      const { showNativeNotification, vibrate } = await import('@/utils/native');
+      await showNativeNotification(title, body);
+      await vibrate();
   };
 
   const fetchActiveRide = async (userId: string) => {
