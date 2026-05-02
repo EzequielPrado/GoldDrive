@@ -708,10 +708,15 @@ const DriverDashboard = () => {
                     </div>
                 )}
 
-                {isCompleted && (
+                {isCompleted && (() => {
+                    const finalPrice = (ride.ride_type === 'MANUAL' && manualPaymentMethod === 'CARD_MACHINE' && cardMachineFee > 0) 
+                        ? Number(ride.price) * (1 + (cardMachineFee / 100)) 
+                        : Number(ride.price);
+
+                    return (
                     <div className="bg-white p-8 rounded-[32px] shadow-2xl text-center border border-gray-100 mt-auto animate-in zoom-in-95">
                         <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"><DollarSign className="w-10 h-10 text-green-600" /></div>
-                        <h2 className="text-3xl font-black text-slate-900 mb-2">R$ {Number(ride.price).toFixed(2)}</h2>
+                        <h2 className="text-3xl font-black text-slate-900 mb-2">R$ {finalPrice.toFixed(2)}</h2>
                         
                         {ride.ride_type === 'MANUAL' ? (
                             <div className="mb-6 space-y-3">
@@ -743,12 +748,13 @@ const DriverDashboard = () => {
 
                         <Button className="w-full h-14 bg-slate-900 text-white font-bold rounded-2xl shadow-xl" onClick={async () => { 
                             if (ride.ride_type === 'MANUAL') {
-                                await supabase.from('rides').update({ payment_method: manualPaymentMethod }).eq('id', ride.id);
+                                await supabase.from('rides').update({ payment_method: manualPaymentMethod, price: finalPrice }).eq('id', ride.id);
                             }
                             await rateRide(ride.id, rating || 5, true); clearRide(); setRating(0); 
                         }}>PRÓXIMA CORRIDA</Button>
                     </div>
-                )}
+                    );
+                })()}
 
                 {isOnTrip && (
                     <div className="bg-white p-6 rounded-[32px] shadow-2xl border border-gray-100 mt-auto animate-in zoom-in-95">
