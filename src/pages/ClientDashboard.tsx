@@ -86,7 +86,7 @@ const ClientDashboard = () => {
     }
   }, [searchParams]);
 
-  const getCurrentLocation = useCallback((silent = false) => {
+  const getCurrentLocation = useCallback(async (silent = false) => {
       if (!window.google || !window.google.maps) {
           if (!silent) showError("Aguarde o mapa carregar ou verifique sua conexão.");
           return;
