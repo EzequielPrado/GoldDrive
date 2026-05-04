@@ -798,11 +798,21 @@ const DriverDashboard = () => {
                              <div className="flex-1"><h3 className="font-black text-slate-900 leading-tight">{ride?.client_details?.first_name || ride?.guest_name}</h3><p className="text-[10px] text-gray-500 font-bold uppercase mt-0.5">Nota: 5.0 ⭐</p></div>
                              <Button size="icon" variant="outline" className="h-10 w-10 rounded-xl" onClick={() => setShowChat(true)}><MessageCircle className="w-4 h-4" /></Button>
                         </div>
-                        {ride?.status === 'ACCEPTED' && <Button className="w-full h-16 bg-slate-900 text-white font-black text-lg rounded-2xl shadow-xl" onClick={() => confirmArrival(ride.id)}>CHEGUEI NO LOCAL</Button>}
-                        {ride?.status === 'ARRIVED' && <Button className="w-full h-16 bg-green-600 text-white font-black text-lg rounded-2xl shadow-xl" onClick={() => startRide(ride.id)}>INICIAR VIAGEM</Button>}
+                        {ride?.status === 'ACCEPTED' && (
+                            <div className="flex flex-col gap-3">
+                                <Button className="w-full h-16 bg-[#0f172a] text-white font-black text-lg rounded-2xl shadow-xl hover:bg-black transition-all" onClick={() => confirmArrival(ride.id)}>CHEGUEI NO LOCAL</Button>
+                                <Button variant="ghost" className="w-full h-10 text-red-500 font-bold uppercase text-[10px] tracking-widest hover:bg-red-50" onClick={() => cancelRide(ride.id)}>CANCELAR CORRIDA</Button>
+                            </div>
+                        )}
+                        {ride?.status === 'ARRIVED' && (
+                            <div className="flex flex-col gap-3">
+                                <Button className="w-full h-16 bg-[#16a34a] text-white font-black text-lg rounded-2xl shadow-xl hover:bg-green-700 transition-all" onClick={() => startRide(ride.id)}>INICIAR VIAGEM</Button>
+                                <Button variant="ghost" className="w-full h-10 text-red-500 font-bold uppercase text-[10px] tracking-widest hover:bg-red-50" onClick={() => cancelRide(ride.id)}>CANCELAR CORRIDA</Button>
+                            </div>
+                        )}
                         {ride?.status === 'IN_PROGRESS' && (
-                            nextStop ? <Button className="w-full h-16 bg-blue-600 text-white font-black text-lg rounded-2xl shadow-xl" onClick={() => completeStop(ride.id, nextStopIndex, currentStops)}>PARADA {nextStopIndex + 1} CONCLUÍDA</Button>
-                            : <Button className="w-full h-16 bg-blue-600 text-white font-black text-lg rounded-2xl shadow-xl" onClick={() => finishRide(ride.id)}>FINALIZAR CORRIDA</Button>
+                            nextStop ? <Button className="w-full h-16 bg-[#2563eb] text-white font-black text-lg rounded-2xl shadow-xl hover:bg-blue-700 transition-all" onClick={() => completeStop(ride.id, nextStopIndex, currentStops)}>PARADA {nextStopIndex + 1} CONCLUÍDA</Button>
+                            : <Button className="w-full h-16 bg-[#2563eb] text-white font-black text-lg rounded-2xl shadow-xl hover:bg-blue-700 transition-all" onClick={() => finishRide(ride.id)}>FINALIZAR CORRIDA</Button>
                         )}
                     </div>
                 )}
