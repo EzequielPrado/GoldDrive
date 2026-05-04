@@ -709,14 +709,22 @@ const DriverDashboard = () => {
                 )}
 
                 {isCompleted && (() => {
-                    const finalPrice = (ride.ride_type === 'MANUAL' && manualPaymentMethod === 'CARD_MACHINE' && cardMachineFee > 0) 
-                        ? Number(ride.price) * (1 + (cardMachineFee / 100)) 
-                        : Number(ride.price);
+                    const basePrice = Number(ride.price) || 0;
+                    const isManual = ride.ride_type?.toUpperCase() === 'MANUAL';
+                    const isCard = manualPaymentMethod === 'CARD_MACHINE';
+                    const feePercentage = Number(cardMachineFee) || 0;
+                    
+                    const finalPrice = (isManual && isCard && feePercentage > 0) 
+                        ? basePrice * (1 + (feePercentage / 100)) 
+                        : basePrice;
 
                     return (
                     <div className="bg-white p-8 rounded-[32px] shadow-2xl text-center border border-gray-100 mt-auto animate-in zoom-in-95">
                         <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"><DollarSign className="w-10 h-10 text-green-600" /></div>
-                        <h2 className="text-3xl font-black text-slate-900 mb-2">R$ {finalPrice.toFixed(2)}</h2>
+                        <h2 className="text-3xl font-black text-slate-900 mb-1">R$ {finalPrice.toFixed(2)}</h2>
+                        {(isManual && isCard && feePercentage > 0) && (
+                            <p className="text-[10px] font-bold text-green-600 mb-4 uppercase tracking-widest">+ {feePercentage}% de taxa da maquininha</p>
+                        )}
                         
                         {ride.ride_type === 'MANUAL' ? (
                             <div className="mb-6 space-y-3">

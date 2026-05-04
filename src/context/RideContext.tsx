@@ -261,7 +261,10 @@ export const RideProvider = ({ children }: { children: React.ReactNode }) => {
           pickup_lat: pickupCoords.lat, pickup_lng: pickupCoords.lng, destination_lat: destCoords.lat, destination_lng: destCoords.lng,
           stops: stops, price, distance, status: 'IN_PROGRESS', category, payment_method: paymentMethod, ride_type: 'MANUAL', guest_name: passengerName, driver_earnings: price
       }).select(`*, driver_details:profiles!public_rides_driver_id_fkey(*), client_details:profiles!public_rides_customer_id_fkey(*)`).single();
-      if (error) throw new Error("Erro ao criar corrida manual.");
+      if (error) {
+          console.error("Supabase insert error:", error);
+          throw new Error("Erro ao criar corrida: " + error.message);
+      }
       setRide(data);
       return data;
   };
