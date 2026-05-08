@@ -5,10 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Shield, Loader2, ArrowLeft, KeyRound } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
+import { showError } from "@/utils/toast";
 
 const LoginAdmin = () => {
   const navigate = useNavigate();
-  const { loading, handleSignIn } = useAuth();
+  const { loading, handleSignIn, handleResetPassword } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -32,6 +33,15 @@ const LoginAdmin = () => {
                        <Button className="w-full bg-yellow-500 text-black font-black h-12 rounded-xl" disabled={loading}>
                            {loading ? <Loader2 className="animate-spin" /> : "AUTENTICAR SISTEMA"}
                        </Button>
+                       <div className="text-center mt-4">
+                           <button 
+                               type="button" 
+                               onClick={() => handleResetPassword(email)} 
+                               className="text-xs font-bold text-slate-400 hover:text-white transition-colors"
+                           >
+                               Esqueci minha senha
+                           </button>
+                       </div>
                    </form>
                </CardContent>
            </Card>

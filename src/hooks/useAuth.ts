@@ -116,7 +116,7 @@ export const useAuth = () => {
     setLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin,
+        redirectTo: `${window.location.origin}/reset-password`,
       });
       if (error) throw error;
       showSuccess("E-mail de recuperação enviado! Verifique sua caixa de entrada.");

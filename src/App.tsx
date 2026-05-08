@@ -20,6 +20,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 import DriverPending from "./pages/DriverPending";
+import ResetPassword from "./pages/ResetPassword";
 
 // Busca a chave de API das variáveis de ambiente configuradas no sistema
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
@@ -91,6 +92,8 @@ const App = () => {
                           <Profile />
                         </ProtectedRoute>
                       } />
+
+                      <Route path="/reset-password" element={<ResetPassword />} />
 
                       <Route path="*" element={<NotFound />} />
                     </Routes>
