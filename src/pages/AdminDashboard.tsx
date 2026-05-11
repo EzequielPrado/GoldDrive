@@ -174,7 +174,25 @@ const AdminDashboard = () => {
   };
 
   const handleCategoryChange = (id: string, field: string, val: any) => {
-      setCarCategories(prev => prev.map(c => c.id === id ? { ...c, [field]: val } : c));
+      setCarCategories(prev => {
+          return prev.map(c => {
+              if (c.id === id) {
+                  // Se o nome mudar, precisamos renomear a chave correspondente em categoryRules
+                  if (field === 'name' && c.name !== val) {
+                      setCategoryRules(prevRules => {
+                          const newRules = { ...prevRules };
+                          if (newRules[c.name]) {
+                              newRules[val] = newRules[c.name];
+                              delete newRules[c.name];
+                          }
+                          return newRules;
+                      });
+                  }
+                  return { ...c, [field]: val };
+              }
+              return c;
+          });
+      });
   };
 
   const handleRuleChange = (catName: string, field: string, val: string) => {
@@ -191,6 +209,7 @@ const AdminDashboard = () => {
       try {
           const { error } = await supabase.from('car_categories')
               .update({ 
+                  name: cat.name,
                   base_fare: cat.base_fare, 
                   cost_per_km: cat.cost_per_km, 
                   min_fare: cat.min_fare,
