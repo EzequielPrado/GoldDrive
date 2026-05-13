@@ -264,10 +264,7 @@ const DriverDashboard = () => {
   const handleMapClick = async (lat: number, lng: number) => {
       if (!mapSelectionMode) return;
       
-      if (!window.google || !window.google.maps) {
-          showError("Aguarde o mapa carregar ou verifique sua conexão.");
-          return;
-      }
+      // Google Maps check removed - using Leaflet
       
       try {
           const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);

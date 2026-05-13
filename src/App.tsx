@@ -8,8 +8,6 @@ import { RideProvider } from "@/context/RideContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import GlobalErrorBoundary from "@/components/GlobalErrorBoundary";
 import { showError } from "@/utils/toast";
-import { APIProvider } from "@vis.gl/react-google-maps";
-
 import Index from "./pages/Index";
 import LoginClient from "./pages/LoginClient";
 import LoginDriver from "./pages/LoginDriver";
@@ -22,18 +20,10 @@ import NotFound from "./pages/NotFound";
 import DriverPending from "./pages/DriverPending";
 import ResetPassword from "./pages/ResetPassword";
 
-// Busca a chave de API das variáveis de ambiente configuradas no sistema
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
-
 const queryClient = new QueryClient();
 
 const App = () => {
   useEffect(() => {
-    // Alerta caso a chave de API esteja faltando (útil para o desenvolvedor)
-    if (!GOOGLE_MAPS_API_KEY) {
-        console.error("ERRO: VITE_GOOGLE_MAPS_API_KEY não configurada nas variáveis de ambiente.");
-    }
-
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
       console.error("Promise Rejection:", event.reason);
       if (event.reason?.message?.includes("ResizeObserver")) return;

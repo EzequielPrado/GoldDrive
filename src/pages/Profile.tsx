@@ -12,7 +12,7 @@ import { showSuccess, showError } from "@/utils/toast";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import GoogleLocationSearch from "@/components/GoogleLocationSearch";
+import LeafletLocationSearch from "@/components/LeafletLocationSearch";
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -326,7 +326,7 @@ const Profile = () => {
                     <div className="space-y-4 bg-slate-50 p-4 rounded-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
                         <div className="space-y-2">
                             <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Casa</Label>
-                            <GoogleLocationSearch 
+                            <LeafletLocationSearch 
                                 placeholder="Definir endereço de casa" 
                                 onSelect={(l) => setFavoritesForm({ ...favoritesForm, home: { address: l?.display_name || '', lat: l?.lat || 0, lng: l?.lon || 0 } })} 
                                 initialValue={favoritesForm.home.address}
@@ -334,7 +334,7 @@ const Profile = () => {
                         </div>
                         <div className="space-y-2">
                             <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Trabalho</Label>
-                            <GoogleLocationSearch 
+                            <LeafletLocationSearch 
                                 placeholder="Definir endereço do trabalho" 
                                 onSelect={(l) => setFavoritesForm({ ...favoritesForm, work: { address: l?.display_name || '', lat: l?.lat || 0, lng: l?.lon || 0 } })} 
                                 initialValue={favoritesForm.work.address}

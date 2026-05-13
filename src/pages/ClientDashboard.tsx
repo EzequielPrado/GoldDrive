@@ -98,10 +98,7 @@ const ClientDashboard = () => {
           return;
       }
 
-      if (!window.google || !window.google.maps) {
-          setGpsLoading(false);
-          return;
-      }
+      // Google Maps check removed - using Leaflet
 
       try {
           const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.lat}&lon=${pos.lng}`);
@@ -124,10 +121,7 @@ const ClientDashboard = () => {
   const handleMapClick = async (lat: number, lng: number) => {
     if (!mapSelectionMode) return;
     
-    if (!window.google || !window.google.maps) {
-        showError("Aguarde o mapa carregar ou verifique sua conexão.");
-        return;
-    }
+    // Google Maps check removed - using Leaflet
     
     setIsReversingGeocode(true);
     try {
@@ -891,7 +885,7 @@ const ClientDashboard = () => {
                   O valor da corrida aumentará em <strong>R$ {costPerStop.toFixed(2)}</strong>. O motorista será notificado.
               </DialogDescription>
               <div className="space-y-4">
-                  <GoogleLocationSearch placeholder="Busque o endereço" onSelect={setNewStop} className="w-full" />
+                  <LeafletLocationSearch placeholder="Busque o endereço" onSelect={setNewStop} className="w-full" />
                   <Button className="w-full h-14 bg-slate-900 text-white font-black rounded-2xl shadow-xl" onClick={handleConfirmNewStop} disabled={!newStop || isSubmittingStop}>
                       {isSubmittingStop ? <Loader2 className="w-6 h-6 animate-spin" /> : "CONFIRMAR PARADA"}
                   </Button>

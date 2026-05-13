@@ -28,7 +28,7 @@ import { Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import GoogleMapComponent from '@/components/GoogleMapComponent';
+import LeafletMapComponent from '@/components/LeafletMapComponent';
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
 
@@ -632,7 +632,7 @@ const AdminDashboard = () => {
                           <h3 className="font-black text-slate-900 text-xl flex items-center gap-2"><Navigation className="w-5 h-5 text-blue-600" /> Live Tracking</h3>
                           <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">{drivers.filter(d => d.is_online).length} Motoristas Online</p>
                       </div>
-                      <GoogleMapComponent 
+                      <LeafletMapComponent 
                           activeDrivers={drivers.filter(d => d.is_online && d.current_lat && d.current_lng).map(d => ({ id: d.id, lat: d.current_lat, lon: d.current_lng }))}
                           interactive={true}
                       />
