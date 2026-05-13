@@ -84,7 +84,7 @@ const GoogleLocationSearch = ({
           setPredictions([]);
         }
       });
-    }, 500);
+    }, 1200);
 
     return () => clearTimeout(timer);
   }, [inputValue, autocompleteService, sessionToken, isOpen]);

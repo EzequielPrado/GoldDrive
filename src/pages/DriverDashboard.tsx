@@ -1002,11 +1002,18 @@ const DriverDashboard = () => {
                           ) : (
                               <>
                                   <p className="text-[10px] font-black text-yellow-700 uppercase tracking-widest mb-2">Trajeto Calculado</p>
-                                  <div className="flex justify-center gap-3">
+                                  <div className="flex justify-center gap-3 mb-4">
                                       <Badge className="bg-white/50 text-yellow-800 font-bold border-yellow-200 text-sm py-1">{routeDistance.toFixed(1)} km</Badge>
                                       <Badge className="bg-white/50 text-yellow-800 font-bold border-yellow-200 text-sm py-1">{Math.round(routeDuration)} min</Badge>
                                   </div>
-                                  <p className="text-xs font-bold text-yellow-700 mt-4">O valor da corrida e a forma de pagamento serão exibidos no final da viagem.</p>
+
+                                  <div className="pt-4 border-t border-yellow-200/50 space-y-2">
+                                      <div className="flex justify-between items-center">
+                                          <p className="text-[10px] font-black text-yellow-700 uppercase tracking-widest">Valor Estimado</p>
+                                          <p className="text-2xl font-black text-slate-900">R$ {calculatePrice().toFixed(2)}</p>
+                                      </div>
+                                      <p className="text-[11px] font-bold text-yellow-700 mt-2">A forma de pagamento será definida ao finalizar a viagem.</p>
+                                  </div>
                               </>
                           )}
                       </div>
