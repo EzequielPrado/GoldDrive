@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import GoogleMapComponent from "@/components/GoogleMapComponent";
+import LeafletMapComponent from "@/components/LeafletMapComponent";
 import { useRide } from "@/context/RideContext";
 import { showSuccess, showError } from "@/utils/toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -23,7 +23,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import RideChat from "@/components/RideChat";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import GoogleLocationSearch from "@/components/GoogleLocationSearch";
+import LeafletLocationSearch from "@/components/LeafletLocationSearch";
 import { cn } from "@/lib/utils";
 import { getCurrentPosition } from "@/utils/native";
 
@@ -269,13 +269,12 @@ const DriverDashboard = () => {
           return;
       }
       
-      setIsReversingGeocode(true);
-      const geocoder = new google.maps.Geocoder();
-      
-      geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+      try {
+          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+          const data = await response.json();
           setIsReversingGeocode(false);
-          if (status === 'OK' && results?.[0]) {
-              const address = results[0].formatted_address;
+          if (data && data.display_name) {
+              const address = data.display_name;
               const locationData = { lat, lon: lng, display_name: address };
               
               if (mapSelectionMode === 'pickup') {
@@ -295,43 +294,43 @@ const DriverDashboard = () => {
           } else {
               showError("Não foi possível identificar este endereço.");
           }
-      });
+      } catch (err) {
+          setIsReversingGeocode(false);
+          showError("Erro ao identificar local.");
+      }
   };
 
   const calculateRouteDistance = useCallback(() => {
       if (!pickupLocation || !destLocation) return;
       setManualLoading(true);
-      const service = new google.maps.DirectionsService();
       
-      const validStops = stops.filter(s => s && s.lat && s.lon);
-      const waypoints = validStops.map(s => ({
-          location: { lat: s.lat, lng: s.lon },
-          stopover: true
-      }));
+      const fetchRoute = async () => {
+          try {
+              const validStops = stops.filter(s => s && s.lat && s.lon);
+              let coords = `${pickupLocation.lon},${pickupLocation.lat}`;
+              if (validStops.length > 0) {
+                  validStops.forEach(s => { coords += `;${s.lon},${s.lat}`; });
+              }
+              coords += `;${destLocation.lon},${destLocation.lat}`;
 
-      service.route({
-          origin: { lat: pickupLocation.lat, lng: pickupLocation.lon },
-          destination: { lat: destLocation.lat, lng: destLocation.lon },
-          waypoints: waypoints,
-          travelMode: google.maps.TravelMode.DRIVING,
-          optimizeWaypoints: true,
-          drivingOptions: {
-              departureTime: new Date(),
-              trafficModel: google.maps.TrafficModel.BEST_GUESS
+              const response = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=false`);
+              const data = await response.json();
+
+              if (data.code === 'Ok' && data.routes.length > 0) {
+                  setRouteDistance(data.routes[0].distance / 1000);
+                  setRouteDuration(data.routes[0].duration / 60);
+              } else {
+                  showError("Não foi possível calcular a rota.");
+              }
+          } catch (err) {
+              console.error("Routing error:", err);
+              showError("Erro ao calcular rota.");
+          } finally {
+              setManualLoading(false);
           }
-      }, (response, status) => {
-          if (status === 'OK' && response) {
-              let totalDist = 0;
-              let totalDur = 0;
-              response.routes[0].legs.forEach(leg => {
-                  totalDist += leg.distance?.value || 0;
-                  totalDur += leg.duration?.value || 0;
-              });
-              setRouteDistance(totalDist / 1000);
-              setRouteDuration(totalDur / 60);
-          }
-          setManualLoading(false);
-      });
+      };
+
+      fetchRoute();
   }, [pickupLocation, destLocation, stops]);
 
   useEffect(() => {
@@ -502,13 +501,17 @@ const DriverDashboard = () => {
       setGpsLoading(true);
       const pos = await getCurrentPosition();
       if (pos) {
-          const geocoder = new google.maps.Geocoder();
-          geocoder.geocode({ location: { lat: pos.lat, lng: pos.lng } }, (results, status) => {
-              if (status === 'OK' && results?.[0]) {
-                  setPickupLocation({ lat: pos.lat, lon: pos.lng, display_name: results[0].formatted_address });
+          try {
+              const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.lat}&lon=${pos.lng}`);
+              const data = await response.json();
+              if (data && data.display_name) {
+                  setPickupLocation({ lat: pos.lat, lon: pos.lng, display_name: data.display_name });
               }
+          } catch (err) {
+              console.error("Reverse geocoding error:", err);
+          } finally {
               setGpsLoading(false);
-          });
+          }
       } else {
           setGpsLoading(false);
           showError("Ative a localização do seu dispositivo.");
@@ -565,7 +568,7 @@ const DriverDashboard = () => {
       )}
 
       <div className="absolute inset-0 z-0">
-          <GoogleMapComponent 
+          <LeafletMapComponent 
             className="h-full w-full" 
             pickupLocation={mapSelectionMode === 'pickup' ? pickupLocation : pickupCoord} 
             destinationLocation={mapSelectionMode === 'destination' ? destLocation : destCoord} 
@@ -956,7 +959,7 @@ const DriverDashboard = () => {
                   <div className="space-y-4">
                       <div className="space-y-2">
                           <Label className="text-[10px] font-black uppercase text-slate-400 ml-1 tracking-widest">Local de Embarque</Label>
-                          <GoogleLocationSearch placeholder="Onde o passageiro entrou?" onSelect={setPickupLocation} initialValue={pickupLocation?.display_name} className="w-full" />
+                          <LeafletLocationSearch placeholder="Onde o passageiro entrou?" onSelect={setPickupLocation} initialValue={pickupLocation?.display_name} className="w-full" />
                           <div className="flex gap-2 mt-2">
                               <Button variant="ghost" className="flex-1 h-12 rounded-2xl bg-slate-50 text-slate-500 hover:text-blue-500 font-bold text-xs" onClick={() => { setShowManualRide(false); setMapSelectionMode('pickup'); }}><Map className="w-4 h-4 mr-2" /> Selecionar no Mapa</Button>
                               <Button variant="outline" className="flex-1 h-12 rounded-2xl border-slate-200 bg-slate-50 text-slate-600 font-bold text-xs" onClick={getCurrentLocation} disabled={gpsLoading}>
@@ -971,7 +974,7 @@ const DriverDashboard = () => {
                                   <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest flex items-center gap-2"><div className="w-2 h-2 rounded-full border border-slate-300 bg-slate-100" /> Parada {index + 1}</Label>
                                   <Button variant="ghost" size="sm" className="h-6 text-[10px] text-red-500 font-bold hover:bg-red-50 rounded-full px-3" onClick={() => { const newStops = [...stops]; newStops.splice(index, 1); setStops(newStops); }}>Remover</Button>
                               </div>
-                              <GoogleLocationSearch placeholder={`Onde é a parada ${index + 1}?`} onSelect={(l) => { const newStops = [...stops]; newStops[index] = l; setStops(newStops); }} initialValue={stop?.display_name} className="w-full" />
+                              <LeafletLocationSearch placeholder={`Onde é a parada ${index + 1}?`} onSelect={(l) => { const newStops = [...stops]; newStops[index] = l; setStops(newStops); }} initialValue={stop?.display_name} className="w-full" />
                               <div className="flex gap-2 mt-2">
                                   <Button variant="outline" className="flex-1 h-10 rounded-xl bg-white border-slate-200 text-slate-500 hover:text-blue-500 font-bold text-xs" onClick={() => { setShowManualRide(false); setMapSelectionMode(`stop-${index}`); }}><Map className="w-4 h-4 mr-2" /> Local no Mapa</Button>
                               </div>
@@ -980,7 +983,7 @@ const DriverDashboard = () => {
 
                       <div className="space-y-2">
                           <Label className="text-[10px] font-black uppercase text-slate-400 ml-1 tracking-widest">Destino Final</Label>
-                          <GoogleLocationSearch placeholder="Para onde vamos?" onSelect={setDestLocation} initialValue={destLocation?.display_name} className="w-full" />
+                          <LeafletLocationSearch placeholder="Para onde vamos?" onSelect={setDestLocation} initialValue={destLocation?.display_name} className="w-full" />
                           <div className="flex gap-2 mt-2">
                               <Button variant="ghost" className="flex-1 h-12 rounded-2xl bg-slate-50 text-slate-500 hover:text-red-500 font-bold text-xs" onClick={() => { setShowManualRide(false); setMapSelectionMode('destination'); }}><Map className="w-4 h-4 mr-2" /> Selecionar no Mapa</Button>
                               {stops.length < 2 && (

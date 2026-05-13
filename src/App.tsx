@@ -49,66 +49,51 @@ const App = () => {
 
   return (
     <GlobalErrorBoundary>
-      {GOOGLE_MAPS_API_KEY ? (
-          <APIProvider 
-            apiKey={GOOGLE_MAPS_API_KEY} 
-            language="pt-BR" 
-            region="BR"
-            libraries={['places', 'routes', 'marker', 'geometry']}
-          >
-            <QueryClientProvider client={queryClient}>
-              <TooltipProvider>
-                <Toaster />
-                <Sonner position="top-right" closeButton richColors theme="light" />
-                <BrowserRouter>
-                  <RideProvider>
-                    <Routes>
-                      <Route path="/" element={<Index />} />
-                      <Route path="/login" element={<LoginClient />} />
-                      <Route path="/login/driver" element={<LoginDriver />} />
-                      <Route path="/login/admin" element={<LoginAdmin />} />
-                      <Route path="/driver-pending" element={<DriverPending />} />
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner position="top-right" closeButton richColors theme="light" />
+          <BrowserRouter>
+            <RideProvider>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/login" element={<LoginClient />} />
+                <Route path="/login/driver" element={<LoginDriver />} />
+                <Route path="/login/admin" element={<LoginAdmin />} />
+                <Route path="/driver-pending" element={<DriverPending />} />
 
-                      <Route path="/client" element={
-                        <ProtectedRoute allowedRoles={['client']}>
-                          <ClientDashboard />
-                        </ProtectedRoute>
-                      } />
+                <Route path="/client" element={
+                  <ProtectedRoute allowedRoles={['client']}>
+                    <ClientDashboard />
+                  </ProtectedRoute>
+                } />
 
-                      <Route path="/driver" element={
-                        <ProtectedRoute allowedRoles={['driver']}>
-                          <DriverDashboard />
-                        </ProtectedRoute>
-                      } />
+                <Route path="/driver" element={
+                  <ProtectedRoute allowedRoles={['driver']}>
+                    <DriverDashboard />
+                  </ProtectedRoute>
+                } />
 
-                      <Route path="/admin" element={
-                        <ProtectedRoute allowedRoles={['admin']}>
-                          <AdminDashboard />
-                        </ProtectedRoute>
-                      } />
+                <Route path="/admin" element={
+                  <ProtectedRoute allowedRoles={['admin']}>
+                    <AdminDashboard />
+                  </ProtectedRoute>
+                } />
 
-                      <Route path="/profile" element={
-                        <ProtectedRoute allowedRoles={['client', 'driver', 'admin']}>
-                          <Profile />
-                        </ProtectedRoute>
-                      } />
+                <Route path="/profile" element={
+                  <ProtectedRoute allowedRoles={['client', 'driver', 'admin']}>
+                    <Profile />
+                  </ProtectedRoute>
+                } />
 
-                      <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
 
-                      <Route path="*" element={<NotFound />} />
-                    </Routes>
-                  </RideProvider>
-                </BrowserRouter>
-              </TooltipProvider>
-            </QueryClientProvider>
-          </APIProvider>
-      ) : (
-          <div className="h-screen flex flex-col items-center justify-center p-6 text-center bg-zinc-950 text-white">
-              <img src="/app-logo.png" className="w-32 mb-8" alt="Gold" />
-              <h1 className="text-xl font-bold mb-2">Configuração Necessária</h1>
-              <p className="text-zinc-400 max-w-sm">A chave do Google Maps não foi detectada. Por favor, configure a variável VITE_GOOGLE_MAPS_API_KEY no painel de controle do projeto.</p>
-          </div>
-      )}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </RideProvider>
+          </BrowserRouter>
+        </TooltipProvider>
+      </QueryClientProvider>
     </GlobalErrorBoundary>
   );
 };
